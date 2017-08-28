@@ -9,10 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/negbie/heplify/logp"
-
 	"github.com/negbie/heplify/config"
-
+	"github.com/negbie/heplify/logp"
 	"github.com/tsg/gopacket"
 	"github.com/tsg/gopacket/layers"
 	"github.com/tsg/gopacket/pcap"
