@@ -1,0 +1,100 @@
+package decoder
+
+import (
+	"net"
+	"os"
+	"time"
+
+	"github.com/tsg/gopacket"
+	"github.com/tsg/gopacket/layers"
+)
+
+type Packet struct {
+	Ts   time.Time `json:"ts"`
+	Host string    `json:"host,omitempty"`
+	Ip4  *IPv4     `json:"ip4,omitempty"`
+	Ip6  *IPv6     `json:"ip6,omitempty"`
+	Tcp  *TCP      `json:"tcp,omitempty"`
+	Udp  *UDP      `json:"udp,omitempty"`
+	Hep  *Hep      `json:"-"`
+}
+
+type Decoder struct {
+	Host string
+}
+
+type Hep struct {
+	Srcip    net.IP
+	Dstip    net.IP
+	Sport    uint16
+	Dport    uint16
+	Protocol layers.IPProtocol
+}
+
+func NewDecoder() *Decoder {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	return &Decoder{Host: host}
+}
+
+func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
+	hep := &Hep{}
+	pkt := &Packet{
+		Host: d.Host,
+		Ts:   ci.Timestamp,
+		Hep:  hep,
+	}
+
+	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+	for _, layer := range packet.Layers() {
+		switch layer.LayerType() {
+		case layers.LayerTypeIPv4:
+			ip4l := packet.Layer(layers.LayerTypeIPv4)
+			ip4, ok := ip4l.(*layers.IPv4)
+			if !ok {
+				return nil, nil
+			}
+			pkt.Ip4 = NewIP4(ip4)
+
+			hep.Srcip = ip4.SrcIP
+			hep.Dstip = ip4.DstIP
+			hep.Protocol = ip4.Protocol
+
+		case layers.LayerTypeIPv6:
+			ip6l := packet.Layer(layers.LayerTypeIPv6)
+			ip6, ok := ip6l.(*layers.IPv6)
+			if !ok {
+				return nil, nil
+			}
+			pkt.Ip6 = NewIP6(ip6)
+
+			hep.Srcip = ip6.SrcIP
+			hep.Dstip = ip6.DstIP
+			hep.Protocol = ip6.NextHeader
+
+		case layers.LayerTypeUDP:
+			udpl := packet.Layer(layers.LayerTypeUDP)
+			udp, ok := udpl.(*layers.UDP)
+			if !ok {
+				break
+			}
+			pkt.Udp = NewUDP(udp)
+			hep.Sport = uint16(udp.SrcPort)
+			hep.Dport = uint16(udp.DstPort)
+			return pkt, nil
+		case layers.LayerTypeTCP:
+			tcpl := packet.Layer(layers.LayerTypeTCP)
+			tcp, ok := tcpl.(*layers.TCP)
+			if !ok {
+				break
+			}
+			pkt.Tcp = NewTCP(tcp)
+			hep.Sport = uint16(tcp.SrcPort)
+			hep.Dport = uint16(tcp.DstPort)
+			return pkt, nil
+		}
+	}
+	return nil, nil
+}
