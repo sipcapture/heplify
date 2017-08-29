@@ -1,8 +1,6 @@
 package outputs
 
 import (
-	"encoding/json"
-
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
@@ -31,15 +29,16 @@ func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
 func (pub *Publisher) output(pkt *decoder.Packet) {
 	defer func() {
 		if err := recover(); err != nil {
-			logp.Err("pub.output() error: %v", err)
+			logp.Err("pub.output() %v", err)
 		}
 	}()
 
-	b, err := json.Marshal(pkt)
-	if err != nil {
-		logp.Err("json.Marshal() error %s", err)
+	//b, err := json.Marshal(pkt)
+	b := toHep(pkt.Hep)
+	/* 	if err != nil {
+		logp.Err("json.Marshal() %v", err)
 		return
-	}
+	} */
 	pub.outputer.Output(b)
 }
 

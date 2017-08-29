@@ -25,10 +25,13 @@ type Decoder struct {
 }
 
 type Hep struct {
+	Tsec     uint32
+	Tmsec    uint32
 	Srcip    uint32
 	Dstip    uint32
 	Sport    uint16
 	Dport    uint16
+	Payload  []byte
 	Protocol layers.IPProtocol
 }
 
@@ -41,7 +44,10 @@ func NewDecoder() *Decoder {
 }
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
-	hep := &Hep{}
+	hep := &Hep{
+		Tsec:  uint32(ci.Timestamp.Unix()),
+		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
+	}
 	pkt := &Packet{
 		Host: d.Host,
 		Ts:   ci.Timestamp,
@@ -58,7 +64,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				return nil, nil
 			}
 			pkt.Ip4 = NewIP4(ip4)
-
 			hep.Srcip = ip2int(ip4.SrcIP)
 			hep.Dstip = ip2int(ip4.DstIP)
 			hep.Protocol = ip4.Protocol
@@ -84,6 +89,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			pkt.Udp = NewUDP(udp)
 			hep.Sport = uint16(udp.SrcPort)
 			hep.Dport = uint16(udp.DstPort)
+			hep.Payload = udp.Payload
 			return pkt, nil
 		case layers.LayerTypeTCP:
 			tcpl := packet.Layer(layers.LayerTypeTCP)
@@ -94,6 +100,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			pkt.Tcp = NewTCP(tcp)
 			hep.Sport = uint16(tcp.SrcPort)
 			hep.Dport = uint16(tcp.DstPort)
+			hep.Payload = tcp.Payload
 			return pkt, nil
 		}
 	}

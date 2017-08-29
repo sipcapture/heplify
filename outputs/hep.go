@@ -69,9 +69,32 @@ func (ho *HepOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 
 func (ho *HepOutputer) Output(msg []byte) {
 	logp.Info("pkt %s", msg)
+	ho.hepQueue <- msg
 }
 
 func (ho *HepOutputer) Send(msg []byte) {
+
+	defer func() {
+		if err := recover(); err != nil {
+			logp.Err("send msg error: %v", err)
+		}
+	}()
+	ho.Conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_, err := ho.Conn.Write(msg)
+	if err != nil {
+		ho.Conn.Close()
+		err = ho.ReConnect()
+		if err != nil {
+			logp.Err("send to server error: %v", err)
+			return
+		}
+		logp.Debug("reconnect", "successfull")
+		_, err := ho.Conn.Write(msg)
+		if err != nil {
+			logp.Err("resend to server error: %v", err)
+		}
+		return
+	}
 
 }
 
@@ -97,8 +120,8 @@ func (ho *HepOutputer) Start() {
 	}
 }
 
-func (p *decoder.Packet) toHep(s string) []byte {
-	chuncks := p.newHEPChuncks(s)
+func toHep(h *decoder.Hep) []byte {
+	chuncks := newHEPChuncks(h)
 	hepMsg := make([]byte, len(chuncks)+6)
 	copy(hepMsg[6:], chuncks)
 	binary.BigEndian.PutUint32(hepMsg[:4], uint32(0x48455033))
@@ -149,12 +172,12 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Hep) []byte {
 	// Chunk unix timestamp, seconds
 	case 0x0009:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], uint32(time.Now().Unix()))
+		binary.BigEndian.PutUint32(chunck[6:], h.Tsec)
 
 	// Chunk unix timestamp, microseconds offset
 	case 0x000a:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], uint32(time.Now().UnixNano()/1000))
+		binary.BigEndian.PutUint32(chunck[6:], h.Tmsec)
 
 	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
 	case 0x000b:
@@ -164,34 +187,26 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Hep) []byte {
 	// Chunk capture agent ID
 	case 0x000c:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], 0x00000BEE)
+		binary.BigEndian.PutUint32(chunck[6:], 0x00001111)
 
-	// case 0x000d:
-	// Chunk keep alive timer
+		// case 0x000d:
+		// Chunk keep alive timer
 
-	// Chunk authenticate key (plain text / TLS connection)
+		// Chunk authenticate key (plain text / TLS connection)
 	case 0x000e:
-		chunck = make([]byte, len(*hepPw)+6)
-		copy(chunck[6:], *hepPw)
+		chunck = make([]byte, len("myhep")+6)
+		copy(chunck[6:], "myhep")
 
 	// Chunk captured packet payload
 	case 0x000f:
-		chunck = make([]byte, len(i.Data.SIP.SipMsg)+6)
-		copy(chunck[6:], i.Data.SIP.SipMsg)
-
-	// case 0x0010:
+		chunck = make([]byte, len(h.Payload)+6)
+		copy(chunck[6:], h.Payload)
+	}
 	// Chunk captured compressed payload (gzip/inflate)
+	// case 0x0010:
 
 	// Chunk internal correlation id
-	case 0x0011:
-		if len(i.Data.QOS.IncCallID) > 0 {
-			chunck = make([]byte, len(i.Data.QOS.IncCallID)+6)
-			copy(chunck[6:], i.Data.QOS.IncCallID)
-		} else {
-			chunck = make([]byte, len(i.Data.QOS.OutCallID)+6)
-			copy(chunck[6:], i.Data.QOS.OutCallID)
-		}
-	}
+	//case 0x0011:
 
 	binary.BigEndian.PutUint16(chunck[:2], chunckVen)
 	binary.BigEndian.PutUint16(chunck[2:4], chunckType)
@@ -200,21 +215,20 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Hep) []byte {
 }
 
 // NewHEPChuncks will fill a buffer with all the chuncks
-func (p *decoder.Packet) newHEPChuncks(s string) []byte {
+func newHEPChuncks(h *decoder.Hep) []byte {
 	buf := new(bytes.Buffer)
 
-	buf.Write(p.MakeChunck(0x0000, 0x0001, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0002, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0003, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0004, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0007, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0008, s))
-	buf.Write(p.MakeChunck(0x0000, 0x0009, s))
-	buf.Write(p.MakeChunck(0x0000, 0x000a, s))
-	buf.Write(p.MakeChunck(0x0000, 0x000b, s))
-	buf.Write(p.MakeChunck(0x0000, 0x000c, s))
-	buf.Write(p.MakeChunck(0x0000, 0x000e, s))
-	buf.Write(p.MakeChunck(0x0000, 0x000f, s))
-
+	buf.Write(makeChunck(0x0000, 0x0001, h))
+	buf.Write(makeChunck(0x0000, 0x0002, h))
+	buf.Write(makeChunck(0x0000, 0x0003, h))
+	buf.Write(makeChunck(0x0000, 0x0004, h))
+	buf.Write(makeChunck(0x0000, 0x0007, h))
+	buf.Write(makeChunck(0x0000, 0x0008, h))
+	buf.Write(makeChunck(0x0000, 0x0009, h))
+	buf.Write(makeChunck(0x0000, 0x000a, h))
+	buf.Write(makeChunck(0x0000, 0x000b, h))
+	buf.Write(makeChunck(0x0000, 0x000c, h))
+	buf.Write(makeChunck(0x0000, 0x000e, h))
+	buf.Write(makeChunck(0x0000, 0x000f, h))
 	return buf.Bytes()
 }
