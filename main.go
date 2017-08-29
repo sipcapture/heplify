@@ -98,7 +98,7 @@ func optParse() {
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
 	flag.BoolVar(&ifaceConfig.WithVlans, "wl", false, "With vlans")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
-	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 200, "Interface buffer size (MB)")
+	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 128, "Interface buffer size (MB)")
 	flag.StringVar(&logging.Level, "l", "info", "Logging level")
 	flag.StringVar(&fileRotator.Path, "p", "", "Log path")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")

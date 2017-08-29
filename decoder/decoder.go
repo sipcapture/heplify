@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"encoding/binary"
 	"net"
 	"os"
 	"time"
@@ -24,8 +25,8 @@ type Decoder struct {
 }
 
 type Hep struct {
-	Srcip    net.IP
-	Dstip    net.IP
+	Srcip    uint32
+	Dstip    uint32
 	Sport    uint16
 	Dport    uint16
 	Protocol layers.IPProtocol
@@ -58,8 +59,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 			pkt.Ip4 = NewIP4(ip4)
 
-			hep.Srcip = ip4.SrcIP
-			hep.Dstip = ip4.DstIP
+			hep.Srcip = ip2int(ip4.SrcIP)
+			hep.Dstip = ip2int(ip4.DstIP)
 			hep.Protocol = ip4.Protocol
 
 		case layers.LayerTypeIPv6:
@@ -70,8 +71,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 			pkt.Ip6 = NewIP6(ip6)
 
-			hep.Srcip = ip6.SrcIP
-			hep.Dstip = ip6.DstIP
+			hep.Srcip = ip2int(ip6.SrcIP)
+			hep.Dstip = ip2int(ip6.DstIP)
 			hep.Protocol = ip6.NextHeader
 
 		case layers.LayerTypeUDP:
@@ -97,4 +98,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 	}
 	return nil, nil
+}
+
+func ip2int(ip net.IP) uint32 {
+	if len(ip) == 16 {
+		return binary.BigEndian.Uint32(ip[12:16])
+	}
+	return binary.BigEndian.Uint32(ip)
 }

@@ -178,7 +178,7 @@ func (sniffer *SnifferSetup) setFromConfig(config *config.InterfacesConfig) erro
 
 	case "af_packet":
 		if sniffer.config.BufferSizeMb == 0 {
-			sniffer.config.BufferSizeMb = 24
+			sniffer.config.BufferSizeMb = 128
 		}
 
 		frameSize, blockSize, numBlocks, err := afpacketComputeSize(
