@@ -81,6 +81,7 @@ func (ho *HepOutputer) Send(msg []byte) {
 	}()
 
 	_, err := ho.writer.Write(msg)
+	err = ho.writer.Flush()
 
 	if err != nil {
 		err = ho.ReConnect()
@@ -90,6 +91,7 @@ func (ho *HepOutputer) Send(msg []byte) {
 		}
 		logp.Debug("reconnect", "successfull")
 		_, err := ho.writer.Write(msg)
+		err = ho.writer.Flush()
 		if err != nil {
 			logp.Err("resend to server error: %v", err)
 		}
