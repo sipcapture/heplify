@@ -1,10 +1,10 @@
 package outputs
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"net"
-	"time"
 
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
@@ -15,14 +15,14 @@ type Outputer interface {
 }
 
 type HepOutputer struct {
-	Addr     string
-	Conn     net.Conn
+	addr     string
+	writer   *bufio.Writer
 	hepQueue chan []byte
 }
 
 func NewHepOutputer(serverAddr string) (*HepOutputer, error) {
 	ho := &HepOutputer{
-		Addr:     serverAddr,
+		addr:     serverAddr,
 		hepQueue: make(chan []byte, 1024),
 	}
 	err := ho.Init()
@@ -34,28 +34,29 @@ func NewHepOutputer(serverAddr string) (*HepOutputer, error) {
 }
 
 func (ho *HepOutputer) Init() error {
-	conn, err := ho.ConnectServer(ho.Addr)
+	conn, err := ho.ConnectServer(ho.addr)
 	if err != nil {
 		logp.Err("hepOutputer server connection error: %v", err)
 		return err
 	}
-	ho.Conn = conn
+	w := bufio.NewWriter(conn)
+	ho.writer = w
 	return nil
 }
 
 func (ho *HepOutputer) Close() {
 	logp.Info("hepOutputer connection close.")
-	ho.Conn.Close()
 }
 
 func (ho *HepOutputer) ReConnect() error {
 	logp.Warn("reconnect server.")
-	conn, err := ho.ConnectServer(ho.Addr)
+	conn, err := ho.ConnectServer(ho.addr)
 	if err != nil {
 		logp.Err("reconnect server error: %v", err)
 		return err
 	}
-	ho.Conn = conn
+	w := bufio.NewWriter(conn)
+	ho.writer = w
 	return nil
 }
 
@@ -68,7 +69,6 @@ func (ho *HepOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 }
 
 func (ho *HepOutputer) Output(msg []byte) {
-	logp.Info("pkt %s", msg)
 	ho.hepQueue <- msg
 }
 
@@ -79,23 +79,22 @@ func (ho *HepOutputer) Send(msg []byte) {
 			logp.Err("send msg error: %v", err)
 		}
 	}()
-	ho.Conn.SetDeadline(time.Now().Add(10 * time.Second))
-	_, err := ho.Conn.Write(msg)
+
+	_, err := ho.writer.Write(msg)
+
 	if err != nil {
-		ho.Conn.Close()
 		err = ho.ReConnect()
 		if err != nil {
 			logp.Err("send to server error: %v", err)
 			return
 		}
 		logp.Debug("reconnect", "successfull")
-		_, err := ho.Conn.Write(msg)
+		_, err := ho.writer.Write(msg)
 		if err != nil {
 			logp.Err("resend to server error: %v", err)
 		}
 		return
 	}
-
 }
 
 func (ho *HepOutputer) Start() {

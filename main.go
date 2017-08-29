@@ -90,12 +90,13 @@ func optParse() {
 	var rotateEveryKB uint64
 	var keepFiles int
 
-	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
+	flag.StringVar(&ifaceConfig.Device, "i", "eth2", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture type are pcap or af_packet")
-	flag.StringVar(&ifaceConfig.BpfFilter, "f", "", "BPF filter")
+	flag.StringVar(&ifaceConfig.BpfFilter, "f", "greater 300 and portrange 5060-5090", "BPF filter")
 	flag.StringVar(&ifaceConfig.File, "rf", "", "Read packets from file")
 	flag.StringVar(&ifaceConfig.Dumpfile, "df", "", "Dump to file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
+	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", true, "Topspeed")
 	flag.BoolVar(&ifaceConfig.WithVlans, "wl", false, "With vlans")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 128, "Interface buffer size (MB)")
