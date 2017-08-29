@@ -7,21 +7,20 @@ import (
 var Cfg Config
 
 type Config struct {
-	Iface      *InterfacesConfig
-	IfaceAddrs map[string]bool
-	Logging    *logp.Logging
-	DoHep      bool
-	HepServer  string
+	Iface     *InterfacesConfig
+	Logging   *logp.Logging
+	DoHep     bool
+	HepServer string
 }
 
 type InterfacesConfig struct {
-	Device       string
-	Type         string
-	File         string
-	WithVlans    bool
-	BpfFilter    string
-	Snaplen      int
-	BufferSizeMb int
+	Device       string `config:"device"`
+	Type         string `config:"type"`
+	File         string `config:"file"`
+	WithVlans    bool   `config:"with_vlans"`
+	BpfFilter    string `config:"bpf_filter"`
+	Snaplen      int    `config:"snaplen"`
+	BufferSizeMb int    `config:"buffer_size_mb"`
 	TopSpeed     bool
 	Dumpfile     string
 	OneAtATime   bool

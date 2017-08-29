@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
+	"log"
 	"os"
 	"runtime"
 
@@ -15,32 +15,6 @@ import (
 	"github.com/tsg/gopacket"
 	"github.com/tsg/gopacket/layers"
 )
-
-func InterfaceAddrsByName(ifaceName string) ([]string, error) {
-
-	var buf []string
-
-	i, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		return nil, err
-	}
-	addrs, err := i.Addrs()
-	if err != nil {
-		return nil, err
-	}
-	for _, addr := range addrs {
-		var ip net.IP
-		switch v := addr.(type) {
-		case *net.IPNet:
-			ip = v.IP
-			buf = append(buf, ip.String())
-		case *net.IPAddr:
-			ip = v.IP
-			buf = append(buf, ip.String())
-		}
-	}
-	return buf, nil
-}
 
 type MainWorker struct {
 	publisher *outputs.Publisher
@@ -90,7 +64,7 @@ func optParse() {
 	var rotateEveryKB uint64
 	var keepFiles int
 
-	flag.StringVar(&ifaceConfig.Device, "i", "eth2", "Listen on interface")
+	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture type are pcap or af_packet")
 	flag.StringVar(&ifaceConfig.BpfFilter, "f", "greater 300 and portrange 5060-5090", "BPF filter")
 	flag.StringVar(&ifaceConfig.File, "rf", "", "Read packets from file")
@@ -101,6 +75,7 @@ func optParse() {
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 128, "Interface buffer size (MB)")
 	flag.StringVar(&logging.Level, "l", "info", "Logging level")
+	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "", "Log path")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "The size (KB) of each log file")
@@ -124,23 +99,28 @@ func optParse() {
 	config.Cfg.Logging = &logging
 
 	if ifaceConfig.Device == "" && ifaceConfig.File == "" {
-		flag.Usage()
-		fmt.Println("no interface specified.")
+		printDevicesList()
 		os.Exit(1)
 	}
+}
 
-	if ifaceConfig.Device != "" {
-		ifaceAddrs, err := InterfaceAddrsByName(config.Cfg.Iface.Device)
-		if err != nil {
-			flag.Usage()
-			fmt.Println("error while looking up interface address.")
-			os.Exit(1)
-		}
+func printDevicesList() {
+	lst, err := sniffer.ListDeviceNames(true, true)
+	if err != nil {
+		log.Fatalf("Error getting devices list: %v\n", err)
+	}
 
-		config.Cfg.IfaceAddrs = make(map[string]bool)
-		for _, addr := range ifaceAddrs {
-			config.Cfg.IfaceAddrs[addr] = true
+	if len(lst) == 0 {
+		fmt.Printf("No devices found.")
+		if runtime.GOOS != "windows" {
+			fmt.Println(" You might need sudo?")
+		} else {
+			fmt.Println("")
 		}
+	}
+
+	for i, d := range lst {
+		fmt.Printf("%d: %s\n", i, d)
 	}
 }
 
@@ -150,6 +130,10 @@ func init() {
 }
 
 func main() {
+	if os.Geteuid() != 0 {
+		fmt.Println("You might need sudo or be root!")
+		os.Exit(1)
+	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	capture := &sniffer.SnifferSetup{}
 	capture.Init(false, config.Cfg.Iface.BpfFilter, NewWorker, config.Cfg.Iface)

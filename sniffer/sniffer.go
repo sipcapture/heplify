@@ -37,98 +37,9 @@ type Worker interface {
 
 type WorkerFactory func(layers.LinkType) (Worker, error)
 
-// Computes the block_size and the num_blocks in such a way that the
-// allocated mmap buffer is close to but smaller than target_size_mb.
-// The restriction is that the block_size must be divisible by both the
-// frame size and page size.
-func afpacketComputeSize(targetSizeMb int, snaplen int, pageSize int) (
-	frameSize int, blockSize int, numBlocks int, err error) {
-
-	if snaplen < pageSize {
-		frameSize = pageSize / (pageSize / snaplen)
-	} else {
-		frameSize = (snaplen/pageSize + 1) * pageSize
-	}
-
-	// 128 is the default from the gopacket library so just use that
-	blockSize = frameSize * 128
-	numBlocks = (targetSizeMb * 1024 * 1024) / blockSize
-
-	if numBlocks == 0 {
-		return 0, 0, 0, fmt.Errorf("Buffer size too small")
-	}
-
-	return frameSize, blockSize, numBlocks, nil
-}
-
-func deviceNameFromIndex(index int, devices []string) (string, error) {
-	if index >= len(devices) {
-		return "", fmt.Errorf("Looking for device index %d, but there are only %d devices",
-			index, len(devices))
-	}
-
-	return devices[index], nil
-}
-
-// ListDevicesNames returns the list of adapters available for sniffing on
-// this computer. If the withDescription parameter is set to true, a human
-// readable version of the adapter name is added. If the withIP parameter
-// is set to true, IP address of the adapter is added.
-func ListDeviceNames(withDescription bool, withIP bool) ([]string, error) {
-	devices, err := pcap.FindAllDevs()
-	if err != nil {
-		return []string{}, err
-	}
-
-	ret := []string{}
-	for _, dev := range devices {
-		r := dev.Name
-
-		if withDescription {
-			desc := "No description available"
-			if len(dev.Description) > 0 {
-				desc = dev.Description
-			}
-			r += fmt.Sprintf(" (%s)", desc)
-		}
-
-		if withIP {
-			ips := "Not assigned ip address"
-			if len(dev.Addresses) > 0 {
-				ips = ""
-
-				for i, address := range []pcap.InterfaceAddress(dev.Addresses) {
-					// Add a space between the IP address.
-					if i > 0 {
-						ips += " "
-					}
-
-					ips += fmt.Sprintf("%s", address.IP.String())
-				}
-			}
-			r += fmt.Sprintf(" (%s)", ips)
-
-		}
-		ret = append(ret, r)
-	}
-	return ret, nil
-}
-
-func (sniffer *SnifferSetup) setFromConfig(config *config.InterfacesConfig) error {
+func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	var err error
-
-	sniffer.config = config
-
-	if len(sniffer.config.File) > 0 {
-		logp.Debug("sniffer", "Reading from file: %s", sniffer.config.File)
-		// we read file with the pcap provider
-		sniffer.config.Type = "pcap"
-	}
-
-	// set defaults
-	if len(sniffer.config.Device) == 0 {
-		sniffer.config.Device = "any"
-	}
+	sniffer.config = cfg
 
 	if index, err := strconv.Atoi(sniffer.config.Device); err == nil { // Device is numeric
 		devices, err := ListDeviceNames(false, false)
@@ -181,7 +92,7 @@ func (sniffer *SnifferSetup) setFromConfig(config *config.InterfacesConfig) erro
 			sniffer.config.BufferSizeMb = 32
 		}
 
-		frameSize, blockSize, numBlocks, err := afpacketComputeSize(
+		szFrame, szBlock, numBlocks, err := afpacketComputeSize(
 			sniffer.config.BufferSizeMb,
 			sniffer.config.Snaplen,
 			os.Getpagesize())
@@ -192,8 +103,8 @@ func (sniffer *SnifferSetup) setFromConfig(config *config.InterfacesConfig) erro
 
 		sniffer.afpacketHandle, err = newAfpacketHandle(
 			sniffer.config.Device,
-			frameSize,
-			blockSize,
+			szFrame,
+			szBlock,
 			numBlocks,
 			500*time.Millisecond)
 		if err != nil {
@@ -368,7 +279,6 @@ func (sniffer *SnifferSetup) Run() error {
 	if sniffer.dumper != nil {
 		sniffer.dumper.Close()
 	}
-
 	return retError
 }
 
