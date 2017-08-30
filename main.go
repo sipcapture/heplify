@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
@@ -107,7 +108,7 @@ func optParse() {
 
 func printDevicesList() {
 	fmt.Printf("\nPlease use one of the following devices:\n\n")
-	lst, err := sniffer.ListDeviceNames(true, true)
+	lst, err := sniffer.ListDeviceNames(false, false)
 	if err != nil {
 		log.Fatalf("Error getting devices list: %v\n", err)
 	}
@@ -115,15 +116,19 @@ func printDevicesList() {
 	if len(lst) == 0 {
 		fmt.Printf("No devices found.")
 		if runtime.GOOS != "windows" {
-			fmt.Println(" You might need sudo?")
+			fmt.Printf("\nYou might need sudo or be root!\n\n")
 		} else {
 			fmt.Println("")
 		}
 	}
 
-	for i, d := range lst {
-		fmt.Printf("%d: %s\n", i, d)
+	for _, d := range lst {
+		if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+			continue
+		}
+		fmt.Printf("-i %s\n", d)
 	}
+	fmt.Println("")
 }
 
 func init() {
@@ -133,7 +138,7 @@ func init() {
 
 func main() {
 	if os.Geteuid() != 0 {
-		fmt.Println("You might need sudo or be root!")
+		fmt.Printf("\nYou might need sudo or be root!\n\n")
 		os.Exit(1)
 	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
