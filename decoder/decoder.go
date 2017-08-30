@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/heplify/config"
 	"github.com/tsg/gopacket"
 	"github.com/tsg/gopacket/layers"
 )
@@ -44,15 +45,6 @@ func NewDecoder() *Decoder {
 	return &Decoder{Host: host}
 }
 
-var (
-	eth     layers.Ethernet
-	ip4     layers.IPv4
-	ip6     layers.IPv6
-	tcp     layers.TCP
-	udp     layers.UDP
-	payload gopacket.Payload
-)
-
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
 	hep := &Hep{
 		Tsec:  uint32(ci.Timestamp.Unix()),
@@ -64,47 +56,54 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Hep:  hep,
 	}
 
-	decoded := []gopacket.LayerType{}
-
-	// Faster, predefined layer parser that doesn't make copies of the layer slices
-	parser := gopacket.NewDecodingLayerParser(
-		layers.LayerTypeEthernet,
-		&eth,
-		&ip4,
-		&ip6,
-		&tcp,
-		&udp,
-		&payload)
-
-	err := parser.DecodeLayers(data, &decoded)
-	if err != nil {
-		logp.Err("Error decoding packet: %v", err)
-		return nil, nil
-	}
-	if len(udp.Payload) > 0 || len(tcp.Payload) > 0 {
-		for _, layerType := range decoded {
-			switch layerType {
+	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+	if app := packet.ApplicationLayer(); app != nil {
+		if config.Cfg.HepFilter != "" && strings.Contains(string(app.Payload()), config.Cfg.HepFilter) {
+			return nil, nil
+		}
+		for _, layer := range packet.Layers() {
+			switch layer.LayerType() {
 
 			case layers.LayerTypeIPv4:
-				//pkt.Ip4 = NewIP4(ip4)
+				ip4l := packet.Layer(layers.LayerTypeIPv4)
+				ip4, ok := ip4l.(*layers.IPv4)
+				if !ok {
+					return nil, nil
+				}
+				pkt.Ip4 = NewIP4(ip4)
 				hep.Srcip = ip2int(ip4.SrcIP)
 				hep.Dstip = ip2int(ip4.DstIP)
 				hep.Protocol = ip4.Protocol
 
 			case layers.LayerTypeIPv6:
-				//pkt.Ip6 = NewIP6(ip6)
+				ip6l := packet.Layer(layers.LayerTypeIPv6)
+				ip6, ok := ip6l.(*layers.IPv6)
+				if !ok {
+					return nil, nil
+				}
+				pkt.Ip6 = NewIP6(ip6)
 				hep.Srcip = ip2int(ip6.SrcIP)
 				hep.Dstip = ip2int(ip6.DstIP)
 				hep.Protocol = ip6.NextHeader
 
 			case layers.LayerTypeUDP:
-				//pkt.Udp = NewUDP(udp)
+				udpl := packet.Layer(layers.LayerTypeUDP)
+				udp, ok := udpl.(*layers.UDP)
+				if !ok {
+					break
+				}
+				pkt.Udp = NewUDP(udp)
 				hep.Sport = uint16(udp.SrcPort)
 				hep.Dport = uint16(udp.DstPort)
 				hep.Payload = udp.Payload
 				return pkt, nil
 			case layers.LayerTypeTCP:
-				//pkt.Tcp = NewTCP(tcp)
+				tcpl := packet.Layer(layers.LayerTypeTCP)
+				tcp, ok := tcpl.(*layers.TCP)
+				if !ok {
+					break
+				}
+				pkt.Tcp = NewTCP(tcp)
 				hep.Sport = uint16(tcp.SrcPort)
 				hep.Dport = uint16(tcp.DstPort)
 				hep.Payload = tcp.Payload

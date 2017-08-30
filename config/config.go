@@ -10,6 +10,7 @@ type Config struct {
 	Iface     *InterfacesConfig
 	Logging   *logp.Logging
 	DoHep     bool
+	HepFilter string
 	HepServer string
 }
 

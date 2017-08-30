@@ -15,7 +15,7 @@ type Publisher struct {
 }
 
 func NewPublisher(o Outputer) *Publisher {
-	lrudup, _ := lru.NewARC(16000)
+	lrudup, _ := lru.NewARC(10000)
 	p := &Publisher{
 		hepQueue: make(chan *decoder.Packet),
 		outputer: o,
