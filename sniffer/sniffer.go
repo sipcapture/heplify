@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,19 +38,22 @@ type Worker interface {
 type WorkerFactory func(layers.LinkType) (Worker, error)
 
 func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
-	var err error
 	sniffer.config = cfg
 
-	if index, err := strconv.Atoi(sniffer.config.Device); err == nil { // Device is numeric
-		devices, err := ListDeviceNames(false, false)
-		if err != nil {
-			return fmt.Errorf("getting devices list: %v", err)
+	devices, err := ListDeviceNames(false, false)
+	if err != nil {
+		return fmt.Errorf("getting devices list: %v", err)
+	}
+	if sniffer.config.Device == "" {
+		fmt.Printf("\nPlease use one of the following devices:\n\n")
+		for _, d := range devices {
+			if strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+				continue
+			}
+			fmt.Printf("-i %s\n", d)
 		}
-		sniffer.config.Device, err = deviceNameFromIndex(index, devices)
-		if err != nil {
-			return fmt.Errorf("Couldn't understand device index %d: %v", index, err)
-		}
-		logp.Info("Resolved device index %d to device: %s", index, sniffer.config.Device)
+		fmt.Println("")
+		os.Exit(1)
 	}
 
 	if sniffer.config.Snaplen == 0 {

@@ -3,10 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
@@ -101,36 +99,6 @@ func optParse() {
 		logging.Files.KeepFiles = &keepFiles
 	}
 	config.Cfg.Logging = &logging
-
-	if ifaceConfig.Device == "" && ifaceConfig.File == "" {
-		printDevicesList()
-		os.Exit(1)
-	}
-}
-
-func printDevicesList() {
-	fmt.Printf("\nPlease use one of the following devices:\n\n")
-	lst, err := sniffer.ListDeviceNames(false, false)
-	if err != nil {
-		log.Fatalf("Error getting devices list: %v\n", err)
-	}
-
-	if len(lst) == 0 {
-		fmt.Printf("No devices found.")
-		if runtime.GOOS != "windows" {
-			fmt.Printf("\nYou might need sudo or be root!\n\n")
-		} else {
-			fmt.Println("")
-		}
-	}
-
-	for _, d := range lst {
-		if strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
-			continue
-		}
-		fmt.Printf("-i %s\n", d)
-	}
-	fmt.Println("")
 }
 
 func init() {
