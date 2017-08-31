@@ -7,50 +7,9 @@ import (
 	"runtime"
 
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
-	"github.com/negbie/heplify/outputs"
 	"github.com/negbie/heplify/sniffer"
-	"github.com/tsg/gopacket"
-	"github.com/tsg/gopacket/layers"
 )
-
-type MainWorker struct {
-	publisher *outputs.Publisher
-	decoder   *decoder.Decoder
-}
-
-func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
-	pkt, err := mw.decoder.Process(data, ci)
-	// TODO check this
-	if err != nil {
-		logp.Critical("OnPacket %v", err)
-		panic(err)
-	}
-	if pkt != nil {
-		mw.publisher.PublishEvent(pkt)
-	}
-}
-
-func NewWorker(dl layers.LinkType) (sniffer.Worker, error) {
-	var o outputs.Outputer
-	var err error
-
-	if config.Cfg.HepServer != "" {
-		o, err = outputs.NewHepOutputer(config.Cfg.HepServer)
-	} else {
-		o, err = outputs.NewFileOutputer()
-	}
-	if err != nil {
-		logp.Critical("NewWorker %v", err)
-		panic(err)
-	}
-
-	p := outputs.NewPublisher(o)
-	d := decoder.NewDecoder()
-	w := &MainWorker{publisher: p, decoder: d}
-	return w, nil
-}
 
 func optParse() {
 
@@ -113,7 +72,7 @@ func main() {
 	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	capture := &sniffer.SnifferSetup{}
-	err := capture.Init(false, config.Cfg.Iface.BpfFilter, NewWorker, config.Cfg.Iface)
+	err := capture.Init(false, config.Cfg.Iface.BpfFilter, sniffer.NewWorker, config.Cfg.Iface)
 	if err != nil {
 		fmt.Printf("\nCritical: %v\n\n", err)
 		logp.Critical("%v", err)
