@@ -121,7 +121,7 @@ func (ho *HepOutputer) Start() {
 	}
 }
 
-func toHep(h *decoder.Hep) []byte {
+func convertToHep(h *decoder.Hep) []byte {
 	chuncks := newHEPChuncks(h)
 	hepMsg := make([]byte, len(chuncks)+6)
 	copy(hepMsg[6:], chuncks)

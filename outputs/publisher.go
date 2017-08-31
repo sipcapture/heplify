@@ -11,15 +11,18 @@ import (
 type Publisher struct {
 	hepQueue chan *decoder.Packet
 	outputer Outputer
-	hepDeDup *lru.ARCCache
+	hepDedup *lru.ARCCache
 }
 
 func NewPublisher(o Outputer) *Publisher {
-	lrudup, _ := lru.NewARC(10000)
+	lru, err := lru.NewARC(1024)
+	if err != nil {
+		logp.Err("lru %v", err)
+	}
 	p := &Publisher{
 		hepQueue: make(chan *decoder.Packet),
 		outputer: o,
-		hepDeDup: lrudup,
+		hepDedup: lru,
 	}
 	go p.Start()
 	return p
@@ -39,25 +42,20 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 	}()
 
 	if config.Cfg.HepDedup {
-
-		_, ok := pub.hepDeDup.Get(string(pkt.Hep.Payload))
-		if ok {
-			logp.Info("duplicate hep %s", pkt.Hep.Payload)
-		} else {
-			logp.Info("send hep %s", pkt.Hep.Payload)
-
-			b := toHep(pkt.Hep)
-			pub.outputer.Output(b)
+		_, dup := pub.hepDedup.Get(string(pkt.Hep.Payload))
+		if dup == false {
+			hepPacket := convertToHep(pkt.Hep)
+			pub.outputer.Output(hepPacket)
 		}
-		pub.hepDeDup.Add(string(pkt.Hep.Payload), nil)
+		pub.hepDedup.Add(string(pkt.Hep.Payload), nil)
 	} else {
 		//b, err := json.Marshal(pkt)
-		b := toHep(pkt.Hep)
+		hepPacket := convertToHep(pkt.Hep)
 		/* 	if err != nil {
 			logp.Err("json.Marshal() %v", err)
 			return
 		} */
-		pub.outputer.Output(b)
+		pub.outputer.Output(hepPacket)
 	}
 }
 
