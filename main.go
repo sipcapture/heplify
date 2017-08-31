@@ -40,7 +40,8 @@ func optParse() {
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "The size (KB) of each log file")
 	flag.IntVar(&keepFiles, "k", 4, "Keep the number of log files")
-	flag.BoolVar(&config.Cfg.DoHep, "dh", true, "Use Hep")
+	flag.BoolVar(&config.Cfg.HepConvert, "hc", true, "Convert packets to HEP")
+	flag.BoolVar(&config.Cfg.HepDedup, "hd", false, "Deduplicate HEP packets")
 	flag.StringVar(&config.Cfg.HepFilter, "hf", "", "Filter like REGISTER, OPTIONS")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HepServer address")
 

@@ -26,7 +26,7 @@ func NewPublisher(o Outputer) *Publisher {
 }
 
 func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
-	if config.Cfg.DoHep {
+	if config.Cfg.HepConvert {
 		pub.hepQueue <- pkt
 	}
 }
@@ -38,12 +38,19 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		}
 	}()
 
-	_, ok := pub.hepDeDup.Get(string(pkt.Hep.Payload))
-	if ok {
-		logp.Info("duplicate hep %s", pkt.Hep.Payload)
-	} else {
-		logp.Info("send hep %s", pkt.Hep.Payload)
+	if config.Cfg.HepDedup {
 
+		_, ok := pub.hepDeDup.Get(string(pkt.Hep.Payload))
+		if ok {
+			logp.Info("duplicate hep %s", pkt.Hep.Payload)
+		} else {
+			logp.Info("send hep %s", pkt.Hep.Payload)
+
+			b := toHep(pkt.Hep)
+			pub.outputer.Output(b)
+		}
+		pub.hepDeDup.Add(string(pkt.Hep.Payload), nil)
+	} else {
 		//b, err := json.Marshal(pkt)
 		b := toHep(pkt.Hep)
 		/* 	if err != nil {
@@ -52,7 +59,6 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		} */
 		pub.outputer.Output(b)
 	}
-	pub.hepDeDup.Add(string(pkt.Hep.Payload), nil)
 }
 
 func (pub *Publisher) Start() {

@@ -7,11 +7,12 @@ import (
 var Cfg Config
 
 type Config struct {
-	Iface     *InterfacesConfig
-	Logging   *logp.Logging
-	DoHep     bool
-	HepFilter string
-	HepServer string
+	Iface      *InterfacesConfig
+	Logging    *logp.Logging
+	HepConvert bool
+	HepDedup   bool
+	HepFilter  string
+	HepServer  string
 }
 
 type InterfacesConfig struct {

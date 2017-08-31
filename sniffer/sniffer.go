@@ -33,11 +33,48 @@ type SnifferSetup struct {
 	DataSource gopacket.PacketDataSource
 }
 
+type MainWorker struct {
+	publisher *outputs.Publisher
+	decoder   *decoder.Decoder
+}
+
 type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 }
 
 type WorkerFactory func(layers.LinkType) (Worker, error)
+
+func NewWorker(dl layers.LinkType) (Worker, error) {
+	var o outputs.Outputer
+	var err error
+
+	if config.Cfg.HepServer != "" {
+		o, err = outputs.NewHepOutputer(config.Cfg.HepServer)
+	} else {
+		o, err = outputs.NewFileOutputer()
+	}
+	if err != nil {
+		logp.Critical("NewWorker %v", err)
+		panic(err)
+	}
+
+	p := outputs.NewPublisher(o)
+	d := decoder.NewDecoder()
+	w := &MainWorker{publisher: p, decoder: d}
+	return w, nil
+}
+
+func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
+	pkt, err := mw.decoder.Process(data, ci)
+	// TODO check this
+	if err != nil {
+		logp.Critical("OnPacket %v", err)
+		panic(err)
+	}
+	if pkt != nil {
+		mw.publisher.PublishEvent(pkt)
+	}
+}
 
 func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	sniffer.config = cfg
@@ -290,41 +327,4 @@ func (sniffer *SnifferSetup) Stop() error {
 
 func (sniffer *SnifferSetup) IsAlive() bool {
 	return sniffer.isAlive
-}
-
-type MainWorker struct {
-	publisher *outputs.Publisher
-	decoder   *decoder.Decoder
-}
-
-func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
-	pkt, err := mw.decoder.Process(data, ci)
-	// TODO check this
-	if err != nil {
-		logp.Critical("OnPacket %v", err)
-		panic(err)
-	}
-	if pkt != nil {
-		mw.publisher.PublishEvent(pkt)
-	}
-}
-
-func NewWorker(dl layers.LinkType) (Worker, error) {
-	var o outputs.Outputer
-	var err error
-
-	if config.Cfg.HepServer != "" {
-		o, err = outputs.NewHepOutputer(config.Cfg.HepServer)
-	} else {
-		o, err = outputs.NewFileOutputer()
-	}
-	if err != nil {
-		logp.Critical("NewWorker %v", err)
-		panic(err)
-	}
-
-	p := outputs.NewPublisher(o)
-	d := decoder.NewDecoder()
-	w := &MainWorker{publisher: p, decoder: d}
-	return w, nil
 }
