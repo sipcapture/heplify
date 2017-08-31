@@ -1,6 +1,8 @@
 package outputs
 
 import (
+	"encoding/json"
+
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
@@ -29,9 +31,7 @@ func NewPublisher(o Outputer) *Publisher {
 }
 
 func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
-	if config.Cfg.HepConvert {
-		pub.hepQueue <- pkt
-	}
+	pub.hepQueue <- pkt
 }
 
 func (pub *Publisher) output(pkt *decoder.Packet) {
@@ -41,21 +41,24 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		}
 	}()
 
-	if config.Cfg.HepDedup {
+	if config.Cfg.HepDedup && config.Cfg.HepConvert {
 		_, dup := pub.hepDedup.Get(string(pkt.Hep.Payload))
 		if dup == false {
 			hepPacket := convertToHep(pkt.Hep)
 			pub.outputer.Output(hepPacket)
 		}
 		pub.hepDedup.Add(string(pkt.Hep.Payload), nil)
-	} else {
-		//b, err := json.Marshal(pkt)
+	} else if config.Cfg.HepConvert {
 		hepPacket := convertToHep(pkt.Hep)
-		/* 	if err != nil {
+		pub.outputer.Output(hepPacket)
+	} else {
+		jsonPacket, err := json.Marshal(pkt)
+		if err != nil {
 			logp.Err("json.Marshal() %v", err)
 			return
-		} */
-		pub.outputer.Output(hepPacket)
+		}
+		logp.Info(string(jsonPacket))
+		pub.outputer.Output(jsonPacket)
 	}
 }
 
