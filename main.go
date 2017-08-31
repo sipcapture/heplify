@@ -22,28 +22,28 @@ func optParse() {
 	var logging logp.Logging
 	var fileRotator logp.FileRotator
 	var rotateEveryKB uint64
-	var keepFiles int
+	var keepLogFiles int
 
 	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
-	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture type are pcap or af_packet")
+	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [pcap, af_packet]")
 	flag.StringVar(&ifaceConfig.BpfFilter, "f", "greater 300 and portrange 5060-5090", "BPF filter")
 	flag.StringVar(&ifaceConfig.File, "rf", "", "Read packets from file")
-	flag.StringVar(&ifaceConfig.Dumpfile, "df", "", "Dump to file")
+	flag.StringVar(&ifaceConfig.Dumpfile, "df", "", "Dump packets to file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
-	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", true, "Topspeed")
+	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", true, "Topspeed uses timestamps from packets")
 	flag.BoolVar(&ifaceConfig.WithVlans, "wl", false, "With vlans")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
-	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 128, "Interface buffer size (MB)")
-	flag.StringVar(&logging.Level, "l", "warning", "Logging level")
+	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
+	flag.IntVar(&keepLogFiles, "kl", 4, "Rotate the number of log files")
+	flag.StringVar(&logging.Level, "l", "warning", "Log level [info, notice, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
-	flag.StringVar(&fileRotator.Path, "p", "./", "Log path")
+	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
-	flag.Uint64Var(&rotateEveryKB, "r", 51200, "The size (KB) of each log file")
-	flag.IntVar(&keepFiles, "k", 4, "Keep the number of log files")
+	flag.Uint64Var(&rotateEveryKB, "r", 51200, "Log filesize (KB)")
 	flag.BoolVar(&config.Cfg.HepConvert, "hc", true, "Convert packets to HEP")
 	flag.BoolVar(&config.Cfg.HepDedup, "hd", false, "Deduplicate HEP packets")
-	flag.StringVar(&config.Cfg.HepFilter, "hf", "", "Filter like REGISTER, OPTIONS")
-	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HepServer address")
+	flag.StringVar(&config.Cfg.HepFilter, "hf", "", "Filter out REGISTER, OPTIONS ...")
+	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
 
 	flag.Parse()
 
@@ -56,7 +56,7 @@ func optParse() {
 
 		rotateKB := rotateEveryKB * 1024
 		logging.Files.RotateEveryBytes = &rotateKB
-		logging.Files.KeepFiles = &keepFiles
+		logging.Files.KeepFiles = &keepLogFiles
 	}
 	config.Cfg.Logging = &logging
 }
