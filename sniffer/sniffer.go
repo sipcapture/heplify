@@ -44,7 +44,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	if index, err := strconv.Atoi(sniffer.config.Device); err == nil { // Device is numeric
 		devices, err := ListDeviceNames(false, false)
 		if err != nil {
-			return fmt.Errorf("Error getting devices list: %v", err)
+			return fmt.Errorf("getting devices list: %v", err)
 		}
 		sniffer.config.Device, err = deviceNameFromIndex(index, devices)
 		if err != nil {
@@ -68,20 +68,16 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		if len(sniffer.config.File) > 0 {
 			sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.File)
 			if err != nil {
-				return err
+				return fmt.Errorf("setting pcap dump mode: %v", err)
 			}
 		} else {
-			sniffer.pcapHandle, err = pcap.OpenLive(
-				sniffer.config.Device,
-				int32(sniffer.config.Snaplen),
-				true,
-				500*time.Millisecond)
+			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
 			if err != nil {
-				return err
+				return fmt.Errorf("setting pcap live mode: %v", err)
 			}
 			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
 			if err != nil {
-				return err
+				return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
 			}
 		}
 
@@ -92,35 +88,25 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			sniffer.config.BufferSizeMb = 32
 		}
 
-		szFrame, szBlock, numBlocks, err := afpacketComputeSize(
-			sniffer.config.BufferSizeMb,
-			sniffer.config.Snaplen,
-			os.Getpagesize())
+		szFrame, szBlock, numBlocks, err := afpacketComputeSize(sniffer.config.BufferSizeMb, sniffer.config.Snaplen, os.Getpagesize())
 		if err != nil {
-			logp.Err("sniffer %s", err)
-			return err
+			return fmt.Errorf("setting af_packet computesize: %v", err)
 		}
 
-		sniffer.afpacketHandle, err = newAfpacketHandle(
-			sniffer.config.Device,
-			szFrame,
-			szBlock,
-			numBlocks,
-			500*time.Millisecond)
+		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, 500*time.Millisecond)
 		if err != nil {
-			logp.Err("sniffer %s", err)
-			return err
+			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
 
 		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.filter)
 		if err != nil {
-			return fmt.Errorf("SetBPFFilter failed: %s", err)
+			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.filter, err)
 		}
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.afpacketHandle)
 
 	default:
-		return fmt.Errorf("Unknown sniffer type: %s", sniffer.config.Type)
+		return fmt.Errorf("unknown sniffer type: %s", sniffer.config.Type)
 	}
 
 	return nil
@@ -159,7 +145,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		logp.Debug("sniffer", "BPF filter: '%s'", sniffer.filter)
 		err = sniffer.setFromConfig(interfaces)
 		if err != nil {
-			return fmt.Errorf("Error creating sniffer: %v", err)
+			return err
 		}
 	}
 
@@ -174,7 +160,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 
 	sniffer.worker, err = factory(sniffer.Datalink())
 	if err != nil {
-		return fmt.Errorf("Error creating decoder: %v", err)
+		return fmt.Errorf("creating decoder: %v", err)
 	}
 
 	if sniffer.config.Dumpfile != "" {

@@ -26,6 +26,7 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	pkt, err := mw.decoder.Process(data, ci)
 	// TODO check this
 	if err != nil {
+		logp.Critical("OnPacket %v", err)
 		panic(err)
 	}
 	if pkt != nil {
@@ -43,6 +44,7 @@ func NewWorker(dl layers.LinkType) (sniffer.Worker, error) {
 		o, err = outputs.NewFileOutputer()
 	}
 	if err != nil {
+		logp.Critical("NewWorker %v", err)
 		panic(err)
 	}
 
@@ -75,9 +77,9 @@ func optParse() {
 	flag.BoolVar(&ifaceConfig.WithVlans, "wl", false, "With vlans")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 128, "Interface buffer size (MB)")
-	flag.StringVar(&logging.Level, "l", "info", "Logging level")
+	flag.StringVar(&logging.Level, "l", "warning", "Logging level")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
-	flag.StringVar(&fileRotator.Path, "p", "", "Log path")
+	flag.StringVar(&fileRotator.Path, "p", "./", "Log path")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "The size (KB) of each log file")
 	flag.IntVar(&keepFiles, "k", 4, "Keep the number of log files")
@@ -143,10 +145,15 @@ func main() {
 	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	capture := &sniffer.SnifferSetup{}
-	capture.Init(false, config.Cfg.Iface.BpfFilter, NewWorker, config.Cfg.Iface)
-	defer capture.Close()
-	err := capture.Run()
+	err := capture.Init(false, config.Cfg.Iface.BpfFilter, NewWorker, config.Cfg.Iface)
 	if err != nil {
-		logp.Err("main capture %v", err)
+		fmt.Printf("\nCritical: %v\n\n", err)
+		logp.Critical("%v", err)
+	}
+	defer capture.Close()
+	err = capture.Run()
+	if err != nil {
+		fmt.Printf("\nCritical: %v\n\n", err)
+		logp.Critical("%v", err)
 	}
 }
