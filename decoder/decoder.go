@@ -58,6 +58,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 	if app := packet.ApplicationLayer(); app != nil {
+
 		if config.Cfg.HepFilter != "" && strings.Contains(string(app.Payload()), config.Cfg.HepFilter) {
 			return nil, nil
 		}
@@ -65,12 +66,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			switch layer.LayerType() {
 
 			case layers.LayerTypeIPv4:
+
 				ip4l := packet.Layer(layers.LayerTypeIPv4)
 				ip4, ok := ip4l.(*layers.IPv4)
 				if !ok {
 					return nil, nil
 				}
-				pkt.Ip4 = NewIP4(ip4)
+				//pkt.Ip4 = NewIP4(ip4)
 				hep.Srcip = ip2int(ip4.SrcIP)
 				hep.Dstip = ip2int(ip4.DstIP)
 				hep.Protocol = ip4.Protocol
@@ -81,7 +83,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				if !ok {
 					return nil, nil
 				}
-				pkt.Ip6 = NewIP6(ip6)
+				//pkt.Ip6 = NewIP6(ip6)
 				hep.Srcip = ip2int(ip6.SrcIP)
 				hep.Dstip = ip2int(ip6.DstIP)
 				hep.Protocol = ip6.NextHeader
@@ -92,21 +94,33 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				if !ok {
 					break
 				}
-				pkt.Udp = NewUDP(udp)
+				//pkt.Udp = NewUDP(udp)
 				hep.Sport = uint16(udp.SrcPort)
 				hep.Dport = uint16(udp.DstPort)
 				hep.Payload = udp.Payload
+
+				/*
+					p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
+					sipLayer, ok := p.Layers()[0].(*SIP)
+					fmt.Println(sipLayer)
+					if !ok {
+						break
+					}
+				*/
+
 				return pkt, nil
+
 			case layers.LayerTypeTCP:
 				tcpl := packet.Layer(layers.LayerTypeTCP)
 				tcp, ok := tcpl.(*layers.TCP)
 				if !ok {
 					break
 				}
-				pkt.Tcp = NewTCP(tcp)
+				//pkt.Tcp = NewTCP(tcp)
 				hep.Sport = uint16(tcp.SrcPort)
 				hep.Dport = uint16(tcp.DstPort)
 				hep.Payload = tcp.Payload
+
 				return pkt, nil
 			}
 		}
