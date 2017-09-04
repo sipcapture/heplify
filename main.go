@@ -30,7 +30,7 @@ func optParse() {
 	flag.StringVar(&ifaceConfig.File, "rf", "", "Read packets from file")
 	flag.StringVar(&ifaceConfig.Dumpfile, "df", "", "Dump packets to file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
-	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", true, "Topspeed uses timestamps from packets")
+	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", false, "Topspeed uses timestamps from packets")
 	flag.BoolVar(&ifaceConfig.WithVlans, "wl", false, "With vlans")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
