@@ -17,7 +17,7 @@ type Publisher struct {
 }
 
 func NewPublisher(o Outputer) *Publisher {
-	lru, err := lru.NewARC(1024)
+	lru, err := lru.NewARC(8192)
 	if err != nil {
 		logp.Err("lru %v", err)
 	}
@@ -41,38 +41,31 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		}
 	}()
 
-	if config.Cfg.HepDedup && config.Cfg.HepConvert {
+	if config.Cfg.HepDedup && config.Cfg.HepServer != "" {
 		_, dup := pub.hepDedup.Get(string(pkt.Payload))
 		if dup == false {
 			hepPacket := convertToHep(pkt)
 			pub.outputer.Output(hepPacket)
+			pub.hepDedup.Add(string(pkt.Payload), nil)
 		}
-		pub.hepDedup.Add(string(pkt.Payload), nil)
-	} else if config.Cfg.HepConvert {
+	} else if config.Cfg.HepServer != "" {
 		hepPacket := convertToHep(pkt)
 		pub.outputer.Output(hepPacket)
 	} else {
 		jsonPacket, err := json.Marshal(pkt)
 		if err != nil {
-			logp.Err("json.Marshal() %v", err)
+			logp.Err("json %v", err)
 			return
 		}
-		logp.Info(string(jsonPacket))
 		pub.outputer.Output(jsonPacket)
 	}
 }
 
 func (pub *Publisher) Start() {
-	counter := 0
 	for {
 		select {
 		case pkt := <-pub.hepQueue:
 			pub.output(pkt)
-			counter++
-		}
-
-		if counter%1024 == 0 {
-			logp.Debug("publisher", "Packet number: %d", counter)
 		}
 	}
 }

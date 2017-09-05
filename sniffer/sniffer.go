@@ -106,21 +106,20 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	logp.Debug("sniffer", "Sniffer type: %s device: %s", sniffer.config.Type, sniffer.config.Device)
 
 	switch sniffer.config.Type {
+	case "file":
+		sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
+		if err != nil {
+			return fmt.Errorf("couldn't open file %v %v", sniffer.config.ReadFile, err)
+		}
+
 	case "pcap":
-		if len(sniffer.config.File) > 0 {
-			sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.File)
-			if err != nil {
-				return fmt.Errorf("setting pcap dump mode: %v", err)
-			}
-		} else {
-			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
-			if err != nil {
-				return fmt.Errorf("setting pcap live mode: %v", err)
-			}
-			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
-			if err != nil {
-				return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
-			}
+		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
+		if err != nil {
+			return fmt.Errorf("setting pcap live mode: %v", err)
+		}
+		err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+		if err != nil {
+			return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
 		}
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
@@ -157,12 +156,12 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 func (sniffer *SnifferSetup) Reopen() error {
 	var err error
 
-	if sniffer.config.Type != "pcap" || sniffer.config.File == "" {
+	if sniffer.config.Type != "file" || sniffer.config.ReadFile == "" {
 		return fmt.Errorf("Reopen is only possible for files")
 	}
 
 	sniffer.pcapHandle.Close()
-	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.File)
+	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
 	if err != nil {
 		return err
 	}
@@ -191,7 +190,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		}
 	}
 
-	if len(interfaces.File) == 0 {
+	if interfaces.ReadFile == "" {
 		if interfaces.Device == "any" {
 			// OS X or Windows
 			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
@@ -205,12 +204,12 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		return fmt.Errorf("creating decoder: %v", err)
 	}
 
-	if sniffer.config.Dumpfile != "" {
+	if sniffer.config.WriteFile != "" {
 		p, err := pcap.OpenDead(sniffer.Datalink(), 65535)
 		if err != nil {
 			return err
 		}
-		sniffer.dumper, err = p.NewDumper(sniffer.config.Dumpfile)
+		sniffer.dumper, err = p.NewDumper(sniffer.config.WriteFile)
 		if err != nil {
 			return err
 		}
@@ -236,17 +235,15 @@ func (sniffer *SnifferSetup) Run() error {
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			//logp.Debug("sniffer", "Interrupted")
+			logp.Debug("sniffer", "Interrupted")
 			continue
 		}
 
-		//logp.Debug("sniffer", "End of file")
 		if err == io.EOF {
 			logp.Debug("sniffer", "End of file")
 			loopCount++
 			if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
-				// give a bit of time to the publish goroutine
-				// to flush
+				// time for the publish goroutine to flush
 				time.Sleep(300 * time.Millisecond)
 				sniffer.isAlive = false
 				continue
@@ -271,10 +268,11 @@ func (sniffer *SnifferSetup) Run() error {
 
 		if len(data) == 0 {
 			// Empty packet, probably timeout from afpacket
+			logp.Debug("sniffer", "Empty packet")
 			continue
 		}
 
-		if sniffer.config.File != "" {
+		if sniffer.config.ReadFile != "" {
 			if lastPktTime != nil && !sniffer.config.TopSpeed {
 				sleep := ci.Timestamp.Sub(*lastPktTime)
 				if sleep > 0 {

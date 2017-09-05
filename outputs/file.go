@@ -8,7 +8,7 @@ type FileOutputer struct {
 }
 
 func (fo *FileOutputer) Output(msg []byte) {
-	logp.Info("fileOutputer %s", msg)
+	logp.Info("%s", msg)
 }
 
 func NewFileOutputer() (*FileOutputer, error) {

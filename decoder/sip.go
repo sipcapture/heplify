@@ -190,6 +190,14 @@ func NewSIP() *SIP {
 	return s
 }
 
+func (s *SIP) CanDecode() gopacket.LayerClass {
+	return LayerTypeSIP
+}
+
+func (s *SIP) NextLayerType() gopacket.LayerType {
+	return gopacket.LayerTypePayload
+}
+
 // LayerType returns gopacket.LayerTypeSIP.
 func (s *SIP) LayerType() gopacket.LayerType {
 	return LayerTypeSIP
