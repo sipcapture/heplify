@@ -121,7 +121,7 @@ func (ho *HepOutputer) Start() {
 	}
 }
 
-func convertToHep(h *decoder.Hep) []byte {
+func convertToHep(h *decoder.Packet) []byte {
 	chuncks := newHEPChuncks(h)
 	hepMsg := make([]byte, len(chuncks)+6)
 	copy(hepMsg[6:], chuncks)
@@ -131,7 +131,7 @@ func convertToHep(h *decoder.Hep) []byte {
 }
 
 // MakeChunck will construct the respective HEP chunck
-func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Hep) []byte {
+func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	var chunck []byte
 	switch chunckType {
 	// Chunk IP protocol family (0x02=IPv4)
@@ -216,7 +216,7 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Hep) []byte {
 }
 
 // NewHEPChuncks will fill a buffer with all the chuncks
-func newHEPChuncks(h *decoder.Hep) []byte {
+func newHEPChuncks(h *decoder.Packet) []byte {
 	buf := new(bytes.Buffer)
 
 	buf.Write(makeChunck(0x0000, 0x0001, h))

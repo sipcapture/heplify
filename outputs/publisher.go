@@ -42,14 +42,14 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 	}()
 
 	if config.Cfg.HepDedup && config.Cfg.HepConvert {
-		_, dup := pub.hepDedup.Get(string(pkt.Hep.Payload))
+		_, dup := pub.hepDedup.Get(string(pkt.Payload))
 		if dup == false {
-			hepPacket := convertToHep(pkt.Hep)
+			hepPacket := convertToHep(pkt)
 			pub.outputer.Output(hepPacket)
 		}
-		pub.hepDedup.Add(string(pkt.Hep.Payload), nil)
+		pub.hepDedup.Add(string(pkt.Payload), nil)
 	} else if config.Cfg.HepConvert {
-		hepPacket := convertToHep(pkt.Hep)
+		hepPacket := convertToHep(pkt)
 		pub.outputer.Output(hepPacket)
 	} else {
 		jsonPacket, err := json.Marshal(pkt)

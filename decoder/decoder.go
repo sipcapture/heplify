@@ -1,18 +1,24 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/negbie/heplify/config"
 	"github.com/tsg/gopacket"
 	"github.com/tsg/gopacket/layers"
 )
 
-type Packet struct {
+var eth layers.Ethernet
+var ip4 layers.IPv4
+var tcp layers.TCP
+var udp layers.UDP
+var payload gopacket.Payload
+
+/* type Packet struct {
 	Ts   time.Time `json:"ts"`
 	Host string    `json:"host,omitempty"`
 	Ip4  *IPv4     `json:"ip4,omitempty"`
@@ -20,21 +26,21 @@ type Packet struct {
 	Tcp  *TCP      `json:"tcp,omitempty"`
 	Udp  *UDP      `json:"udp,omitempty"`
 	Hep  *Hep      `json:"-"`
-}
+} */
 
 type Decoder struct {
 	Host string
 }
 
-type Hep struct {
-	Tsec     uint32
-	Tmsec    uint32
-	Srcip    uint32
-	Dstip    uint32
-	Sport    uint16
-	Dport    uint16
-	Payload  []byte
-	Protocol layers.IPProtocol
+type Packet struct {
+	Host    string
+	Tsec    uint32
+	Tmsec   uint32
+	Srcip   uint32
+	Dstip   uint32
+	Sport   uint16
+	Dport   uint16
+	Payload []byte
 }
 
 func NewDecoder() *Decoder {
@@ -46,82 +52,63 @@ func NewDecoder() *Decoder {
 }
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
-	hep := &Hep{
+	pkt := &Packet{
+		Host:  d.Host,
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
-	pkt := &Packet{
-		Host: d.Host,
-		Ts:   ci.Timestamp,
-		Hep:  hep,
-	}
 
-	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
-	if app := packet.ApplicationLayer(); app != nil {
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip4, &tcp, &udp, &payload)
+	decoded := []gopacket.LayerType{}
+	parser.DecodeLayers(data, &decoded)
 
-		if config.Cfg.HepFilter != "" && strings.Contains(string(app.Payload()), config.Cfg.HepFilter) {
-			return nil, nil
-		}
-		for _, layer := range packet.Layers() {
-			switch layer.LayerType() {
+	for _, layerType := range decoded {
+		switch layerType {
+		case layers.LayerTypeEthernet:
+			pkt.Payload = eth.Payload
+			
+		case layers.LayerTypeIPv4:
+			pkt.Srcip = ip2int(ip4.SrcIP)
+			pkt.Dstip = ip2int(ip4.DstIP)
 
-			case layers.LayerTypeIPv4:
+		case layers.LayerTypeUDP:
+			if config.Cfg.HepFilter != "" && bytes.Contains(udp.Payload, []byte(config.Cfg.HepFilter)) {
+				return nil, nil
+			}
+			//pkt.Udp = NewUDP(udp)
+			pkt.Sport = uint16(udp.SrcPort)
+			pkt.Dport = uint16(udp.DstPort)
+			pkt.Payload = udp.Payload
 
-				ip4l := packet.Layer(layers.LayerTypeIPv4)
-				ip4, ok := ip4l.(*layers.IPv4)
-				if !ok {
-					return nil, nil
-				}
-				//pkt.Ip4 = NewIP4(ip4)
-				hep.Srcip = ip2int(ip4.SrcIP)
-				hep.Dstip = ip2int(ip4.DstIP)
-				hep.Protocol = ip4.Protocol
-
-			case layers.LayerTypeIPv6:
-				ip6l := packet.Layer(layers.LayerTypeIPv6)
-				ip6, ok := ip6l.(*layers.IPv6)
-				if !ok {
-					return nil, nil
-				}
-				//pkt.Ip6 = NewIP6(ip6)
-				hep.Srcip = ip2int(ip6.SrcIP)
-				hep.Dstip = ip2int(ip6.DstIP)
-				hep.Protocol = ip6.NextHeader
-
-			case layers.LayerTypeUDP:
-				udpl := packet.Layer(layers.LayerTypeUDP)
-				udp, ok := udpl.(*layers.UDP)
+			/*
+				p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
+				sipLayer, ok := p.Layers()[0].(*SIP)
+				fmt.Println(sipLayer)
 				if !ok {
 					break
 				}
-				//pkt.Udp = NewUDP(udp)
-				hep.Sport = uint16(udp.SrcPort)
-				hep.Dport = uint16(udp.DstPort)
-				hep.Payload = udp.Payload
+			*/
 
-				/*
-					p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
-					sipLayer, ok := p.Layers()[0].(*SIP)
-					fmt.Println(sipLayer)
-					if !ok {
-						break
-					}
-				*/
+			return pkt, nil
 
-				return pkt, nil
+		case layers.LayerTypeTCP:
+			if config.Cfg.HepFilter != "" && bytes.Contains(tcp.Payload, []byte(config.Cfg.HepFilter)) {
+				return nil, nil
+			}
+			//pkt.Tcp = NewTCP(tcp)
+			pkt.Sport = uint16(tcp.SrcPort)
+			pkt.Dport = uint16(tcp.DstPort)
+			pkt.Payload = tcp.Payload
 
-			case layers.LayerTypeTCP:
-				tcpl := packet.Layer(layers.LayerTypeTCP)
-				tcp, ok := tcpl.(*layers.TCP)
-				if !ok {
-					break
-				}
-				//pkt.Tcp = NewTCP(tcp)
-				hep.Sport = uint16(tcp.SrcPort)
-				hep.Dport = uint16(tcp.DstPort)
-				hep.Payload = tcp.Payload
+			return pkt, nil
 
-				return pkt, nil
+		default:
+
+			if payload != nil {
+				fmt.Println(layerType)
+
+				pkt.Payload = payload.Payload()
+				fmt.Println(string(pkt.Payload))
 			}
 		}
 	}
