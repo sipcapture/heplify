@@ -4,47 +4,45 @@
 
 ```bash
   -b int
-        Interface buffer size (MB) (default 128)
+        Interface buffersize (MB) (default 64)
   -d string
         Enable certain debug selectors
-  -df string
-        Dump to file
-  -dh
-        Use Hep (default true)
   -e    Log to stderr and disable syslog/file output
   -f string
         BPF filter (default "greater 300 and portrange 5060-5090")
+  -hd
+        Deduplicate HEP packets
   -hf string
-        Filter like REGISTER, OPTIONS
+        Filter out REGISTER, OPTIONS ...
   -hs string
-        HepServer address (default "127.0.0.1:9060")
+        HEP Server address (default "127.0.0.1:9060")
   -i string
         Listen on interface
-  -k int
-        Keep the number of log files (default 4)
+  -kl int
+        Rotate the number of log files (default 4)
   -l string
-        Logging level (default "info")
+        Log level [debug, info, notice, warning, error] (default "warning")
   -lp int
         Loop
   -n string
         Log filename (default "heplify.log")
   -o    Read packet for packet
   -p string
-        Log path
+        Log filepath (default "./")
   -r uint
-        The size (KB) of each log file (default 51200)
+        Log filesize (KB) (default 51200)
   -rf string
-        Read packets from file
+        Read packets from file. Please use -t file
   -s int
         Snap length (default 65535)
   -t string
-        Capture type are pcap or af_packet (default "af_packet")
+        Capture types are [af_packet, pcap, file] (default "af_packet")
   -ts
-        Topspeed (default true)
+        Topspeed uses timestamps from packets
   -v    Log at INFO level
-  -wl
-        With vlans
-  
+  -wf string
+        Write packets to file. Please use -t file
+
 ################################################################
 ./heplify -i eth0 -hf REGISTER
 
