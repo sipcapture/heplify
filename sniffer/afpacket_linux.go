@@ -3,7 +3,6 @@
 package sniffer
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/tsg/gopacket"
@@ -48,11 +47,7 @@ func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.Capt
 }
 
 func (h *afpacketHandle) SetBPFFilter(expr string) (_ error) {
-	filter := expr
-	if expr != "" {
-		filter = fmt.Sprintf("%s or (vlan and (%s))", expr, expr)
-	}
-	return h.TPacket.SetBPFFilter(filter)
+	return h.TPacket.SetBPFFilter(expr)
 }
 
 func (h *afpacketHandle) LinkType() layers.LinkType {

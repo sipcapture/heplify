@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/negbie/heplify/config"
+	"github.com/negbie/heplify/ip4defrag"
+	"github.com/negbie/heplify/logp"
 	"github.com/tsg/gopacket"
 	"github.com/tsg/gopacket/layers"
 )
@@ -66,6 +68,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
+	defragger := ip4defrag.NewIPv4Defragmenter()
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &d1q, &ip4, &tcp, &udp, &sip, &payload)
 	parser.DecodeLayers(data, &decoded)
 
@@ -79,8 +82,16 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			pkt.Vlan = d1q.VLANIdentifier
 
 		case layers.LayerTypeIPv4:
-			pkt.Srcip = ip2int(ip4.SrcIP)
-			pkt.Dstip = ip2int(ip4.DstIP)
+			newip4, err := defragger.DefragIPv4(&ip4)
+
+			if err != nil {
+				logp.Err("Error while de-fragmenting", err)
+			} else if newip4 == nil {
+				logp.Info("ip packet fragment, we don't have the whole packet yet.")
+				continue
+			}
+			pkt.Srcip = ip2int(newip4.SrcIP)
+			pkt.Dstip = ip2int(newip4.DstIP)
 
 		case layers.LayerTypeUDP:
 			pkt.Sport = uint16(udp.SrcPort)
