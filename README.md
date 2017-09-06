@@ -44,6 +44,7 @@
         Write packets to file. Please use -t file
 
 ################################################################
+./heplify -i any -hs "" -e -l info
 ./heplify -i eth0 -hf REGISTER
 
 
