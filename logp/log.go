@@ -151,6 +151,10 @@ func Info(format string, v ...interface{}) {
 	msg(LOG_INFO, "INFO", format, v...)
 }
 
+func Notice(format string, v ...interface{}) {
+	msg(LOG_INFO, "NOTICE", format, v...)
+}
+
 func Warn(format string, v ...interface{}) {
 	msg(LOG_WARNING, "WARN", format, v...)
 }

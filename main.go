@@ -26,7 +26,7 @@ func optParse() {
 
 	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [af_packet, pcap, file]")
-	flag.StringVar(&ifaceConfig.BpfFilter, "f", "greater 300 and portrange 5060-5090", "BPF filter")
+	flag.StringVar(&ifaceConfig.BpfFilter, "f", "udp", "BPF filter")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from file. Please use -t file")
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to file. Please use -t file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
@@ -44,11 +44,9 @@ func optParse() {
 	flag.BoolVar(&config.Cfg.HepDedup, "hd", false, "Deduplicate HEP packets")
 	flag.StringVar(&config.Cfg.HepFilter, "hf", "", "Filter out REGISTER, OPTIONS ...")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
-
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
-
 	logging.Files = &fileRotator
 	if logging.Files.Path != "" {
 		tofiles := true

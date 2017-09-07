@@ -1,9 +1,7 @@
 package outputs
 
 import (
-	"crypto/md5"
 	"encoding/json"
-	"fmt"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
@@ -44,12 +42,12 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 	}()
 
 	if config.Cfg.HepDedup && config.Cfg.HepServer != "" {
-		md5Key := fmt.Sprintf("%x", md5.Sum(pkt.Payload))
-		_, dup := pub.hepDedup.Get(string(md5Key))
+		//md5Key := fmt.Sprintf("%x", md5.Sum(pkt.Payload))
+		_, dup := pub.hepDedup.Get(string(pkt.Payload))
 		if dup == false {
 			hepPacket := convertToHep(pkt)
 			pub.outputer.Output(hepPacket)
-			pub.hepDedup.Add(string(md5Key), nil)
+			pub.hepDedup.Add(string(pkt.Payload), nil)
 		}
 
 	} else if config.Cfg.HepServer != "" {

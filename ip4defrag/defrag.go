@@ -32,7 +32,8 @@ func (d debugging) Printf(format string, args ...interface{}) {
 
 // Constants determining how to handle fragments.
 const (
-	IPv4MinimumFragmentSize    = 576   // Minimum size of a single fragment
+	//IPv4MinimumFragmentSize    = 576   // Minimum size of a single fragment
+	IPv4MinimumFragmentSize    = 8     // Minimum size of a single fragment
 	IPv4MaximumSize            = 65535 // Maximum size of a fragment (2^16)
 	IPv4MaximumFragmentOffset  = 8189  // Maximum offset of a fragment
 	IPv4MaximumFragmentListLen = 8     // Back out if we get more than this many fragments
