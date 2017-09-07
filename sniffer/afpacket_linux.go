@@ -25,24 +25,21 @@ func newAfpacketHandle(device string, snaplen int, block_size int, num_blocks in
 			afpacket.OptFrameSize(snaplen),
 			afpacket.OptBlockSize(block_size),
 			afpacket.OptNumBlocks(num_blocks),
-			afpacket.OptPollTimeout(timeout))
+			afpacket.OptPollTimeout(timeout),
+			afpacket.OptTPacketVersion(afpacket.TPacketVersion3))
 	} else {
 		h.TPacket, err = afpacket.NewTPacket(
 			afpacket.OptInterface(device),
 			afpacket.OptFrameSize(snaplen),
 			afpacket.OptBlockSize(block_size),
 			afpacket.OptNumBlocks(num_blocks),
-			afpacket.OptPollTimeout(timeout))
+			afpacket.OptPollTimeout(timeout),
+			afpacket.OptTPacketVersion(afpacket.TPacketVersion3))
 	}
-
 	return h, err
 }
 
 func (h *afpacketHandle) ReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
-	return h.TPacket.ReadPacketData()
-}
-
-func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
 	return h.TPacket.ZeroCopyReadPacketData()
 }
 

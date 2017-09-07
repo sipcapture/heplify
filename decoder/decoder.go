@@ -45,20 +45,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
-	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+	if app := packet.ApplicationLayer(); app != nil {
+		if config.Cfg.HepFilter != "" && bytes.Contains(app.Payload(), []byte(config.Cfg.HepFilter)) {
+			return nil, nil
+		}
+	}
+
 	for _, layer := range packet.Layers() {
 		switch layer.LayerType() {
-
-		case layers.LayerTypeEthernet:
-			ethl := packet.Layer(layers.LayerTypeEthernet)
-			eth, ok := ethl.(*layers.Ethernet)
-			if !ok {
-				break
-			}
-
-			if config.Cfg.HepFilter != "" && bytes.Contains(eth.Payload, []byte(config.Cfg.HepFilter)) {
-				break
-			}
 
 		case layers.LayerTypeIPv4:
 			ip4l := packet.Layer(layers.LayerTypeIPv4)
@@ -66,26 +61,28 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			if !ok {
 				break
 			}
-
-			l := ip4.Length
-			newip4, err := d.defragger.DefragIPv4(ip4)
-			if err != nil {
-				logp.Err("Error while defragging", err)
-			} else if newip4 == nil {
-				logp.Info("Recieved a fragment")
-				continue
-			}
-			if newip4.Length != l {
-				logp.Info("Decoding re-assembled packet: %s\n", newip4.NextLayerType())
-				pb, ok := packet.(gopacket.PacketBuilder)
-				if !ok {
-					logp.Err("Error while getting packet builder: it's not a PacketBuilder")
+			if config.Cfg.Reasm {
+				l := ip4.Length
+				ip4, err := d.defragger.DefragIPv4(ip4)
+				if err != nil {
+					logp.Err("Error while defragging", err)
+				} else if ip4 == nil {
+					logp.Info("Recieved a fragment")
+					continue
 				}
-				nextDecoder := newip4.NextLayerType()
-				nextDecoder.Decode(newip4.Payload, pb)
+				if ip4.Length != l {
+					logp.Info("Decoding re-assembled packet: %s\n", ip4.NextLayerType())
+					logp.Info(string(ip4.Payload))
+					pb, ok := packet.(gopacket.PacketBuilder)
+					if !ok {
+						logp.Err("Error while getting packet builder: it's not a PacketBuilder")
+					}
+					nextDecoder := ip4.NextLayerType()
+					nextDecoder.Decode(ip4.Payload, pb)
+				}
 			}
-			pkt.Srcip = ip2int(newip4.SrcIP)
-			pkt.Dstip = ip2int(newip4.DstIP)
+			pkt.Srcip = ip2int(ip4.SrcIP)
+			pkt.Dstip = ip2int(ip4.DstIP)
 
 		case layers.LayerTypeUDP:
 			udpl := packet.Layer(layers.LayerTypeUDP)
@@ -122,6 +119,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			if !ok {
 				break
 			}
+
 			pkt.SipHeader = sipLayer.Headers
 
 			return pkt, nil
