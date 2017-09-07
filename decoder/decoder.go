@@ -3,7 +3,6 @@ package decoder
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"os"
 
@@ -101,7 +100,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 			p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
 			sipLayer, ok := p.Layers()[0].(*SIP)
-			fmt.Println(sipLayer)
 			if !ok {
 				break
 			}
