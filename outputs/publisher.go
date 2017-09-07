@@ -39,7 +39,7 @@ func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
 func (pub *Publisher) output(pkt *decoder.Packet) {
 	defer func() {
 		if err := recover(); err != nil {
-			logp.Err("pub.output() %v", err)
+			logp.Err("recover %v", err)
 		}
 	}()
 
