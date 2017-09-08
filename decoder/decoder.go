@@ -3,14 +3,14 @@ package decoder
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/ip4defrag"
-	"github.com/google/gopacket/layers"
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/heplify/ip4defrag"
+	"github.com/tsg/gopacket"
+	"github.com/tsg/gopacket/layers"
 )
 
 type Decoder struct {
@@ -19,15 +19,15 @@ type Decoder struct {
 }
 
 type Packet struct {
-	Host    string
-	Tsec    uint32
-	Tmsec   uint32
-	Srcip   uint32
-	Dstip   uint32
-	Sport   uint16
-	Dport   uint16
-	Payload []byte
-	//SipHeader map[string][]string
+	Host      string
+	Tsec      uint32
+	Tmsec     uint32
+	Srcip     uint32
+	Dstip     uint32
+	Sport     uint16
+	Dport     uint16
+	Payload   []byte
+	SipHeader map[string][]string
 }
 
 func NewDecoder() *Decoder {
@@ -46,6 +46,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+	if packet.ErrorLayer() != nil {
+		fmt.Println("Failed to decode packet:", packet.ErrorLayer().Error())
+	}
+	if app := packet.ApplicationLayer(); app != nil {
+		if config.Cfg.HepFilter != "" && bytes.Contains(app.Payload(), []byte(config.Cfg.HepFilter)) {
+			return nil, nil
+		}
+	}
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4l := packet.Layer(layers.LayerTypeIPv4)
@@ -54,72 +62,71 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
-		if config.Cfg.HepFilter != "" && bytes.Contains(ip4.Payload, []byte(config.Cfg.HepFilter)) {
+
+		ip4Defrag, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
+		//ip4Defrag, err := d.defragger.DefragIPv4(ip4)
+		if err != nil {
 			return nil, nil
 		}
-		if ip4.Flags&layers.IPv4DontFragment == 0 && (ip4.Flags&layers.IPv4MoreFragments != 0 || ip4.FragOffset != 0) {
-			ip4, err := d.defragger.DefragIPv4(ip4)
-			if err != nil {
-				logp.Err("Error while de-fragmenting", err)
-			} else if ip4 == nil {
-				logp.Notice("packet fragment, we don't have whole packet yet")
-				return nil, nil
-			}
-
-			if ip4.Length != ip4Len {
-				logp.Notice("Decoding re-assembled packet: %s\n", ip4.NextLayerType())
-				pb, ok := packet.(gopacket.PacketBuilder)
-				if !ok {
-					panic("Not a PacketBuilder")
-				}
-				nextDecoder := ip4.NextLayerType()
-				nextDecoder.Decode(ip4.Payload, pb)
-			}
+		if ip4Defrag == nil {
+			return nil, nil
 		}
-		pkt.Srcip = ip2int(ip4.SrcIP)
-		pkt.Dstip = ip2int(ip4.DstIP)
+		pkt.Srcip = ip2int(ip4Defrag.SrcIP)
+		pkt.Dstip = ip2int(ip4Defrag.DstIP)
 
-		if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-			tcpl := packet.Layer(layers.LayerTypeTCP)
-			tcp, ok := tcpl.(*layers.TCP)
-			if !ok {
-				return nil, nil
-			}
-			pkt.Sport = uint16(tcp.SrcPort)
-			pkt.Dport = uint16(tcp.DstPort)
-			pkt.Payload = tcp.Payload
+		if ip4Defrag.Length > ip4Len {
+			ip4Header := ip4.LayerContents()
+			ip4Header[2] = byte((len(ip4Defrag.LayerPayload()) + 20) / 256)
+			ip4Header[3] = byte((len(ip4Defrag.LayerPayload()) + 20) % 256)
+			ip4Header[6] = 0
+			ip4Header[7] = 0
 
-			/* 			p := gopacket.NewPacket(tcp.Payload, LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-			   			sipLayer, ok := p.Layers()[0].(*SIP)
-			   			if !ok {
-			   				return nil, nil
-			   			}
-			   			pkt.SipHeader = sipLayer.Headers */
-			return pkt, nil
+			// Build new defragmentated Packet
+			newIP4 := append(ip4Header, ip4Defrag.LayerPayload()...)
+			data := append(packet.Data()[0:14], newIP4...)
+			packet = gopacket.NewPacket(data, layers.LinkTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+			//fmt.Println(ip4Defrag.SrcIP.String())
+			//fmt.Println(ip4Defrag.DstIP.String())
 		}
 
-		if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-			udpl := packet.Layer(layers.LayerTypeUDP)
-			udp, ok := udpl.(*layers.UDP)
-			if !ok {
-				return nil, nil
-			}
-			pkt.Sport = uint16(udp.SrcPort)
-			pkt.Dport = uint16(udp.DstPort)
-			pkt.Payload = udp.Payload
-			/* 			if udp.Length > 1500 {
-				fmt.Println(udp.Length)
-				fmt.Println(string(udp.Payload))
-			} */
+	}
 
-			/* 			p := gopacket.NewPacket(udp.Payload, LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-			   			sipLayer, ok := p.Layers()[0].(*SIP)
-			   			if !ok {
-			   				return nil, nil
-			   			}
-			   			pkt.SipHeader = sipLayer.Headers */
-			return pkt, nil
+	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+		tcpl := packet.Layer(layers.LayerTypeTCP)
+		tcp, ok := tcpl.(*layers.TCP)
+		if !ok {
+			return nil, nil
 		}
+		pkt.Sport = uint16(tcp.SrcPort)
+		pkt.Dport = uint16(tcp.DstPort)
+		pkt.Payload = tcp.Payload
+
+		/* p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
+		   sipLayer, ok := p.Layers()[0].(*SIP)
+		   if !ok {
+			   break
+		   }
+		   pkt.SipHeader = sipLayer.Headers */
+		return pkt, nil
+	}
+
+	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
+		udpl := packet.Layer(layers.LayerTypeUDP)
+		udp, ok := udpl.(*layers.UDP)
+		if !ok {
+			return nil, nil
+		}
+		pkt.Sport = uint16(udp.SrcPort)
+		pkt.Dport = uint16(udp.DstPort)
+		pkt.Payload = udp.Payload
+
+		/* p := gopacket.NewPacket(layer.LayerPayload(), LayerTypeSIP, gopacket.NoCopy)
+		   sipLayer, ok := p.Layers()[0].(*SIP)
+		   if !ok {
+			   break
+		   }
+		   pkt.SipHeader = sipLayer.Headers */
+		return pkt, nil
 	}
 
 	return nil, nil
