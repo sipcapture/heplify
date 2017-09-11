@@ -24,7 +24,6 @@ type InterfacesConfig struct {
 	BufferSizeMb int    `config:"buffer_size_mb"`
 	TopSpeed     bool
 	WriteFile    string
-	WithVlans    bool
 	OneAtATime   bool
 	Loop         int
 }

@@ -20,7 +20,6 @@ const (
 	LOG_CRIT
 	LOG_ERR
 	LOG_WARNING
-	LOG_NOTICE
 	LOG_INFO
 	LOG_DEBUG
 )
@@ -149,10 +148,6 @@ func msg(level Priority, prefix string, format string, v ...interface{}) {
 
 func Info(format string, v ...interface{}) {
 	msg(LOG_INFO, "INFO", format, v...)
-}
-
-func Notice(format string, v ...interface{}) {
-	msg(LOG_INFO, "NOTICE", format, v...)
 }
 
 func Warn(format string, v ...interface{}) {

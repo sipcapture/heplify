@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -9,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/outputs"
-	"github.com/tsg/gopacket"
-	"github.com/tsg/gopacket/layers"
-	"github.com/tsg/gopacket/pcap"
 )
 
 type SnifferSetup struct {
@@ -23,7 +24,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	dumper         *pcap.Dumper
+	//dumper         *pcap.Dumper
 
 	// bpf filter
 	filter string
@@ -204,7 +205,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		return fmt.Errorf("creating decoder: %v", err)
 	}
 
-	if sniffer.config.WriteFile != "" {
+	/* 	if sniffer.config.WriteFile != "" {
 		p, err := pcap.OpenDead(sniffer.Datalink(), 65535)
 		if err != nil {
 			return err
@@ -213,7 +214,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		if err != nil {
 			return err
 		}
-	}
+	} */
 
 	sniffer.isAlive = true
 
@@ -233,6 +234,10 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
+
+		if config.Cfg.HepFilter != "" && bytes.Contains(data, []byte(config.Cfg.HepFilter)) {
+			continue
+		}
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
 			logp.Debug("sniffer", "Interrupted")
@@ -290,11 +295,9 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 		counter++
 
-		if sniffer.dumper != nil {
-			sniffer.dumper.WritePacketData(data, ci)
-		}
+		/* 		if sniffer.dumper != nil {s */
 		if counter%1024 == 0 {
-			logp.Debug("sniffer", "Packet number: %d", counter)
+			logp.Debug("sniffer", "Receive packet counter: %d", counter)
 		}
 
 		sniffer.worker.OnPacket(data, &ci)
@@ -302,9 +305,9 @@ func (sniffer *SnifferSetup) Run() error {
 
 	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
 
-	if sniffer.dumper != nil {
+	/* 	if sniffer.dumper != nil {
 		sniffer.dumper.Close()
-	}
+	} */
 	return retError
 }
 

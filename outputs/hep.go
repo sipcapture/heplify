@@ -100,6 +100,7 @@ func (ho *HepOutputer) Send(msg []byte) {
 }
 
 func (ho *HepOutputer) Start() {
+	counter := 0
 	defer func() {
 		if err := recover(); err != nil {
 			logp.Err("recover() error: %v", err)
@@ -110,7 +111,11 @@ func (ho *HepOutputer) Start() {
 	for {
 		select {
 		case msg := <-ho.hepQueue:
+			counter++
 			ho.Send(msg)
+		}
+		if counter%1024 == 0 {
+			logp.Debug("hep", "HEP sent packet counter: %d", counter)
 		}
 	}
 }
