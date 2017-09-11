@@ -74,6 +74,8 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	}
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
+	} else {
+		logp.Debug("sniffer", "Empty packet")
 	}
 }
 
@@ -273,7 +275,7 @@ func (sniffer *SnifferSetup) Run() error {
 
 		if len(data) == 0 {
 			// Empty packet, probably timeout from afpacket
-			logp.Debug("sniffer", "Empty packet")
+			logp.Debug("sniffer", "Empty data packet")
 			continue
 		}
 
@@ -293,9 +295,8 @@ func (sniffer *SnifferSetup) Run() error {
 				ci.Timestamp = time.Now()
 			}
 		}
-		counter++
 
-		/* 		if sniffer.dumper != nil {s */
+		counter++
 		if counter%1024 == 0 {
 			logp.Debug("sniffer", "Receive packet counter: %d", counter)
 		}

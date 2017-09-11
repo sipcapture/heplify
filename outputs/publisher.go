@@ -12,6 +12,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+type Outputer interface {
+	Output(msg []byte)
+}
+
 type Publisher struct {
 	hepQueue chan *decoder.Packet
 	outputer Outputer
@@ -54,8 +58,9 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 			hepPacket := convertToHep(pkt)
 			pub.outputer.Output(hepPacket)
 			pub.hepDedup.Add(key, nil)
+		} else {
+			logp.Debug("publisher", "Got duplicate packet with hash: %v\n", key)
 		}
-		logp.Debug("publisher", "Got duplicate packet with hash: %v\n", key)
 		pub.hash.Reset()
 
 	} else if config.Cfg.HepServer != "" {
@@ -81,7 +86,7 @@ func (pub *Publisher) Start() {
 		}
 
 		if counter%1024 == 0 {
-			logp.Debug("publisher", "Sent packet counter: %d, channel size: %d", counter, len(pub.hepQueue))
+			logp.Debug("publisher", "Sent packet counter: %d", counter)
 		}
 	}
 }
