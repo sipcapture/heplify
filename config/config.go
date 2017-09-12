@@ -10,8 +10,8 @@ type Config struct {
 	Iface     *InterfacesConfig
 	Logging   *logp.Logging
 	Reasm     bool
-	HepDedup  bool
-	HepFilter string
+	Dedup     bool
+	Filter    string
 	HepServer string
 }
 

@@ -50,19 +50,18 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		}
 	}()
 
-	if config.Cfg.HepDedup && config.Cfg.HepServer != "" {
+	if config.Cfg.Dedup && config.Cfg.HepServer != "" {
 		pub.hash.Write(pkt.Payload)
 		key := pub.hash.Sum64()
+		pub.hash.Reset()
 		_, dup := pub.hepDedup.Get(key)
 		if dup == false {
 			hepPacket := convertToHep(pkt)
 			pub.outputer.Output(hepPacket)
-			pub.hepDedup.Add(key, nil)
 		} else {
-			logp.Debug("publisher", "Got duplicate packet with hash: %v\n", key)
+			logp.Info("duplicate packet with hash: %v", key)
 		}
-		pub.hash.Reset()
-
+		pub.hepDedup.Add(key, nil)
 	} else if config.Cfg.HepServer != "" {
 		hepPacket := convertToHep(pkt)
 		pub.outputer.Output(hepPacket)

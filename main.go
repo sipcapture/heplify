@@ -25,7 +25,7 @@ func optParse() {
 	var keepLogFiles int
 
 	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
-	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [af_packet, pcap, file]")
+	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [af_packet, pcap, file]")
 	flag.StringVar(&ifaceConfig.BpfFilter, "f", "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))", "BPF filter")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from file. Please use -t file")
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to file. Please use -t file")
@@ -40,8 +40,8 @@ func optParse() {
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "Log filesize (KB)")
 	flag.BoolVar(&config.Cfg.Reasm, "re", true, "Reassemble fragmented packets")
-	flag.BoolVar(&config.Cfg.HepDedup, "hd", false, "Deduplicate HEP packets")
-	flag.StringVar(&config.Cfg.HepFilter, "hf", "", "Filter out REGISTER, OPTIONS ...")
+	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
+	flag.StringVar(&config.Cfg.Filter, "hf", "", "Filter out packets like SIP OPTIONS, HTTP Requests ...")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
 	flag.Parse()
 

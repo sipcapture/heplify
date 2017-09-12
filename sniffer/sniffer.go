@@ -75,7 +75,7 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
 	} else {
-		logp.Info("Skip probably fragmented packet during process with length: %d", ci.Length)
+		logp.Info("Skip %d bytes packet. Probably fragmented.", ci.Length)
 	}
 }
 
@@ -89,7 +89,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	if sniffer.config.Device == "" {
 		fmt.Printf("\nPlease use one of the following devices:\n\n")
 		for _, d := range devices {
-			if strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+			if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
 				continue
 			}
 			fmt.Printf("-i %s\n", d)
@@ -237,12 +237,12 @@ func (sniffer *SnifferSetup) Run() error {
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
-		if config.Cfg.HepFilter != "" && bytes.Contains(data, []byte(config.Cfg.HepFilter)) {
+		if config.Cfg.Filter != "" && bytes.Contains(data, []byte(config.Cfg.Filter)) {
 			continue
 		}
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			logp.Debug("sniffer", "Interrupted")
+			logp.Debug("sniffer", "Idle")
 			continue
 		}
 

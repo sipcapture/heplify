@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
+	"github.com/negbie/tlsx"
 	//"github.com/negbie/sippar"
 	//"github.com/negbie/siprocket"
 )
@@ -50,7 +52,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	//logp.Debug("decoder", "Captured packet layers:\n%v\nCaptured packet payload:\n%v\n", packet, string(packet.ApplicationLayer().Payload()))
+	logp.Debug("decoder", "Captured packet layers:\n %v\n", packet)
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4l := packet.Layer(layers.LayerTypeIPv4)
@@ -59,6 +61,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+
+		logp.Debug("decoder", "Captured packet payload:\n %v\nPacket length: %v\n\n\n", string(ip4.Payload), ip4.Length)
 
 		if config.Cfg.Reasm {
 			ip4, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
@@ -76,7 +80,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				if d.defragCounter%128 == 0 {
 					logp.Info("Defragmentated packet counter: %d", d.defragCounter)
 				}
-				//logp.Info("Decoding re-assembled packet: %v\n next layer: %s\n", packet, ip4.NextLayerType())
 				logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
 					packet, string(packet.ApplicationLayer().Payload()), string(ip4.Payload[8:]), ip4.Length,
 				)
@@ -88,20 +91,22 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				nextDecoder.Decode(ip4.Payload, pb)
 			}
 		}
+
 		pkt.Srcip = ip2int(ip4.SrcIP)
 		pkt.Dstip = ip2int(ip4.DstIP)
 	}
 
 	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-		tcpl := packet.Layer(layers.LayerTypeTCP)
-		tcp, ok := tcpl.(*layers.TCP)
+		tcp, ok := tcpLayer.(*layers.TCP)
 		if !ok {
 			return nil, nil
 		}
+
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
-		return pkt, nil
+
+		//return pkt, nil
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -113,7 +118,26 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
-		return pkt, nil
+		//return pkt, nil
+	}
+
+	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		if pkt.Dport == 443 || pkt.Sport == 443 {
+			var hello = tlsx.ClientHello{}
+
+			err := hello.Unmarshall(appLayer.Payload())
+
+			switch err {
+			case nil:
+			case tlsx.ErrHandshakeWrongType:
+				return nil, nil
+			default:
+				fmt.Println("Error reading Client Hello:", err)
+				fmt.Println("Raw Client Hello:", appLayer.Payload())
+				return nil, nil
+			}
+			fmt.Println(hello)
+		}
 	}
 
 	/* 	// SIP parser. Right now not needed
