@@ -13,6 +13,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
@@ -24,7 +25,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	//dumper         *pcap.Dumper
+	dumper         *pcapgo.Writer
 
 	// bpf filter
 	filter string
@@ -114,6 +115,12 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		if err != nil {
 			return fmt.Errorf("couldn't open file %v %v", sniffer.config.ReadFile, err)
 		}
+		err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+		if err != nil {
+			return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
+		}
+
+		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "pcap":
 		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
@@ -207,16 +214,19 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 		return fmt.Errorf("creating decoder: %v", err)
 	}
 
-	/* 	if sniffer.config.WriteFile != "" {
-		p, err := pcap.OpenDead(sniffer.Datalink(), 65535)
+	if sniffer.config.WriteFile != "" {
+		f, err := os.Create(sniffer.config.WriteFile)
 		if err != nil {
-			return err
+			return fmt.Errorf("creating pcap: %v", err)
 		}
-		sniffer.dumper, err = p.NewDumper(sniffer.config.WriteFile)
+		w := pcapgo.NewWriter(f)
+		err = w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
 		if err != nil {
-			return err
+			return fmt.Errorf("pcap writer: %v", err)
 		}
-	} */
+
+		sniffer.dumper = w
+	}
 
 	sniffer.isAlive = true
 
@@ -294,6 +304,11 @@ func (sniffer *SnifferSetup) Run() error {
 				// Overwrite what we get from the pcap
 				ci.Timestamp = time.Now()
 			}
+		} else if sniffer.config.WriteFile != "" {
+			err := sniffer.dumper.WritePacket(ci, data)
+			if err != nil {
+				return fmt.Errorf("couldn't write to file %v %v", sniffer.config.WriteFile, err)
+			}
 		}
 
 		counter++
@@ -305,10 +320,8 @@ func (sniffer *SnifferSetup) Run() error {
 	}
 
 	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
+	sniffer.pcapHandle.Close()
 
-	/* 	if sniffer.dumper != nil {
-		sniffer.dumper.Close()
-	} */
 	return retError
 }
 

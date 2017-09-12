@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 	"os"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
-	"github.com/negbie/tlsx"
+	//"github.com/negbie/tlsx"
 	//"github.com/negbie/sippar"
 	//"github.com/negbie/siprocket"
 )
@@ -55,14 +54,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	logp.Debug("decoder", "Captured packet layers:\n %v\n", packet)
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		ip4l := packet.Layer(layers.LayerTypeIPv4)
-		ip4, ok := ip4l.(*layers.IPv4)
+		ip4, ok := ipLayer.(*layers.IPv4)
 		ip4Len := ip4.Length
 		if !ok {
 			return nil, nil
 		}
-
-		logp.Debug("decoder", "Captured packet payload:\n %v\nPacket length: %v\n\n\n", string(ip4.Payload), ip4.Length)
 
 		if config.Cfg.Reasm {
 			ip4, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
@@ -101,26 +97,26 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
-
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
-		pkt.Payload = tcp.Payload
-
-		//return pkt, nil
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-		udpl := packet.Layer(layers.LayerTypeUDP)
-		udp, ok := udpl.(*layers.UDP)
+		udp, ok := udpLayer.(*layers.UDP)
 		if !ok {
 			return nil, nil
 		}
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
-		pkt.Payload = udp.Payload
-		//return pkt, nil
 	}
 
+	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		logp.Debug("decoder", "Captured packet payload:\n %v\n\n", string(appLayer.Payload()))
+		pkt.Payload = appLayer.Payload()
+		return pkt, nil
+	}
+
+	/* // TLS handshake parser. Right now not needed
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
 		if pkt.Dport == 443 || pkt.Sport == 443 {
 			var hello = tlsx.ClientHello{}
@@ -129,6 +125,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 			switch err {
 			case nil:
+				fmt.Println(hello)
 			case tlsx.ErrHandshakeWrongType:
 				return nil, nil
 			default:
@@ -136,27 +133,27 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				fmt.Println("Raw Client Hello:", appLayer.Payload())
 				return nil, nil
 			}
-			fmt.Println(hello)
 		}
 	}
+	*/
 
-	/* 	// SIP parser. Right now not needed
-	   	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-	   		if config.Cfg.HepFilter != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.HepFilter)) {
-	   			return nil, nil
-	   		}
+	/* // SIP parser. Right now not needed
+	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		if config.Cfg.HepFilter != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.HepFilter)) {
+			return nil, nil
+		}
 
-	   		sipl := gopacket.NewPacket(appLayer.Payload(), LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	   		sip, ok := sipl.Layers()[0].(*SIP)
-	   		if !ok {
-	   			return nil, nil
-	   		}
-	   		pkt.Payload = appLayer.Payload()
-	   		//pkt.SipMsg = sipparser.ParseMsg(string(udp.Payload))
-	   		//pkt.SipMsg = siprocket.Parse(udp.payload)
-	   		pkt.SipHeader = sip.Headers
-	   		return pkt, nil
-	   	}
+		sipl := gopacket.NewPacket(appLayer.Payload(), LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+		sip, ok := sipl.Layers()[0].(*SIP)
+		if !ok {
+			return nil, nil
+		}
+		pkt.Payload = appLayer.Payload()
+		//pkt.SipMsg = sipparser.ParseMsg(string(udp.Payload))
+		//pkt.SipMsg = siprocket.Parse(udp.payload)
+		pkt.SipHeader = sip.Headers
+		return pkt, nil
+	}
 	*/
 
 	return nil, nil
