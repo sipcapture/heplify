@@ -10,6 +10,8 @@ import (
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
+	//"github.com/negbie/sippar"
+	//"github.com/negbie/siprocket"
 )
 
 type Decoder struct {
@@ -27,6 +29,8 @@ type Packet struct {
 	Sport   uint16
 	Dport   uint16
 	Payload []byte
+	//SipMsg  *sipparser.SipMsg
+	//SipMsg siprocket.SipMsg
 	//SipHeader map[string][]string
 }
 
@@ -46,6 +50,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+	//logp.Debug("decoder", "Captured packet layers:\n%v\nCaptured packet payload:\n%v\n", packet, string(packet.ApplicationLayer().Payload()))
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4l := packet.Layer(layers.LayerTypeIPv4)
@@ -69,9 +74,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				d.defragCounter++
 
 				if d.defragCounter%128 == 0 {
-					logp.Debug("decoder", "Defragmentated packet counter: %d", d.defragCounter)
+					logp.Info("Defragmentated packet counter: %d", d.defragCounter)
 				}
-				//logp.Debug("decoder", "Decoding re-assembled packet: %v\n next layer: %s\n", packet, ip4.NextLayerType())
+				//logp.Info("Decoding re-assembled packet: %v\n next layer: %s\n", packet, ip4.NextLayerType())
+				logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+					packet, string(packet.ApplicationLayer().Payload()), string(ip4.Payload[8:]), ip4.Length,
+				)
 				pb, ok := packet.(gopacket.PacketBuilder)
 				if !ok {
 					panic("Not a PacketBuilder")
@@ -107,21 +115,26 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = udp.Payload
 		return pkt, nil
 	}
-	// SIP parser. Right now not needed
-	/* 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+
+	/* 	// SIP parser. Right now not needed
+	   	if appLayer := packet.ApplicationLayer(); appLayer != nil {
 	   		if config.Cfg.HepFilter != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.HepFilter)) {
 	   			return nil, nil
 	   		}
+
 	   		sipl := gopacket.NewPacket(appLayer.Payload(), LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	   		sip, ok := sipl.Layers()[0].(*SIP)
 	   		if !ok {
 	   			return nil, nil
 	   		}
 	   		pkt.Payload = appLayer.Payload()
+	   		//pkt.SipMsg = sipparser.ParseMsg(string(udp.Payload))
+	   		//pkt.SipMsg = siprocket.Parse(udp.payload)
 	   		pkt.SipHeader = sip.Headers
 	   		return pkt, nil
 	   	}
 	*/
+
 	return nil, nil
 }
 

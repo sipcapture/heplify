@@ -75,7 +75,7 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
 	} else {
-		logp.Debug("sniffer", "Empty packet")
+		logp.Info("Skip probably fragmented packet during process with length: %d", ci.Length)
 	}
 }
 
@@ -298,7 +298,7 @@ func (sniffer *SnifferSetup) Run() error {
 
 		counter++
 		if counter%1024 == 0 {
-			logp.Debug("sniffer", "Receive packet counter: %d", counter)
+			logp.Info("Receive packet counter: %d", counter)
 		}
 
 		sniffer.worker.OnPacket(data, &ci)

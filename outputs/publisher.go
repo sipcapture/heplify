@@ -86,7 +86,7 @@ func (pub *Publisher) Start() {
 		}
 
 		if counter%1024 == 0 {
-			logp.Debug("publisher", "Sent packet counter: %d", counter)
+			logp.Info("Sent packet counter: %d", counter)
 		}
 	}
 }

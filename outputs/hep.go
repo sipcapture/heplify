@@ -117,7 +117,7 @@ func (ho *HepOutputer) Start() {
 			ho.Send(msg)
 		}
 		if counter%1024 == 0 {
-			logp.Debug("hep", "HEP sent packet counter: %d", counter)
+			logp.Info("HEP sent packet counter: %d", counter)
 		}
 	}
 }
