@@ -10,10 +10,6 @@ import (
 	"github.com/negbie/heplify/logp"
 )
 
-type Outputer interface {
-	Output(msg []byte)
-}
-
 type HepOutputer struct {
 	addr     string
 	writer   *bufio.Writer
@@ -36,7 +32,7 @@ func NewHepOutputer(serverAddr string) (*HepOutputer, error) {
 func (ho *HepOutputer) Init() error {
 	conn, err := ho.ConnectServer(ho.addr)
 	if err != nil {
-		logp.Err("hepOutputer server connection error: %v", err)
+		logp.Err("server connection error: %v", err)
 		return err
 	}
 	w := bufio.NewWriter(conn)
@@ -45,7 +41,7 @@ func (ho *HepOutputer) Init() error {
 }
 
 func (ho *HepOutputer) Close() {
-	logp.Info("hepOutputer connection close.")
+	logp.Info("connection close.")
 }
 
 func (ho *HepOutputer) ReConnect() error {
@@ -73,7 +69,6 @@ func (ho *HepOutputer) Output(msg []byte) {
 }
 
 func (ho *HepOutputer) Send(msg []byte) {
-
 	defer func() {
 		if err := recover(); err != nil {
 			logp.Err("send msg error: %v", err)
@@ -81,25 +76,33 @@ func (ho *HepOutputer) Send(msg []byte) {
 	}()
 
 	_, err := ho.writer.Write(msg)
-	err = ho.writer.Flush()
 
 	if err != nil {
 		err = ho.ReConnect()
 		if err != nil {
-			logp.Err("send to server error: %v", err)
+			logp.Err("reconnect error: %v", err)
 			return
 		}
-		logp.Debug("reconnect", "successfull")
+		logp.Debug("hep", "reconnect successfull")
 		_, err := ho.writer.Write(msg)
-		err = ho.writer.Flush()
 		if err != nil {
 			logp.Err("resend to server error: %v", err)
 		}
+		err = ho.writer.Flush()
+		if err != nil {
+			logp.Err("flush error: %v", err)
+		}
+		return
+	}
+	err = ho.writer.Flush()
+	if err != nil {
+		logp.Err("flush error: %v", err)
 		return
 	}
 }
 
 func (ho *HepOutputer) Start() {
+	counter := 0
 	defer func() {
 		if err := recover(); err != nil {
 			logp.Err("recover() error: %v", err)
@@ -110,7 +113,11 @@ func (ho *HepOutputer) Start() {
 	for {
 		select {
 		case msg := <-ho.hepQueue:
+			counter++
 			ho.Send(msg)
+		}
+		if counter%1024 == 0 {
+			logp.Info("HEP sent packet counter: %d", counter)
 		}
 	}
 }

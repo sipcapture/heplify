@@ -3,7 +3,7 @@ package decoder
 import (
 	"net"
 
-	"github.com/tsg/gopacket/layers"
+	"github.com/google/gopacket/layers"
 )
 
 type IPv4 struct {

@@ -1,7 +1,7 @@
 package decoder
 
 import (
-	"github.com/tsg/gopacket/layers"
+	"github.com/google/gopacket/layers"
 )
 
 type UDP struct {

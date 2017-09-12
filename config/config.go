@@ -10,8 +10,8 @@ type Config struct {
 	Iface     *InterfacesConfig
 	Logging   *logp.Logging
 	Reasm     bool
-	HepDedup  bool
-	HepFilter string
+	Dedup     bool
+	Filter    string
 	HepServer string
 }
 
@@ -24,7 +24,6 @@ type InterfacesConfig struct {
 	BufferSizeMb int    `config:"buffer_size_mb"`
 	TopSpeed     bool
 	WriteFile    string
-	WithVlans    bool
 	OneAtATime   bool
 	Loop         int
 }

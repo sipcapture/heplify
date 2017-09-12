@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -9,13 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/outputs"
-	"github.com/tsg/gopacket"
-	"github.com/tsg/gopacket/layers"
-	"github.com/tsg/gopacket/pcap"
 )
 
 type SnifferSetup struct {
@@ -23,7 +25,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	dumper         *pcap.Dumper
+	dumper         *pcapgo.Writer
 
 	// bpf filter
 	filter string
@@ -73,6 +75,8 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	}
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
+	} else {
+		logp.Info("Skip %d bytes packet. Probably fragmented.", ci.Length)
 	}
 }
 
@@ -86,7 +90,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	if sniffer.config.Device == "" {
 		fmt.Printf("\nPlease use one of the following devices:\n\n")
 		for _, d := range devices {
-			if strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+			if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
 				continue
 			}
 			fmt.Printf("-i %s\n", d)
@@ -111,6 +115,12 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		if err != nil {
 			return fmt.Errorf("couldn't open file %v %v", sniffer.config.ReadFile, err)
 		}
+		err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+		if err != nil {
+			return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
+		}
+
+		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "pcap":
 		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
@@ -205,14 +215,17 @@ func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFa
 	}
 
 	if sniffer.config.WriteFile != "" {
-		p, err := pcap.OpenDead(sniffer.Datalink(), 65535)
+		f, err := os.Create(sniffer.config.WriteFile)
 		if err != nil {
-			return err
+			return fmt.Errorf("creating pcap: %v", err)
 		}
-		sniffer.dumper, err = p.NewDumper(sniffer.config.WriteFile)
+		w := pcapgo.NewWriter(f)
+		err = w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
 		if err != nil {
-			return err
+			return fmt.Errorf("pcap writer: %v", err)
 		}
+
+		sniffer.dumper = w
 	}
 
 	sniffer.isAlive = true
@@ -234,8 +247,12 @@ func (sniffer *SnifferSetup) Run() error {
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
+		if config.Cfg.Filter != "" && bytes.Contains(data, []byte(config.Cfg.Filter)) {
+			continue
+		}
+
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			logp.Debug("sniffer", "Interrupted")
+			logp.Debug("sniffer", "Idle")
 			continue
 		}
 
@@ -268,7 +285,7 @@ func (sniffer *SnifferSetup) Run() error {
 
 		if len(data) == 0 {
 			// Empty packet, probably timeout from afpacket
-			logp.Debug("sniffer", "Empty packet")
+			logp.Debug("sniffer", "Empty data packet")
 			continue
 		}
 
@@ -287,24 +304,24 @@ func (sniffer *SnifferSetup) Run() error {
 				// Overwrite what we get from the pcap
 				ci.Timestamp = time.Now()
 			}
+		} else if sniffer.config.WriteFile != "" {
+			err := sniffer.dumper.WritePacket(ci, data)
+			if err != nil {
+				return fmt.Errorf("couldn't write to file %v %v", sniffer.config.WriteFile, err)
+			}
 		}
-		counter++
 
-		if sniffer.dumper != nil {
-			sniffer.dumper.WritePacketData(data, ci)
-		}
+		counter++
 		if counter%1024 == 0 {
-			logp.Debug("sniffer", "Packet number: %d", counter)
+			logp.Info("Receive packet counter: %d", counter)
 		}
 
 		sniffer.worker.OnPacket(data, &ci)
 	}
 
 	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
+	sniffer.pcapHandle.Close()
 
-	if sniffer.dumper != nil {
-		sniffer.dumper.Close()
-	}
 	return retError
 }
 

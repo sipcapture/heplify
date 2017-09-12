@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tsg/gopacket"
-	"github.com/tsg/gopacket/layers"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
-var LayerTypeSIP = gopacket.RegisterLayerType(1010, gopacket.LayerTypeMetadata{Name: "SIP", Decoder: gopacket.DecodeFunc(decodeSIP)})
+var LayerTypeSIP = gopacket.RegisterLayerType(200, gopacket.LayerTypeMetadata{Name: "SIP", Decoder: gopacket.DecodeFunc(decodeSIP)})
 
 // SIPVersion defines the different versions of the SIP Protocol
 type SIPVersion uint8
