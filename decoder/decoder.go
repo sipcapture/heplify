@@ -25,6 +25,7 @@ type Packet struct {
 	Host    string
 	Tsec    uint32
 	Tmsec   uint32
+	MF      bool
 	Srcip   uint32
 	Dstip   uint32
 	Sport   uint16
@@ -56,40 +57,49 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4, ok := ipLayer.(*layers.IPv4)
 		ip4Len := ip4.Length
+		pkt.MF = false
 		if !ok {
 			return nil, nil
 		}
-
-		if config.Cfg.Reasm {
-			ip4, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
-			if err != nil {
-				logp.Err("Error while de-fragmenting", err)
-				return nil, err
-			} else if ip4 == nil {
-				//packet fragment, we don't have whole packet yet
-				return nil, nil
-			}
-
-			if ip4.Length != ip4Len {
-				d.defragCounter++
-
-				if d.defragCounter%128 == 0 {
-					logp.Info("Defragmentated packet counter: %d", d.defragCounter)
-				}
-				logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
-					packet, string(packet.ApplicationLayer().Payload()), string(ip4.Payload[8:]), ip4.Length,
-				)
-				pb, ok := packet.(gopacket.PacketBuilder)
-				if !ok {
-					panic("Not a PacketBuilder")
-				}
-				nextDecoder := ip4.NextLayerType()
-				nextDecoder.Decode(ip4.Payload, pb)
-			}
+		if (ip4.Flags&layers.IPv4MoreFragments != 0 || ip4.FragOffset != 0) && ip4Len >= 576 {
+			pkt.MF = true
 		}
 
 		pkt.Srcip = ip2int(ip4.SrcIP)
 		pkt.Dstip = ip2int(ip4.DstIP)
+
+		if config.Cfg.Reasm {
+			if ip4.Flags&layers.IPv4DontFragment == 0 && (ip4.Flags&layers.IPv4MoreFragments != 0 || ip4.FragOffset != 0) {
+				ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
+				if err != nil {
+					logp.Err("Error while de-fragmenting", err)
+					return nil, err
+				} else if ip4New == nil {
+					//packet fragment, we don't have whole packet yet. Send it anyway and overwrite it later
+					return nil, nil
+				}
+
+				if ip4New.Length != ip4Len {
+					d.defragCounter++
+
+					if d.defragCounter%128 == 0 {
+						logp.Warn("Defragmentated packet counter: %d", d.defragCounter)
+					}
+					logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+						packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
+					)
+
+					pb, ok := packet.(gopacket.PacketBuilder)
+					if !ok {
+						panic("Not a PacketBuilder")
+					}
+					nextDecoder := ip4New.NextLayerType()
+					nextDecoder.Decode(ip4New.Payload, pb)
+				}
+				pkt.Srcip = ip2int(ip4New.SrcIP)
+				pkt.Dstip = ip2int(ip4New.DstIP)
+			}
+		}
 	}
 
 	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
@@ -111,8 +121,17 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		logp.Debug("decoder", "Captured packet payload:\n %v\n\n", string(appLayer.Payload()))
-		pkt.Payload = appLayer.Payload()
+		if pkt.Sport == 0 {
+			pkt.Sport = 5060
+		}
+		if pkt.Dport == 0 {
+			pkt.Dport = 5060
+		}
+		if pkt.MF {
+			pkt.Payload = appLayer.Payload()[8:]
+		} else {
+			pkt.Payload = appLayer.Payload()
+		}
 		return pkt, nil
 	}
 
@@ -157,6 +176,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	*/
 
 	return nil, nil
+
 }
 
 func ip2int(ip net.IP) uint32 {

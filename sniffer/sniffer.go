@@ -18,6 +18,9 @@ import (
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/outputs"
+
+	"github.com/cespare/xxhash"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 type SnifferSetup struct {
@@ -238,6 +241,11 @@ func (sniffer *SnifferSetup) Run() error {
 	loopCount := 1
 	var lastPktTime *time.Time
 	var retError error
+	lru, err := lru.NewARC(8192)
+	if err != nil {
+		logp.Err("lru %v", err)
+	}
+	xHash := xxhash.New()
 
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
@@ -246,6 +254,17 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
+
+		if config.Cfg.Dedup {
+			xHash.Write(data)
+			key := xHash.Sum64()
+			xHash.Reset()
+			_, dup := lru.Get(key)
+			if dup == true {
+				continue
+			}
+			lru.Add(key, nil)
+		}
 
 		if config.Cfg.Filter != "" && bytes.Contains(data, []byte(config.Cfg.Filter)) {
 			continue
