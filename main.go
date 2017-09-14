@@ -39,7 +39,7 @@ func optParse() {
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "Log filesize (KB)")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, TLS]")
-	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
+	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "hf", "", "Filter out packets like SIP OPTIONS, HTTP Requests ...")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
 	flag.Parse()

@@ -116,6 +116,9 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "greater 50 and ip and dst port 53"
 	} else if sniffer.mode == "TLS" {
 		sniffer.filter = "greater 100 and tcp and port 443"
+	} else {
+		sniffer.mode = "SIP"
+		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
 	logp.Debug("sniffer", "Sniffer type: %s device: %s", sniffer.config.Type, sniffer.config.Device)
