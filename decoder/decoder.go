@@ -2,7 +2,7 @@ package decoder
 
 import (
 	"encoding/binary"
-	"fmt"
+	"encoding/json"
 	"hash"
 	"net"
 	"os"
@@ -149,7 +149,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
-		pkt.Payload = []byte(fmt.Sprintf("%#v", dns))
+
+		jsonDNS, err := json.Marshal(NewDNS(dns))
+		if err != nil {
+			logp.Warn("jsonDNS marshal", err)
+			return nil, err
+		}
+		pkt.Payload = jsonDNS
 	}
 
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
