@@ -18,9 +18,6 @@ import (
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/outputs"
-
-	"github.com/cespare/xxhash"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 type SnifferSetup struct {
@@ -31,6 +28,7 @@ type SnifferSetup struct {
 	dumper         *pcapgo.Writer
 
 	// bpf filter
+	mode   string
 	filter string
 
 	// Decoder    *decoder.DecoderStruct
@@ -108,6 +106,16 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 
 	if sniffer.config.Type == "autodetect" || sniffer.config.Type == "" {
 		sniffer.config.Type = "pcap"
+	}
+
+	if sniffer.mode == "SIP" {
+		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
+	} else if sniffer.mode == "LOG" {
+		sniffer.filter = "greater 100 and port 514"
+	} else if sniffer.mode == "DNS" {
+		sniffer.filter = "greater 50 and ip and dst port 53"
+	} else if sniffer.mode == "TLS" {
+		sniffer.filter = "greater 100 and tcp and port 443"
 	}
 
 	logp.Debug("sniffer", "Sniffer type: %s device: %s", sniffer.config.Type, sniffer.config.Device)
@@ -191,12 +199,12 @@ func (sniffer *SnifferSetup) Datalink() layers.LinkType {
 	return layers.LinkTypeEthernet
 }
 
-func (sniffer *SnifferSetup) Init(testMode bool, filter string, factory WorkerFactory, interfaces *config.InterfacesConfig) error {
+func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFactory, interfaces *config.InterfacesConfig) error {
 	var err error
 
 	if !testMode {
-		sniffer.filter = filter
-		logp.Debug("sniffer", "BPF filter: '%s'", sniffer.filter)
+		sniffer.mode = mode
+		logp.Debug("sniffer", "Capture mode: '%s'", sniffer.mode)
 		err = sniffer.setFromConfig(interfaces)
 		if err != nil {
 			return err
@@ -241,11 +249,6 @@ func (sniffer *SnifferSetup) Run() error {
 	loopCount := 1
 	var lastPktTime *time.Time
 	var retError error
-	lru, err := lru.NewARC(8192)
-	if err != nil {
-		logp.Err("lru %v", err)
-	}
-	xHash := xxhash.New()
 
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
@@ -254,17 +257,6 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
-
-		if config.Cfg.Dedup {
-			xHash.Write(data)
-			key := xHash.Sum64()
-			xHash.Reset()
-			_, dup := lru.Get(key)
-			if dup == true {
-				continue
-			}
-			lru.Add(key, nil)
-		}
 
 		if config.Cfg.Filter != "" && bytes.Contains(data, []byte(config.Cfg.Filter)) {
 			continue

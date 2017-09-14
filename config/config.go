@@ -9,7 +9,7 @@ var Cfg Config
 type Config struct {
 	Iface     *InterfacesConfig
 	Logging   *logp.Logging
-	Reasm     bool
+	Mode      string
 	Dedup     bool
 	Filter    string
 	HepServer string
@@ -18,12 +18,11 @@ type Config struct {
 type InterfacesConfig struct {
 	Device       string `config:"device"`
 	Type         string `config:"type"`
-	ReadFile     string `config:"file"`
-	BpfFilter    string `config:"bpf_filter"`
+	ReadFile     string `config:"read_file"`
+	WriteFile    string `config:"write_file"`
 	Snaplen      int    `config:"snaplen"`
 	BufferSizeMb int    `config:"buffer_size_mb"`
 	TopSpeed     bool
-	WriteFile    string
 	OneAtATime   bool
 	Loop         int
 }

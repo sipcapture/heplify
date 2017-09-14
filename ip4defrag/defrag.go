@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/negbie/heplify/logp"
 )
 
 // Quick and Easy to use debug code to trace
@@ -230,6 +231,8 @@ func (f *fragmentList) insert(in *layers.IPv4, t time.Time) (*layers.IPv4, error
 				// never be reassembled.
 				debug.Printf("defrag: ignoring frag %d as we already have it (duplicate?)\n",
 					fragOffset)
+				logp.Warn("ignoring %d byte fragment from %v to %v as we already have it. Payload:\n%s\n",
+					fragOffset, in.SrcIP.String(), in.DstIP.String(), string(in.Payload))
 				return nil, nil
 			}
 			if in.FragOffset < frag.FragOffset {

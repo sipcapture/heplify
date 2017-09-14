@@ -2,35 +2,42 @@ package decoder
 
 import (
 	"encoding/binary"
+	"fmt"
+	"hash"
 	"net"
 	"os"
 
+	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/hashicorp/golang-lru"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
+	"github.com/negbie/tlsx"
 	//"github.com/negbie/tlsx"
 	//"github.com/negbie/sippar"
 	//"github.com/negbie/siprocket"
 )
 
 type Decoder struct {
-	Host          string
-	defragger     *ip4defrag.IPv4Defragmenter
-	defragCounter int
+	Host      string
+	defragger *ip4defrag.IPv4Defragmenter
+	mfc       int
+	lru       *lru.ARCCache
+	hash      hash.Hash64
 }
 
 type Packet struct {
-	Host    string
-	Tsec    uint32
-	Tmsec   uint32
-	MF      bool
-	Srcip   uint32
-	Dstip   uint32
-	Sport   uint16
-	Dport   uint16
-	Payload []byte
+	Host          string
+	Tsec          uint32
+	Tmsec         uint32
+	Srcip         uint32
+	Dstip         uint32
+	Sport         uint16
+	Dport         uint16
+	CorrelationID []byte
+	Payload       []byte
 	//SipMsg  *sipparser.SipMsg
 	//SipMsg siprocket.SipMsg
 	//SipHeader map[string][]string
@@ -41,7 +48,12 @@ func NewDecoder() *Decoder {
 	if err != nil {
 		host = "sniffer"
 	}
-	return &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), defragCounter: 0}
+	l, err := lru.NewARC(8192)
+	if err != nil {
+		logp.Err("lru %v", err)
+	}
+	h := xxhash.New()
+	return &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), mfc: 0, lru: l, hash: h}
 }
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
@@ -52,53 +64,63 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	logp.Debug("decoder", "Captured packet layers:\n %v\n", packet)
+	logp.Debug("decoder", "Captured packet layers:\n%v\n", packet)
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4, ok := ipLayer.(*layers.IPv4)
 		ip4Len := ip4.Length
-		pkt.MF = false
+
 		if !ok {
 			return nil, nil
 		}
-		if (ip4.Flags&layers.IPv4MoreFragments != 0 || ip4.FragOffset != 0) && ip4Len >= 576 {
-			pkt.MF = true
+
+		if config.Cfg.Dedup {
+			d.hash.Write(ip4.Payload)
+			//key := fastHash(ip4.Payload)
+			key := d.hash.Sum64()
+			d.hash.Reset()
+			_, dup := d.lru.Get(key)
+			d.lru.Add(key, nil)
+			if dup == true {
+				return nil, nil
+			}
 		}
 
 		pkt.Srcip = ip2int(ip4.SrcIP)
 		pkt.Dstip = ip2int(ip4.DstIP)
 
-		if config.Cfg.Reasm {
-			if ip4.Flags&layers.IPv4DontFragment == 0 && (ip4.Flags&layers.IPv4MoreFragments != 0 || ip4.FragOffset != 0) {
-				ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
-				if err != nil {
-					logp.Err("Error while de-fragmenting", err)
-					return nil, err
-				} else if ip4New == nil {
-					//packet fragment, we don't have whole packet yet. Send it anyway and overwrite it later
-					return nil, nil
-				}
+		ip4New, err := d.defragger.DefragIPv4(ip4)
+		if err != nil {
+			logp.Err("Error while de-fragmenting", err)
+			return nil, err
+		} else if ip4New == nil {
+			//packet fragment, we don't have whole packet yet. Send it anyway and overwrite it later
+			return nil, nil
+		}
 
-				if ip4New.Length != ip4Len {
-					d.defragCounter++
+		if ip4New.Length != ip4Len {
+			d.mfc++
 
-					if d.defragCounter%128 == 0 {
-						logp.Warn("Defragmentated packet counter: %d", d.defragCounter)
-					}
-					logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
-						packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
-					)
-
-					pb, ok := packet.(gopacket.PacketBuilder)
-					if !ok {
-						panic("Not a PacketBuilder")
-					}
-					nextDecoder := ip4New.NextLayerType()
-					nextDecoder.Decode(ip4New.Payload, pb)
-				}
-				pkt.Srcip = ip2int(ip4New.SrcIP)
-				pkt.Dstip = ip2int(ip4New.DstIP)
+			if d.mfc%128 == 0 {
+				logp.Warn("Defragmentated packet counter: %d", d.mfc)
 			}
+			logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
+			)
+
+			pkt.Srcip = ip2int(ip4New.SrcIP)
+			pkt.Dstip = ip2int(ip4New.DstIP)
+
+			pb, ok := packet.(gopacket.PacketBuilder)
+			if !ok {
+				panic("Not a PacketBuilder")
+			}
+			nextDecoder := ip4New.NextLayerType()
+			nextDecoder.Decode(ip4New.Payload, pb)
+		}
+
+		if config.Cfg.Mode == "DNS" || config.Cfg.Mode == "LOG" || config.Cfg.Mode == "TLS" {
+			pkt.CorrelationID = []byte(config.Cfg.Mode)
 		}
 	}
 
@@ -109,6 +131,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
+		pkt.Payload = tcp.Payload
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -118,43 +141,37 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
+		pkt.Payload = udp.Payload
+	}
+
+	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+		dns, ok := dnsLayer.(*layers.DNS)
+		if !ok {
+			return nil, nil
+		}
+		pkt.Payload = []byte(fmt.Sprintf("%#v", dns))
 	}
 
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		if pkt.Sport == 0 {
-			pkt.Sport = 5060
-		}
-		if pkt.Dport == 0 {
-			pkt.Dport = 5060
-		}
-		if pkt.MF {
-			pkt.Payload = appLayer.Payload()[8:]
-		} else {
-			pkt.Payload = appLayer.Payload()
-		}
-		return pkt, nil
-	}
+		logp.Debug("decoder", "Captured packet:\n%v\n", string(appLayer.Payload()))
 
-	/* // TLS handshake parser. Right now not needed
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		if pkt.Dport == 443 || pkt.Sport == 443 {
-			var hello = tlsx.ClientHello{}
+		if config.Cfg.Mode == "TLS" {
+			if pkt.Dport == 443 || pkt.Sport == 443 {
+				var hello = tlsx.ClientHello{}
+				err := hello.Unmarshall(appLayer.Payload())
 
-			err := hello.Unmarshall(appLayer.Payload())
-
-			switch err {
-			case nil:
-				fmt.Println(hello)
-			case tlsx.ErrHandshakeWrongType:
-				return nil, nil
-			default:
-				fmt.Println("Error reading Client Hello:", err)
-				fmt.Println("Raw Client Hello:", appLayer.Payload())
-				return nil, nil
+				switch err {
+				case nil:
+					logp.Debug("Captured packet:\n %v\n", hello.String())
+					pkt.Payload = []byte(hello.String())
+				case tlsx.ErrHandshakeWrongType:
+					return nil, nil
+				default:
+					return nil, nil
+				}
 			}
 		}
 	}
-	*/
 
 	/* // SIP parser. Right now not needed
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
@@ -175,8 +192,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 	*/
 
+	if pkt.Payload != nil {
+		return pkt, nil
+	}
 	return nil, nil
-
 }
 
 func ip2int(ip net.IP) uint32 {
@@ -184,4 +203,16 @@ func ip2int(ip net.IP) uint32 {
 		return binary.BigEndian.Uint32(ip[12:16])
 	}
 	return binary.BigEndian.Uint32(ip)
+}
+
+const fnvBasis = 14695981039346656037
+const fnvPrime = 1099511628211
+
+func fastHash(s []byte) (h uint64) {
+	h = fnvBasis
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= fnvPrime
+	}
+	return
 }

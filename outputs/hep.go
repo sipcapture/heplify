@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"net"
 
+	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 )
@@ -184,7 +185,11 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
 	case 0x000b:
 		chunck = make([]byte, 6+1)
-		chunck[6] = 1 // SIP
+		if config.Cfg.Mode == "SIP" {
+			chunck[6] = 1 // SIP
+		} else {
+			chunck[6] = 100 // LOG
+		}
 
 	// Chunk capture agent ID
 	case 0x000c:
@@ -203,12 +208,20 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	case 0x000f:
 		chunck = make([]byte, len(h.Payload)+6)
 		copy(chunck[6:], h.Payload)
-	}
+
 	// Chunk captured compressed payload (gzip/inflate)
 	// case 0x0010:
 
 	// Chunk internal correlation id
-	//case 0x0011:
+	case 0x0011:
+		chunck = make([]byte, len(h.CorrelationID)+6)
+		copy(chunck[6:], h.CorrelationID)
+
+	// Chunk MOS only
+	case 0x0020:
+		//chunck = make([]byte, 6+2)
+		//binary.BigEndian.PutUint16(chunck[6:], uint16())
+	}
 
 	binary.BigEndian.PutUint16(chunck[:2], chunckVen)
 	binary.BigEndian.PutUint16(chunck[2:4], chunckType)
@@ -232,5 +245,8 @@ func newHEPChuncks(h *decoder.Packet) []byte {
 	buf.Write(makeChunck(0x0000, 0x000c, h))
 	buf.Write(makeChunck(0x0000, 0x000e, h))
 	buf.Write(makeChunck(0x0000, 0x000f, h))
+	if config.Cfg.Mode != "SIP" && config.Cfg.Mode != "" {
+		buf.Write(makeChunck(0x0000, 0x0011, h))
+	}
 	return buf.Bytes()
 }
