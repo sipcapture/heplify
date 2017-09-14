@@ -121,7 +121,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
-	logp.Debug("sniffer", "Sniffer type: %s device: %s", sniffer.config.Type, sniffer.config.Device)
+	logp.Debug("sniffer", "Sniffer type: %s device: %s mode: %s", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
 
 	switch sniffer.config.Type {
 	case "file":
@@ -204,10 +204,9 @@ func (sniffer *SnifferSetup) Datalink() layers.LinkType {
 
 func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFactory, interfaces *config.InterfacesConfig) error {
 	var err error
+	sniffer.mode = mode
 
 	if !testMode {
-		sniffer.mode = mode
-		logp.Debug("sniffer", "Capture mode: '%s'", sniffer.mode)
 		err = sniffer.setFromConfig(interfaces)
 		if err != nil {
 			return err
