@@ -17,7 +17,7 @@ import (
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
-	"github.com/negbie/heplify/outputs"
+	"github.com/negbie/heplify/publish"
 )
 
 type SnifferSetup struct {
@@ -37,7 +37,7 @@ type SnifferSetup struct {
 }
 
 type MainWorker struct {
-	publisher *outputs.Publisher
+	publisher *publish.Publisher
 	decoder   *decoder.Decoder
 }
 
@@ -48,20 +48,20 @@ type Worker interface {
 type WorkerFactory func(layers.LinkType) (Worker, error)
 
 func NewWorker(dl layers.LinkType) (Worker, error) {
-	var o outputs.Outputer
+	var o publish.Outputer
 	var err error
 
 	if config.Cfg.HepServer != "" {
-		o, err = outputs.NewHepOutputer(config.Cfg.HepServer)
+		o, err = publish.NewHepOutputer(config.Cfg.HepServer)
 	} else {
-		o, err = outputs.NewFileOutputer()
+		o, err = publish.NewFileOutputer()
 	}
 	if err != nil {
 		logp.Critical("NewWorker %v", err)
 		panic(err)
 	}
 
-	p := outputs.NewPublisher(o)
+	p := publish.NewPublisher(o)
 	d := decoder.NewDecoder()
 	w := &MainWorker{publisher: p, decoder: d}
 	return w, nil

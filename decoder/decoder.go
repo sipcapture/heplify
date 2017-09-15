@@ -6,6 +6,7 @@ import (
 	"hash"
 	"net"
 	"os"
+	"time"
 
 	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
@@ -14,8 +15,8 @@ import (
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
+	"github.com/negbie/heplify/protos"
 	"github.com/negbie/tlsx"
-	//"github.com/negbie/tlsx"
 	//"github.com/negbie/sippar"
 	//"github.com/negbie/siprocket"
 )
@@ -44,6 +45,7 @@ type Packet struct {
 }
 
 func NewDecoder() *Decoder {
+
 	host, err := os.Hostname()
 	if err != nil {
 		host = "sniffer"
@@ -53,7 +55,9 @@ func NewDecoder() *Decoder {
 		logp.Err("lru %v", err)
 	}
 	h := xxhash.New()
-	return &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), mfc: 0, lru: l, hash: h}
+	d := &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), mfc: 0, lru: l, hash: h}
+	go d.fragFlush()
+	return d
 }
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
@@ -150,7 +154,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		jsonDNS, err := json.Marshal(NewDNS(dns))
+		jsonDNS, err := json.Marshal(protos.NewDNS(dns))
 		if err != nil {
 			logp.Warn("jsonDNS marshal", err)
 			return nil, err
@@ -221,4 +225,16 @@ func fastHash(s []byte) (h uint64) {
 		h *= fnvPrime
 	}
 	return
+}
+
+func (d *Decoder) fragFlush() {
+	for {
+		<-time.After(1 * time.Minute)
+		go d.flush(time.Now())
+	}
+}
+
+func (d *Decoder) flush(t time.Time) {
+	c := d.defragger.DiscardOlderThan(t.Add(-1 * time.Minute))
+	logp.Info("Fragment flush counter: ", c)
 }

@@ -1,4 +1,4 @@
-package outputs
+package publish
 
 import (
 	"github.com/negbie/heplify/logp"
