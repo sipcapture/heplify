@@ -27,7 +27,7 @@ func optParse() {
 	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [af_packet, pcap, file]")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from file. Please use -t file")
-	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to file. Please use -t file")
+	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
 	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", false, "Topspeed uses timestamps from packets")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")

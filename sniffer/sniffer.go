@@ -76,8 +76,6 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	}
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
-	} else {
-		logp.Info("Skip %d bytes packet. Probably fragmented.", ci.Length)
 	}
 }
 
