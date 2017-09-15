@@ -7,13 +7,13 @@
         Interface buffersize (MB) (default 64)
   -d string
         Enable certain debug selectors
+  -dd
+        Deduplicate packets (default true)
+  -di string
+        Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...
   -e    Log to stderr and disable syslog/file output
-  -f string
-        BPF filter (default "greater 300 and portrange 5060-5090")
-  -hd
-        Deduplicate HEP packets
-  -hf string
-        Filter out REGISTER, OPTIONS ...
+  -fi string
+        Filter out interesting packets like SIP OPTIONS, HTTP Requests ...
   -hs string
         HEP Server address (default "127.0.0.1:9060")
   -i string
@@ -21,9 +21,11 @@
   -kl int
         Rotate the number of log files (default 4)
   -l string
-        Log level [debug, info, notice, warning, error] (default "warning")
+        Log level [debug, info, warning, error] (default "warning")
   -lp int
         Loop
+  -m string
+        Capture modes [DNS, LOG, SIP, TLS] (default "SIP")
   -n string
         Log filename (default "heplify.log")
   -o    Read packet for packet
@@ -36,7 +38,7 @@
   -s int
         Snap length (default 65535)
   -t string
-        Capture types are [af_packet, pcap, file] (default "af_packet")
+        Capture types are [af_packet, pcap, file] (default "pcap")
   -ts
         Topspeed uses timestamps from packets
   -v    Log at INFO level
