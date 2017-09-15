@@ -49,6 +49,7 @@ func (h *afpacketHandle) ReadPacketData() (data []byte, ci gopacket.CaptureInfo,
 	return h.TPacket.ZeroCopyReadPacketData()
 }
 
+// TODO: check this function more deeply. Seems it could be done better.
 func (h *afpacketHandle) SetBPFFilter(filter string) (err error) {
 	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, 65535, filter)
 	if err != nil {

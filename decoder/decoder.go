@@ -1,12 +1,9 @@
 package decoder
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"hash"
-	"net"
 	"os"
-	"time"
 
 	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
@@ -122,7 +119,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			nextDecoder := ip4New.NextLayerType()
 			nextDecoder.Decode(ip4New.Payload, pb)
 		}
-
+		// TODO: generate a more meaningful CorrelationID
 		if config.Cfg.Mode == "DNS" || config.Cfg.Mode == "LOG" || config.Cfg.Mode == "TLS" {
 			pkt.CorrelationID = []byte(config.Cfg.Mode)
 		}
@@ -162,9 +159,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = jsonDNS
 	}
 
+	// TODO: add more layers like DHCP, NTP
+
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
 		logp.Debug("decoder", "Captured packet:\n%v\n", string(appLayer.Payload()))
-
+		// TODO: move this to protos tls
 		if config.Cfg.Mode == "TLS" {
 			if pkt.Dport == 443 || pkt.Sport == 443 {
 				var hello = tlsx.ClientHello{}
@@ -206,35 +205,4 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		return pkt, nil
 	}
 	return nil, nil
-}
-
-func ip2int(ip net.IP) uint32 {
-	if len(ip) == 16 {
-		return binary.BigEndian.Uint32(ip[12:16])
-	}
-	return binary.BigEndian.Uint32(ip)
-}
-
-const fnvBasis = 14695981039346656037
-const fnvPrime = 1099511628211
-
-func fastHash(s []byte) (h uint64) {
-	h = fnvBasis
-	for i := 0; i < len(s); i++ {
-		h ^= uint64(s[i])
-		h *= fnvPrime
-	}
-	return
-}
-
-func (d *Decoder) fragFlush() {
-	for {
-		<-time.After(1 * time.Minute)
-		go d.flush(time.Now())
-	}
-}
-
-func (d *Decoder) flush(t time.Time) {
-	c := d.defragger.DiscardOlderThan(t.Add(-1 * time.Minute))
-	logp.Info("Fragment flush counter: ", c)
 }

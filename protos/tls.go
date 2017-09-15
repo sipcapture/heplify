@@ -25,6 +25,7 @@ type TLSHandshake struct {
 	ALPNs            []string
 }
 
+// TODO: complete this
 func NewTLS(tls *tlsx.ClientHello) (t *TLSHandshake) {
 	t = &TLSHandshake{}
 	return t

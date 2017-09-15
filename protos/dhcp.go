@@ -24,6 +24,7 @@ type DHCP struct {
 	Options      layers.DHCPOptions
 }
 
+// TODO: complete this
 func NewDHCP(dhcp *layers.DHCPv4) (d *DHCP) {
 	d = &DHCP{}
 	d.Xid = dhcp.Xid

@@ -69,7 +69,7 @@ func NewWorker(dl layers.LinkType) (Worker, error) {
 
 func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	pkt, err := mw.decoder.Process(data, ci)
-	// TODO check this
+	// TODO: add some checks here
 	if err != nil {
 		logp.Critical("OnPacket %v", err)
 		panic(err)
@@ -86,6 +86,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	if err != nil {
 		return fmt.Errorf("getting devices list: %v", err)
 	}
+	// TODO: move this to device.go and add some checks. Mby warn if user choose interface any with pcap capture type
 	if sniffer.config.Device == "" {
 		fmt.Printf("\nPlease use one of the following devices:\n\n")
 		for _, d := range devices {
@@ -119,7 +120,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
-	logp.Debug("sniffer", "Sniffer type: %s device: %s mode: %s", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
+	logp.Debug("sniffer", "Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
 
 	switch sniffer.config.Type {
 	case "file":
