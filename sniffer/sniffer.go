@@ -260,7 +260,10 @@ func (sniffer *SnifferSetup) Run() error {
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
-		if config.Cfg.Filter != "" && bytes.Contains(data, []byte(config.Cfg.Filter)) {
+		if config.Cfg.Filter != "" && !bytes.Contains(data, []byte(config.Cfg.Filter)) {
+			continue
+		}
+		if config.Cfg.Discard != "" && bytes.Contains(data, []byte(config.Cfg.Discard)) {
 			continue
 		}
 

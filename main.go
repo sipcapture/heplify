@@ -40,7 +40,8 @@ func optParse() {
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "Log filesize (KB)")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
-	flag.StringVar(&config.Cfg.Filter, "hf", "", "Filter out packets like SIP OPTIONS, HTTP Requests ...")
+	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter out interesting packets like SIP OPTIONS, HTTP Requests ...")
+	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
 	flag.Parse()
 

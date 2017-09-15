@@ -12,6 +12,7 @@ type Config struct {
 	Mode      string
 	Dedup     bool
 	Filter    string
+	Discard   string
 	HepServer string
 }
 
