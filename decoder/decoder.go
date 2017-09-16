@@ -36,8 +36,8 @@ type Packet struct {
 	Dport         uint16
 	CorrelationID []byte
 	Payload       []byte
-	//SipMsg  *sipparser.SipMsg
-	//SipMsg siprocket.SipMsg
+	//sipMsg        *sipparser.SipMsg
+	//SipMsg        siprocket.SipMsg
 	//SipHeader map[string][]string
 }
 
@@ -63,6 +63,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
+
+	/* 	if config.Cfg.Mode == "SIP" {
+		pkt.SipMsg = siprocket.Parse(data)
+		pkt.sipMsg = sipparser.ParseMsg(string(data))
+		return pkt, nil
+	} */
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("decoder", "Captured packet layers:\n%v\n", packet)
@@ -160,9 +166,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	// TODO: add more layers like DHCP, NTP
-
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		logp.Debug("decoder", "Captured packet:\n%v\n", string(appLayer.Payload()))
+		logp.Debug("decoder", "Captured payload:\n%v\n", string(appLayer.Payload()))
+
 		// TODO: move this to protos tls
 		if config.Cfg.Mode == "TLS" {
 			if pkt.Dport == 443 || pkt.Sport == 443 {
@@ -171,7 +177,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 				switch err {
 				case nil:
-					logp.Debug("Captured packet:\n %v\n", hello.String())
+					logp.Debug("Captured payload:\n %v\n", hello.String())
 					pkt.Payload = []byte(hello.String())
 				case tlsx.ErrHandshakeWrongType:
 					return nil, nil
@@ -180,26 +186,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				}
 			}
 		}
-	}
 
-	/* // SIP parser. Right now not needed
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		if config.Cfg.HepFilter != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.HepFilter)) {
-			return nil, nil
-		}
-
-		sipl := gopacket.NewPacket(appLayer.Payload(), LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-		sip, ok := sipl.Layers()[0].(*SIP)
-		if !ok {
-			return nil, nil
-		}
-		pkt.Payload = appLayer.Payload()
-		//pkt.SipMsg = sipparser.ParseMsg(string(udp.Payload))
-		//pkt.SipMsg = siprocket.Parse(udp.payload)
-		pkt.SipHeader = sip.Headers
-		return pkt, nil
+		/* 	if config.Cfg.Mode == "SIP" {
+			sipl := gopacket.NewPacket(appLayer.Payload(), ownlayers.LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+			_, ok := sipl.Layers()[0].(*ownlayers.SIP)
+			if !ok {
+				return nil, nil
+			}
+		} */
 	}
-	*/
 
 	if pkt.Payload != nil {
 		return pkt, nil

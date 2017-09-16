@@ -11,7 +11,7 @@ import (
 	"github.com/negbie/heplify/sniffer"
 )
 
-func optParse() {
+func flagParse() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s [option]\n", os.Args[0])
@@ -28,9 +28,9 @@ func optParse() {
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [af_packet, pcap, file]")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from file. Please use -t file")
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to file")
-	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop")
+	flag.IntVar(&ifaceConfig.Loop, "lp", 0, "Loop count over ReadFile")
 	flag.BoolVar(&ifaceConfig.TopSpeed, "ts", false, "Topspeed uses timestamps from packets")
-	flag.IntVar(&ifaceConfig.Snaplen, "s", 65535, "Snap length")
+	flag.IntVar(&ifaceConfig.Snaplen, "s", 32767, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
 	flag.IntVar(&keepLogFiles, "kl", 4, "Rotate the number of log files")
 	flag.StringVar(&logging.Level, "l", "warning", "Log level [debug, info, warning, error]")
@@ -40,7 +40,7 @@ func optParse() {
 	flag.Uint64Var(&rotateEveryKB, "r", 51200, "Log filesize (KB)")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
-	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter out interesting packets like SIP OPTIONS, HTTP Requests ...")
+	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter out interesting packets like SIP INVITES, Handshakes ...")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
 	flag.Parse()
@@ -58,27 +58,27 @@ func optParse() {
 	config.Cfg.Logging = &logging
 }
 
-func init() {
-	optParse()
-	logp.Init("heplify", config.Cfg.Logging)
+func checkCritErr(err error) {
+	if err != nil {
+		fmt.Printf("\nCritical: %v\n\n", err)
+		logp.Critical("%v", err)
+		os.Exit(1)
+	}
 }
 
 func main() {
+	flagParse()
+	err := logp.Init("heplify", config.Cfg.Logging)
+	checkCritErr(err)
 	if os.Geteuid() != 0 {
 		fmt.Printf("\nYou might need sudo or be root!\n\n")
 		os.Exit(1)
 	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	capture := &sniffer.SnifferSetup{}
-	err := capture.Init(false, config.Cfg.Mode, sniffer.NewWorker, config.Cfg.Iface)
-	if err != nil {
-		fmt.Printf("\nCritical: %v\n\n", err)
-		logp.Critical("%v", err)
-	}
+	err = capture.Init(false, config.Cfg.Mode, sniffer.NewWorker, config.Cfg.Iface)
+	checkCritErr(err)
 	defer capture.Close()
 	err = capture.Run()
-	if err != nil {
-		fmt.Printf("\nCritical: %v\n\n", err)
-		logp.Critical("%v", err)
-	}
+	checkCritErr(err)
 }

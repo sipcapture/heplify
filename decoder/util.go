@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/negbie/fluxify/logp"
+	"github.com/negbie/heplify/logp"
 )
 
 const fnvBasis = 14695981039346656037
@@ -30,11 +30,11 @@ func ip2int(ip net.IP) uint32 {
 func (d *Decoder) fragFlush() {
 	for {
 		<-time.After(1 * time.Minute)
-		go d.flush(time.Now())
+		go d.flush()
 	}
 }
 
-func (d *Decoder) flush(t time.Time) {
-	c := d.defragger.DiscardOlderThan(t.Add(-1 * time.Minute))
+func (d *Decoder) flush() {
+	c := d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
 	logp.Info("Fragment flush counter: %d", c)
 }

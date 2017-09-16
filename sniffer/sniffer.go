@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -80,42 +79,27 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 }
 
 func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
+	var err error
 	sniffer.config = cfg
-
-	devices, err := ListDeviceNames(false, false)
-	if err != nil {
-		return fmt.Errorf("getting devices list: %v", err)
-	}
-	// TODO: move this to device.go and add some checks. Mby warn if user choose interface any with pcap capture type
-	if sniffer.config.Device == "" {
-		fmt.Printf("\nPlease use one of the following devices:\n\n")
-		for _, d := range devices {
-			if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
-				continue
-			}
-			fmt.Printf("-i %s\n", d)
-		}
-		fmt.Println("")
-		os.Exit(1)
-	}
 
 	if sniffer.config.Snaplen == 0 {
 		sniffer.config.Snaplen = 65535
 	}
 
-	if sniffer.config.Type == "autodetect" || sniffer.config.Type == "" {
+	if sniffer.config.Type != "file" && sniffer.config.Type != "af_packet" {
 		sniffer.config.Type = "pcap"
 	}
 
-	if sniffer.mode == "SIP" {
+	switch sniffer.mode {
+	case "SIP":
 		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
-	} else if sniffer.mode == "LOG" {
+	case "LOG":
 		sniffer.filter = "greater 100 and port 514"
-	} else if sniffer.mode == "DNS" {
+	case "DNS":
 		sniffer.filter = "greater 50 and ip and dst port 53"
-	} else if sniffer.mode == "TLS" {
+	case "TLS":
 		sniffer.filter = "greater 100 and tcp and port 443"
-	} else {
+	default:
 		sniffer.mode = "SIP"
 		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
@@ -176,34 +160,19 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	return nil
 }
 
-func (sniffer *SnifferSetup) Reopen() error {
-	var err error
-
-	if sniffer.config.Type != "file" || sniffer.config.ReadFile == "" {
-		return fmt.Errorf("Reopen is only possible for files")
-	}
-
-	sniffer.pcapHandle.Close()
-	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
-	if err != nil {
-		return err
-	}
-
-	sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
-
-	return nil
-}
-
-func (sniffer *SnifferSetup) Datalink() layers.LinkType {
-	if sniffer.config.Type == "pcap" {
-		return sniffer.pcapHandle.LinkType()
-	}
-	return layers.LinkTypeEthernet
-}
-
 func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFactory, interfaces *config.InterfacesConfig) error {
 	var err error
 	sniffer.mode = mode
+
+	if interfaces.Device == "" {
+		fmt.Printf("\nPlease use one of the following devices:\n\n")
+		_, err := ListDeviceNames(false, false)
+		if err != nil {
+			return fmt.Errorf("getting devices list: %v", err)
+		}
+		fmt.Println("")
+		os.Exit(1)
+	}
 
 	if !testMode {
 		err = sniffer.setFromConfig(interfaces)
@@ -350,9 +319,34 @@ func (sniffer *SnifferSetup) Close() error {
 	return nil
 }
 
+func (sniffer *SnifferSetup) Reopen() error {
+	var err error
+
+	if sniffer.config.Type != "file" || sniffer.config.ReadFile == "" {
+		return fmt.Errorf("Reopen is only possible for files")
+	}
+
+	sniffer.pcapHandle.Close()
+	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
+	if err != nil {
+		return err
+	}
+
+	sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
+
+	return nil
+}
+
 func (sniffer *SnifferSetup) Stop() error {
 	sniffer.isAlive = false
 	return nil
+}
+
+func (sniffer *SnifferSetup) Datalink() layers.LinkType {
+	if sniffer.config.Type == "pcap" {
+		return sniffer.pcapHandle.LinkType()
+	}
+	return layers.LinkTypeEthernet
 }
 
 func (sniffer *SnifferSetup) IsAlive() bool {

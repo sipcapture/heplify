@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/google/gopacket/pcap"
 
@@ -53,6 +54,7 @@ func ListDeviceNames(withDescription bool, withIP bool) ([]string, error) {
 		}
 		ret = append(ret, r)
 	}
+	filterDeviceName(ret)
 	return ret, nil
 }
 
@@ -85,4 +87,13 @@ func deviceNameFromIndex(index int, devices []string) (string, error) {
 	}
 
 	return devices[index], nil
+}
+
+func filterDeviceName(name []string) {
+	for _, d := range name {
+		if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+			continue
+		}
+		fmt.Printf("-i %s\n", d)
+	}
 }
