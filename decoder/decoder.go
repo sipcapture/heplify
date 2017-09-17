@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"encoding/json"
 	"hash"
 	"os"
 
@@ -13,9 +12,6 @@ import (
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/protos"
-	"github.com/negbie/tlsx"
-	//"github.com/negbie/sippar"
-	//"github.com/negbie/siprocket"
 )
 
 type Decoder struct {
@@ -36,9 +32,6 @@ type Packet struct {
 	Dport         uint16
 	CorrelationID []byte
 	Payload       []byte
-	//sipMsg        *sipparser.SipMsg
-	//SipMsg        siprocket.SipMsg
-	//SipHeader map[string][]string
 }
 
 func NewDecoder() *Decoder {
@@ -63,12 +56,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
-
-	/* 	if config.Cfg.Mode == "SIP" {
-		pkt.SipMsg = siprocket.Parse(data)
-		pkt.sipMsg = sipparser.ParseMsg(string(data))
-		return pkt, nil
-	} */
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("decoder", "Captured packet layers:\n%v\n", packet)
@@ -109,9 +96,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			d.mfc++
 
 			if d.mfc%128 == 0 {
-				logp.Warn("Defragmentated packet counter: %d", d.mfc)
+				logp.Info("Defragmentated packet counter: %d", d.mfc)
 			}
-			logp.Info("Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+			logp.Debug("decoder", "Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
 				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
 			)
 
@@ -131,7 +118,16 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 	}
 
-	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
+		udp, ok := udpLayer.(*layers.UDP)
+		if !ok {
+			return nil, nil
+		}
+		pkt.Sport = uint16(udp.SrcPort)
+		pkt.Dport = uint16(udp.DstPort)
+		pkt.Payload = udp.Payload
+
+	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		tcp, ok := tcpLayer.(*layers.TCP)
 		if !ok {
 			return nil, nil
@@ -141,59 +137,22 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = tcp.Payload
 	}
 
-	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-		udp, ok := udpLayer.(*layers.UDP)
-		if !ok {
-			return nil, nil
-		}
-		pkt.Sport = uint16(udp.SrcPort)
-		pkt.Dport = uint16(udp.DstPort)
-		pkt.Payload = udp.Payload
-	}
-
 	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 		dns, ok := dnsLayer.(*layers.DNS)
 		if !ok {
 			return nil, nil
 		}
-
-		jsonDNS, err := json.Marshal(protos.NewDNS(dns))
-		if err != nil {
-			logp.Warn("jsonDNS marshal", err)
-			return nil, err
-		}
-		pkt.Payload = jsonDNS
+		pkt.Payload = protos.NewDNS(dns)
 	}
 
 	// TODO: add more layers like DHCP, NTP
+
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		logp.Debug("decoder", "Captured payload:\n%v\n", string(appLayer.Payload()))
-
-		// TODO: move this to protos tls
 		if config.Cfg.Mode == "TLS" {
-			if pkt.Dport == 443 || pkt.Sport == 443 {
-				var hello = tlsx.ClientHello{}
-				err := hello.Unmarshall(appLayer.Payload())
-
-				switch err {
-				case nil:
-					logp.Debug("Captured payload:\n %v\n", hello.String())
-					pkt.Payload = []byte(hello.String())
-				case tlsx.ErrHandshakeWrongType:
-					return nil, nil
-				default:
-					return nil, nil
-				}
-			}
+			pkt.Payload = protos.NewTLS(appLayer.Payload())
+		} else {
+			logp.Debug("decoder", "Captured payload:\n%v\n", string(appLayer.Payload()))
 		}
-
-		/* 	if config.Cfg.Mode == "SIP" {
-			sipl := gopacket.NewPacket(appLayer.Payload(), ownlayers.LayerTypeSIP, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-			_, ok := sipl.Layers()[0].(*ownlayers.SIP)
-			if !ok {
-				return nil, nil
-			}
-		} */
 	}
 
 	if pkt.Payload != nil {

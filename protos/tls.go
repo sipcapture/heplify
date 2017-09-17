@@ -1,6 +1,7 @@
 package protos
 
 import (
+	"github.com/negbie/heplify/logp"
 	"github.com/negbie/tlsx"
 )
 
@@ -26,7 +27,17 @@ type TLSHandshake struct {
 }
 
 // TODO: complete this
-func NewTLS(tls *tlsx.ClientHello) (t *TLSHandshake) {
-	t = &TLSHandshake{}
-	return t
+func NewTLS(raw []byte) []byte {
+	var hello = tlsx.ClientHello{}
+	err := hello.Unmarshall(raw)
+
+	switch err {
+	case nil:
+		logp.Info("Captured TLS handshake:\n%v\n", hello.String())
+		return []byte(hello.String())
+	case tlsx.ErrHandshakeWrongType:
+		return nil
+	default:
+		return nil
+	}
 }

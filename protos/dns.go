@@ -1,9 +1,11 @@
 package protos
 
 import (
+	"encoding/json"
 	"net"
 
 	"github.com/google/gopacket/layers"
+	"github.com/negbie/heplify/logp"
 )
 
 type DNS struct {
@@ -44,7 +46,7 @@ type DNSResourceRecord struct {
 	CNAME string `json:"cname,omitempty"`
 }
 
-func NewDNS(dns *layers.DNS) (d *DNS) {
+func toDNS(dns *layers.DNS) (d *DNS) {
 	d = &DNS{}
 
 	d.ID = dns.ID
@@ -86,4 +88,13 @@ func NewDNS(dns *layers.DNS) (d *DNS) {
 	}
 
 	return d
+}
+
+func NewDNS(d *layers.DNS) []byte {
+	nd, err := json.Marshal(toDNS(d))
+	if err != nil {
+		logp.Warn("NewDNS marshal", err)
+		return nil
+	}
+	return nd
 }

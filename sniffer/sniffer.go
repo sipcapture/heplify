@@ -98,7 +98,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	case "DNS":
 		sniffer.filter = "greater 50 and ip and dst port 53"
 	case "TLS":
-		sniffer.filter = "greater 100 and tcp and port 443"
+		sniffer.filter = "tcp and port 443 and tcp[(((tcp[12:1] & 0xf0) >> 2)):1] = 0x16 and ((tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x01) or (tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x02))"
 	default:
 		sniffer.mode = "SIP"
 		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"

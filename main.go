@@ -33,7 +33,7 @@ func flagParse() {
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 32767, "Snap length")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
 	flag.IntVar(&keepLogFiles, "kl", 4, "Rotate the number of log files")
-	flag.StringVar(&logging.Level, "l", "warning", "Log level [debug, info, warning, error]")
+	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
