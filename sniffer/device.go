@@ -94,6 +94,6 @@ func filterDeviceName(name []string) {
 		if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
 			continue
 		}
-		fmt.Printf("-i %s\n", d)
+		fmt.Printf("./heplify -i %s\n", d)
 	}
 }

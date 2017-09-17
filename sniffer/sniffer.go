@@ -120,7 +120,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "pcap":
-		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 500*time.Millisecond)
+		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 12*time.Hour)
 		if err != nil {
 			return fmt.Errorf("setting pcap live mode: %v", err)
 		}
@@ -141,7 +141,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			return fmt.Errorf("setting af_packet computesize: %v", err)
 		}
 
-		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, 500*time.Millisecond)
+		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, 12*time.Hour)
 		if err != nil {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
@@ -304,13 +304,15 @@ func (sniffer *SnifferSetup) Run() error {
 	}
 
 	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
-	sniffer.pcapHandle.Close()
+	sniffer.Close()
 
 	return retError
 }
 
 func (sniffer *SnifferSetup) Close() error {
 	switch sniffer.config.Type {
+	case "file":
+		sniffer.pcapHandle.Close()
 	case "pcap":
 		sniffer.pcapHandle.Close()
 	case "af_packet":
