@@ -296,7 +296,7 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		counter++
-		if counter%1024 == 0 {
+		if counter%8192 == 0 {
 			logp.Info("Receive packet counter: %d", counter)
 		}
 
