@@ -26,6 +26,8 @@ type Packet struct {
 	Host          string
 	Tsec          uint32
 	Tmsec         uint32
+	Version       uint8
+	Protocol      uint8
 	Srcip         uint32
 	Dstip         uint32
 	Sport         uint16
@@ -80,6 +82,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 		}
 
+		pkt.Version = ip4.Version
+		pkt.Protocol = uint8(ip4.Protocol)
 		pkt.Srcip = ip2int(ip4.SrcIP)
 		pkt.Dstip = ip2int(ip4.DstIP)
 
@@ -102,6 +106,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
 			)
 
+			pkt.Version = ip4New.Version
+			pkt.Protocol = uint8(ip4New.Protocol)
 			pkt.Srcip = ip2int(ip4New.SrcIP)
 			pkt.Dstip = ip2int(ip4New.DstIP)
 

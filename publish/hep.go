@@ -139,12 +139,12 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk IP protocol family (0x02=IPv4)
 	case 0x0001:
 		chunck = make([]byte, 6+1)
-		chunck[6] = 0x02
+		chunck[6] = h.Version
 
 	// Chunk IP protocol ID (0x11=UDP)
 	case 0x0002:
 		chunck = make([]byte, 6+1)
-		chunck[6] = 0x11
+		chunck[6] = h.Protocol
 
 	// Chunk IPv4 source address
 	case 0x0003:

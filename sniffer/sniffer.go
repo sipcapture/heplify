@@ -120,7 +120,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "pcap":
-		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 12*time.Hour)
+		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
 		if err != nil {
 			return fmt.Errorf("setting pcap live mode: %v", err)
 		}
@@ -141,7 +141,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			return fmt.Errorf("setting af_packet computesize: %v", err)
 		}
 
-		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, 12*time.Hour)
+		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, pcap.BlockForever)
 		if err != nil {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
@@ -324,7 +324,7 @@ func (sniffer *SnifferSetup) Close() error {
 func (sniffer *SnifferSetup) Reopen() error {
 	var err error
 
-	if sniffer.config.Type != "file" || sniffer.config.ReadFile == "" {
+	if sniffer.config.Type != "file" {
 		return fmt.Errorf("Reopen is only possible for files")
 	}
 
