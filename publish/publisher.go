@@ -39,7 +39,7 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 	}()
 
 	if config.Cfg.HepServer != "" {
-		hepPacket := convertToHep(pkt)
+		hepPacket := NewHEP(pkt)
 		pub.outputer.Output(hepPacket)
 	} else {
 		jsonPacket, err := json.MarshalIndent(pkt, "", "  ")
@@ -60,8 +60,8 @@ func (pub *Publisher) Start() {
 			pub.output(pkt)
 		}
 
-		if counter%8192 == 0 {
-			logp.Info("Sent packet counter: %d", counter)
+		if counter%65536 == 0 {
+			logp.Info("msg=\"Packets sent: %d\"", counter)
 		}
 	}
 }

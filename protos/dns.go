@@ -46,7 +46,7 @@ type DNSResourceRecord struct {
 	CNAME string `json:"cname,omitempty"`
 }
 
-func toDNS(dns *layers.DNS) (d *DNS) {
+func setDNS(dns *layers.DNS) (d *DNS) {
 	d = &DNS{}
 
 	d.ID = dns.ID
@@ -91,7 +91,7 @@ func toDNS(dns *layers.DNS) (d *DNS) {
 }
 
 func NewDNS(d *layers.DNS) []byte {
-	nd, err := json.Marshal(toDNS(d))
+	nd, err := json.Marshal(setDNS(d))
 	if err != nil {
 		logp.Warn("NewDNS marshal", err)
 		return nil

@@ -27,14 +27,12 @@ func ip2int(ip net.IP) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
-func (d *Decoder) fragFlush() {
+func (d *Decoder) flushFrag() {
 	for {
 		<-time.After(1 * time.Minute)
-		go d.flush()
+		go func() {
+			c := d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
+			logp.Info("msg=\"Fragments flushed since last minute: %d\"", c)
+		}()
 	}
-}
-
-func (d *Decoder) flush() {
-	c := d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
-	logp.Info("Fragment flush counter: %d", c)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
@@ -31,8 +32,10 @@ type SnifferSetup struct {
 	filter string
 
 	// Decoder    *decoder.DecoderStruct
-	worker     Worker
-	DataSource gopacket.PacketDataSource
+	worker        Worker
+	DataSource    gopacket.PacketDataSource
+	pcapStats     *pcap.Stats
+	afpacketStats afpacket.Stats
 }
 
 type MainWorker struct {
@@ -92,16 +95,16 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 
 	switch sniffer.mode {
 	case "SIP":
-		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
+		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	case "LOG":
-		sniffer.filter = "greater 100 and port 514"
+		sniffer.filter = "greater 128 and port 514"
 	case "DNS":
-		sniffer.filter = "greater 50 and ip and dst port 53"
+		sniffer.filter = "greater 32 and ip and dst port 53"
 	case "TLS":
 		sniffer.filter = "tcp and port 443 and tcp[(((tcp[12:1] & 0xf0) >> 2)):1] = 0x16 and ((tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x01) or (tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x02))"
 	default:
 		sniffer.mode = "SIP"
-		sniffer.filter = "(greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 300 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
+		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
 	logp.Debug("sniffer", "Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
@@ -210,19 +213,19 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFact
 	}
 
 	sniffer.isAlive = true
+	go sniffer.printStats()
 
 	return nil
 }
 
 func (sniffer *SnifferSetup) Run() error {
-	counter := 0
 	loopCount := 1
 	var lastPktTime *time.Time
 	var retError error
 
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
-			fmt.Println("Press enter to read packet")
+			fmt.Println("Press enter to read next packet")
 			fmt.Scanln()
 		}
 
@@ -295,17 +298,9 @@ func (sniffer *SnifferSetup) Run() error {
 			}
 		}
 
-		counter++
-		if counter%8192 == 0 {
-			logp.Info("Receive packet counter: %d", counter)
-		}
-
 		sniffer.worker.OnPacket(data, &ci)
 	}
-
-	logp.Info("Input finish. Processed %d packets. Have a nice day!", counter)
 	sniffer.Close()
-
 	return retError
 }
 
@@ -353,4 +348,38 @@ func (sniffer *SnifferSetup) Datalink() layers.LinkType {
 
 func (sniffer *SnifferSetup) IsAlive() bool {
 	return sniffer.isAlive
+}
+
+func (sniffer *SnifferSetup) printStats() {
+	var err error
+	for {
+		<-time.After(30 * time.Second)
+		go func() {
+			switch sniffer.config.Type {
+			case "file":
+				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
+				if err != nil {
+					logp.Warn("Stats err: %v", err)
+				}
+				logp.Info("msg=\"Packets received: %d, dropped by OS: %d, dropped by interface: %d\"",
+					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
+
+			case "pcap":
+				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
+				if err != nil {
+					logp.Warn("Stats err: %v", err)
+				}
+				logp.Info("msg=\"Packets received: %d, dropped by OS: %d, dropped by interface: %d\"",
+					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
+
+			case "af_packet":
+				sniffer.afpacketStats, err = sniffer.afpacketHandle.Stats()
+				if err != nil {
+					logp.Warn("Stats err: %v", err)
+				}
+				logp.Info("msg=\"Packets received: %d, polls: %d\"",
+					sniffer.afpacketStats.Packets, sniffer.afpacketStats.Polls)
+			}
+		}()
+	}
 }

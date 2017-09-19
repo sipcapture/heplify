@@ -17,7 +17,7 @@ import (
 type Decoder struct {
 	Host      string
 	defragger *ip4defrag.IPv4Defragmenter
-	mfc       int
+	fragCount int
 	lru       *lru.ARCCache
 	hash      hash.Hash64
 }
@@ -47,8 +47,8 @@ func NewDecoder() *Decoder {
 		logp.Err("lru %v", err)
 	}
 	h := xxhash.New()
-	d := &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), mfc: 0, lru: l, hash: h}
-	go d.fragFlush()
+	d := &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), fragCount: 0, lru: l, hash: h}
+	go d.flushFrag()
 	return d
 }
 
@@ -65,7 +65,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4, ok := ipLayer.(*layers.IPv4)
 		ip4Len := ip4.Length
-
 		if !ok {
 			return nil, nil
 		}
@@ -92,16 +91,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			logp.Err("Error while de-fragmenting", err)
 			return nil, err
 		} else if ip4New == nil {
-			//packet fragment, we don't have whole packet yet. Send it anyway and overwrite it later
+			d.fragCount++
+			if d.fragCount%1024 == 0 {
+				logp.Info("msg=\"Packets fragmentated: %d\"", d.fragCount)
+			}
+
 			return nil, nil
 		}
 
 		if ip4New.Length != ip4Len {
-			d.mfc++
-
-			if d.mfc%128 == 0 {
-				logp.Info("Defragmentated packet counter: %d", d.mfc)
-			}
 			logp.Debug("decoder", "Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
 				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
 			)
@@ -113,7 +111,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 			pb, ok := packet.(gopacket.PacketBuilder)
 			if !ok {
-				panic("Not a PacketBuilder")
+				logp.Critical("Not a PacketBuilder")
 			}
 			nextDecoder := ip4New.NextLayerType()
 			nextDecoder.Decode(ip4New.Payload, pb)

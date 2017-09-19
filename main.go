@@ -11,7 +11,7 @@ import (
 	"github.com/negbie/heplify/sniffer"
 )
 
-func flagParse() {
+func parseFlags() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s [option]\n", os.Args[0])
@@ -67,7 +67,7 @@ func checkCritErr(err error) {
 }
 
 func main() {
-	flagParse()
+	parseFlags()
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
 	if os.Geteuid() != 0 {

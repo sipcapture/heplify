@@ -117,13 +117,13 @@ func (ho *HepOutputer) Start() {
 			counter++
 			ho.Send(msg)
 		}
-		if counter%8192 == 0 {
-			logp.Info("HEP sent packet counter: %d", counter)
+		if counter%65536 == 0 {
+			logp.Info("msg=\"HEP packets sent: %d\"", counter)
 		}
 	}
 }
 
-func convertToHep(h *decoder.Packet) []byte {
+func NewHEP(h *decoder.Packet) []byte {
 	chuncks := newHEPChuncks(h)
 	hepMsg := make([]byte, len(chuncks)+6)
 	copy(hepMsg[6:], chuncks)
@@ -196,10 +196,10 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 		chunck = make([]byte, 6+4)
 		binary.BigEndian.PutUint32(chunck[6:], 0x00001111)
 
-		// case 0x000d:
-		// Chunk keep alive timer
+	// Chunk keep alive timer
+	// case 0x000d:
 
-		// Chunk authenticate key (plain text / TLS connection)
+	// Chunk authenticate key (plain text / TLS connection)
 	case 0x000e:
 		chunck = make([]byte, len("myhep")+6)
 		copy(chunck[6:], "myhep")
@@ -245,7 +245,7 @@ func newHEPChuncks(h *decoder.Packet) []byte {
 	buf.Write(makeChunck(0x0000, 0x000c, h))
 	buf.Write(makeChunck(0x0000, 0x000e, h))
 	buf.Write(makeChunck(0x0000, 0x000f, h))
-	if config.Cfg.Mode != "SIP" && config.Cfg.Mode != "" {
+	if config.Cfg.Mode != "SIP" {
 		buf.Write(makeChunck(0x0000, 0x0011, h))
 	}
 	return buf.Bytes()

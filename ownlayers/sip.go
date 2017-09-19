@@ -146,6 +146,30 @@ func GetSIPMethod(method string) (SIPMethod, error) {
 	}
 }
 
+// Here is a correspondance between long header names and short
+// as defined in rfc3261 in section 20
+var compactSipHeadersCorrespondance map[string]string = map[string]string{
+	"accept-contact":      "a",
+	"allow-events":        "u",
+	"call-id":             "i",
+	"contact":             "m",
+	"content-encoding":    "e",
+	"content-length":      "l",
+	"content-type":        "c",
+	"event":               "o",
+	"from":                "f",
+	"identity":            "y",
+	"refer-to":            "r",
+	"referred-by":         "b",
+	"reject-contact":      "j",
+	"request-disposition": "d",
+	"session-expires":     "x",
+	"subject":             "s",
+	"supported":           "k",
+	"to":                  "t",
+	"via":                 "v",
+}
+
 // SIP object will contains information about decoded SIP packet.
 // -> The SIP Version
 // -> The SIP Headers (in a map[string][]string because of multiple headers with the same name
@@ -188,14 +212,6 @@ func NewSIP() *SIP {
 	s := new(SIP)
 	s.Headers = make(map[string][]string)
 	return s
-}
-
-func (s *SIP) CanDecode() gopacket.LayerClass {
-	return LayerTypeSIP
-}
-
-func (s *SIP) NextLayerType() gopacket.LayerType {
-	return gopacket.LayerTypePayload
 }
 
 // LayerType returns gopacket.LayerTypeSIP.
@@ -349,6 +365,8 @@ func (s *SIP) GetHeader(headerName string) []string {
 	if _, ok := s.Headers[headerName]; ok {
 		if len(s.Headers[headerName]) > 0 {
 			return s.Headers[headerName]
+		} else if len(s.Headers[compactSipHeadersCorrespondance[headerName]]) > 0 {
+			return s.Headers[compactSipHeadersCorrespondance[headerName]]
 		}
 	}
 	return h
@@ -362,6 +380,8 @@ func (s *SIP) GetFirstHeader(headerName string) string {
 	if _, ok := s.Headers[headerName]; ok {
 		if len(s.Headers[headerName]) > 0 {
 			return s.Headers[headerName][0]
+		} else if len(s.Headers[compactSipHeadersCorrespondance[headerName]]) > 0 {
+			return s.Headers[compactSipHeadersCorrespondance[headerName]][0]
 		}
 	}
 	return ""

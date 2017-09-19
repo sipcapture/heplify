@@ -80,3 +80,7 @@ func (h *afpacketHandle) LinkType() layers.LinkType {
 func (h *afpacketHandle) Close() {
 	h.TPacket.Close()
 }
+
+func (h *afpacketHandle) Stats() (stats afpacket.Stats, err error) {
+	return h.TPacket.Stats()
+}
