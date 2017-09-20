@@ -15,11 +15,17 @@ import (
 )
 
 type Decoder struct {
-	Host      string
-	defragger *ip4defrag.IPv4Defragmenter
-	fragCount int
-	lru       *lru.ARCCache
-	hash      hash.Hash64
+	Host         string
+	defragger    *ip4defrag.IPv4Defragmenter
+	fragCount    int
+	dupCount     int
+	ip4Count     int
+	udpCount     int
+	tcpCount     int
+	dnsCount     int
+	unknownCount int
+	lru          *lru.ARCCache
+	hash         hash.Hash64
 }
 
 type Packet struct {
@@ -47,8 +53,21 @@ func NewDecoder() *Decoder {
 		logp.Err("lru %v", err)
 	}
 	h := xxhash.New()
-	d := &Decoder{Host: host, defragger: ip4defrag.NewIPv4Defragmenter(), fragCount: 0, lru: l, hash: h}
+	d := &Decoder{
+		Host:         host,
+		defragger:    ip4defrag.NewIPv4Defragmenter(),
+		fragCount:    0,
+		dupCount:     0,
+		ip4Count:     0,
+		udpCount:     0,
+		tcpCount:     0,
+		dnsCount:     0,
+		unknownCount: 0,
+		lru:          l,
+		hash:         h,
+	}
 	go d.flushFrag()
+	go d.printStats()
 	return d
 }
 
@@ -77,10 +96,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			_, dup := d.lru.Get(key)
 			d.lru.Add(key, nil)
 			if dup == true {
+				d.dupCount++
 				return nil, nil
 			}
 		}
 
+		d.ip4Count++
 		pkt.Version = ip4.Version
 		pkt.Protocol = uint8(ip4.Protocol)
 		pkt.Srcip = ip2int(ip4.SrcIP)
@@ -92,10 +113,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, err
 		} else if ip4New == nil {
 			d.fragCount++
-			if d.fragCount%1024 == 0 {
-				logp.Info("msg=\"Packets fragmentated: %d\"", d.fragCount)
-			}
-
 			return nil, nil
 		}
 
@@ -127,6 +144,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+		d.udpCount++
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
@@ -136,6 +154,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+		d.tcpCount++
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
@@ -146,6 +165,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+		d.dnsCount++
 		pkt.Payload = protos.NewDNS(dns)
 	}
 
@@ -162,5 +182,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	if pkt.Payload != nil {
 		return pkt, nil
 	}
+
+	d.unknownCount++
 	return nil, nil
 }

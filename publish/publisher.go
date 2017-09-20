@@ -2,6 +2,7 @@ package publish
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
@@ -14,6 +15,7 @@ type Outputer interface {
 
 type Publisher struct {
 	hepQueue chan *decoder.Packet
+	pubCount int
 	outputer Outputer
 }
 
@@ -21,9 +23,11 @@ func NewPublisher(o Outputer) *Publisher {
 
 	p := &Publisher{
 		hepQueue: make(chan *decoder.Packet),
+		pubCount: 0,
 		outputer: o,
 	}
 	go p.Start()
+	go p.printStats()
 	return p
 }
 
@@ -52,16 +56,21 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 }
 
 func (pub *Publisher) Start() {
-	counter := 0
 	for {
 		select {
 		case pkt := <-pub.hepQueue:
-			counter++
+			pub.pubCount++
 			pub.output(pkt)
 		}
+	}
+}
 
-		if counter%65536 == 0 {
-			logp.Info("msg=\"Packets sent: %d\"", counter)
-		}
+func (pub *Publisher) printStats() {
+	for {
+		<-time.After(1 * time.Minute)
+		go func() {
+			logp.Info("Packets since last minute sent: %d", pub.pubCount)
+			pub.pubCount = 0
+		}()
 	}
 }

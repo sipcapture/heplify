@@ -31,8 +31,18 @@ func (d *Decoder) flushFrag() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
-			c := d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
-			logp.Info("msg=\"Fragments flushed since last minute: %d\"", c)
+			d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
+		}()
+	}
+}
+
+func (d *Decoder) printStats() {
+	for {
+		<-time.After(1 * time.Minute)
+		go func() {
+			logp.Info("Packets since last minute IPv4: %d, UDP: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+				d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
+			d.fragCount, d.dupCount, d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0
 		}()
 	}
 }

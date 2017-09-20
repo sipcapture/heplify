@@ -353,7 +353,7 @@ func (sniffer *SnifferSetup) IsAlive() bool {
 func (sniffer *SnifferSetup) printStats() {
 	var err error
 	for {
-		<-time.After(30 * time.Second)
+		<-time.After(1 * time.Minute)
 		go func() {
 			switch sniffer.config.Type {
 			case "file":
@@ -361,7 +361,7 @@ func (sniffer *SnifferSetup) printStats() {
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("msg=\"Packets received: %d, dropped by OS: %d, dropped by interface: %d\"",
+				logp.Info("Packets overall received: %d, dropped by OS: %d, dropped by interface: %d",
 					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
 
 			case "pcap":
@@ -369,7 +369,7 @@ func (sniffer *SnifferSetup) printStats() {
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("msg=\"Packets received: %d, dropped by OS: %d, dropped by interface: %d\"",
+				logp.Info("Packets overall received: %d, dropped by OS: %d, dropped by interface: %d",
 					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
 
 			case "af_packet":
@@ -377,7 +377,7 @@ func (sniffer *SnifferSetup) printStats() {
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("msg=\"Packets received: %d, polls: %d\"",
+				logp.Info("Packets overall received: %d, polls: %d",
 					sniffer.afpacketStats.Packets, sniffer.afpacketStats.Polls)
 			}
 		}()
