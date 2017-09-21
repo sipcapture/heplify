@@ -1,16 +1,11 @@
 # heplify
 heplify is captagents little brother. While it offers a compareable performance the design goal was simplicity.
 It's a single binary which you can place on your linux or windows machine. Just run it to capture packets and 
-<<<<<<< HEAD
 send them to Homer. Right now heplify is able to send SIP, DNS, LOG or TLS handshakes into homer.
-=======
-send them to Homer. Right know heplify is able to send SIP, DNS, LOG or TLS handshakes into homer.
->>>>>>> nightly
 
 ### Requirements
 * libpcap
 
-<<<<<<< HEAD
 On Debian/Ubuntu: sudo apt-get install libpcap-dev  
 On CentOS/RHEL: yum install libpcap-devel  
 On Windows: install WinPcap  
@@ -18,15 +13,6 @@ On Windows: install WinPcap
 ### Installation
 Simply grab it from the releases  
 chmod +x heplify  
-=======
-On Debian/Ubuntu: sudo apt-get install libpcap-dev
-On CentOS/RHEL: yum install libpcap-devel
-On Windows: install WinPcap
-
-### Installation
-Simply grab it from the releases
-chmod +x heplify
->>>>>>> nightly
 
 ### Usage
 ```bash
