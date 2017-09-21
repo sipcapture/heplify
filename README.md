@@ -1,4 +1,3 @@
-<img src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png" width="100">
 # heplify
 heplify is captagents little brother. While it offers a compareable performance the design goal was simplicity.
 It's a single binary which you can place on your linux or windows machine. Just run it to capture packets and 
@@ -11,7 +10,7 @@ handle fragmented and duplicate packets out of the box.
 On Debian/Ubuntu: sudo apt-get install libpcap-dev  
 On CentOS/RHEL: yum install libpcap-devel  
 On Windows: install WinPcap  
-
+<img align="right" width="200" src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png">
 ### Installation
 Simply grab it from the [releases](https://github.com/sipcapture/heplify/releases)  
 chmod +x heplify  
