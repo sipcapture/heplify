@@ -11,7 +11,7 @@ On CentOS/RHEL: yum install libpcap-devel
 On Windows: install WinPcap  
 
 ### Installation
-Simply grab it from the releases  
+Simply grab it from the [releases](https://github.com/sipcapture/heplify/releases) 
 chmod +x heplify  
 
 ### Usage
