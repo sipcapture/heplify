@@ -6,11 +6,11 @@ handle fragmented and duplicate packets out of the box.
 
 ### Requirements
 * libpcap
-
+<img align="right" width="300" src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png">
 On Debian/Ubuntu: sudo apt-get install libpcap-dev  
 On CentOS/RHEL: yum install libpcap-devel  
 On Windows: install WinPcap  
-<img align="right" width="200" src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png">
+
 ### Installation
 Simply grab it from the [releases](https://github.com/sipcapture/heplify/releases)  
 chmod +x heplify  
