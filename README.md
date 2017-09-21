@@ -26,8 +26,6 @@ chmod +x heplify
   -wf   Write packets to file
   -e    Log to stderr and disable syslog/file output
   -l    Log level [debug, info, warning, error] (default "info")
-
-################################################################
 ```
 
 ### Examples
@@ -50,5 +48,4 @@ chmod +x heplify
 # Read pcap file from current folder and send it's content to Homer under 192.168.1.1:9060
 ./heplify -i eth2 -t file -rf capture.pcap -hs "192.168.1.1:9060"
 
-################################################################
 ```
