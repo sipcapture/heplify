@@ -1,55 +1,54 @@
 # heplify
+heplify is captagents little brother. While it offers a compareable performance the design goal was simplicity.
+It's a single binary which you can place on your linux or windows machine. Just run it to capture packets and 
+send them to Homer. Right now heplify is able to send SIP, DNS, LOG or TLS handshakes into homer.
 
-### Usage of ./heplify:
+### Requirements
+* libpcap
 
+On Debian/Ubuntu: sudo apt-get install libpcap-dev  
+On CentOS/RHEL: yum install libpcap-devel  
+On Windows: install WinPcap  
+
+### Installation
+Simply grab it from the releases  
+chmod +x heplify  
+
+### Usage
 ```bash
-  -b int
-        Interface buffersize (MB) (default 64)
-  -d string
-        Enable certain debug selectors
-  -dd
-        Deduplicate packets (default true)
-  -di string
-        Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...
+  -i    Listen on interface
+  -t    Capture types are [af_packet, pcap, file] (default "pcap")
+  -m    Capture modes [DNS, LOG, SIP, TLS] (default "SIP")
+  -hs   HEP Server address (default "127.0.0.1:9060")
+  -di   Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...
+  -fi   Filter out interesting packets like SIP INVITES, Handshakes ...
+  -rf   Read packets from file. Please use -t file
+  -wf   Write packets to file
   -e    Log to stderr and disable syslog/file output
-  -fi string
-        Filter out interesting packets like SIP OPTIONS, HTTP Requests ...
-  -hs string
-        HEP Server address (default "127.0.0.1:9060")
-  -i string
-        Listen on interface
-  -kl int
-        Rotate the number of log files (default 4)
-  -l string
-        Log level [debug, info, warning, error] (default "warning")
-  -lp int
-        Loop
-  -m string
-        Capture modes [DNS, LOG, SIP, TLS] (default "SIP")
-  -n string
-        Log filename (default "heplify.log")
-  -o    Read packet for packet
-  -p string
-        Log filepath (default "./")
-  -r uint
-        Log filesize (KB) (default 51200)
-  -rf string
-        Read packets from file. Please use -t file
-  -s int
-        Snap length (default 65535)
-  -t string
-        Capture types are [af_packet, pcap, file] (default "pcap")
-  -ts
-        Topspeed uses timestamps from packets
-  -v    Log at INFO level
-  -wf string
-        Write packets to file. Please use -t file
+  -l    Log level [debug, info, warning, error] (default "info")
 
 ################################################################
-./heplify -i any -hs "" -e -l info
-./heplify -i eth0 -hf REGISTER
+```
 
+### Examples
+```bash
+# Capture SIP packets on eth2 and send them to Homer under 192.168.1.1:9060
+./heplify -i eth2 -hs "192.168.1.1:9060"
 
-The last command will send HEP messages to localhost Homer. Messages will be captured from eth0.
-It will filter out REGISTER and the default BPF Filter is greater 300 and portrange 5060-5090.
+# Print default log level to stdout
+./heplify -i eth2 -hs "192.168.1.1:9060" -e
+
+# Print debug log level to stdout
+./heplify -i eth2 -hs "192.168.1.1:9060" -e -l debug
+
+# Capture LOG packets on eth2 and send them to Homer under 192.168.1.1:9060
+./heplify -i eth2 -hs "192.168.1.1:9060" -m LOG
+
+# Capture SIP packets on eth2 and save them to pcap into current folder
+./heplify -i eth2 -wf capture.pcap
+
+# Read pcap file from current folder and send it's content to Homer under 192.168.1.1:9060
+./heplify -i eth2 -t file -rf capture.pcap -hs "192.168.1.1:9060"
+
+################################################################
 ```
