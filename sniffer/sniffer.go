@@ -96,6 +96,10 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	switch sniffer.mode {
 	case "SIP":
 		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
+	case "RTCP":
+		sniffer.filter = "(ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
+	case "SIPRTCP":
+		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc))"
 	case "LOG":
 		sniffer.filter = "greater 128 and port 514"
 	case "DNS":
@@ -107,7 +111,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
-	logp.Debug("sniffer", "Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
+	logp.Info("sniffer", "Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
 
 	switch sniffer.config.Type {
 	case "file":
@@ -167,7 +171,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFact
 	var err error
 	sniffer.mode = mode
 
-	if interfaces.Device == "" {
+	if interfaces.Device == "" && interfaces.ReadFile == "" {
 		fmt.Printf("\nPlease use one of the following devices:\n\n")
 		_, err := ListDeviceNames(false, false)
 		if err != nil {

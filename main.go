@@ -38,7 +38,7 @@ func parseFlags() {
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 16384, "Log filesize (KB)")
-	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, TLS]")
+	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, RTCP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter out interesting packets like SIP INVITES, Handshakes ...")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets like SIP OPTIONS, HTTP Requests ...")

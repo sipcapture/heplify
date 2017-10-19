@@ -109,8 +109,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		ip4New, err := d.defragger.DefragIPv4(ip4)
 		if err != nil {
-			logp.Err("Error while de-fragmenting", err)
-			return nil, err
+			logp.Warn("Error while de-fragmenting", err)
+			return nil, nil
 		} else if ip4New == nil {
 			d.fragCount++
 			return nil, nil
@@ -148,6 +148,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
+		if (udp.Payload[0]&0xc0)>>6 == 2 && udp.Payload[1] == 200 || udp.Payload[1] == 201 {
+			pkt.Payload, _ = protos.ParseRTCP(udp.Payload)
+		}
 
 	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		tcp, ok := tcpLayer.(*layers.TCP)
