@@ -148,8 +148,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
-		if (udp.Payload[0]&0xc0)>>6 == 2 && udp.Payload[1] == 200 || udp.Payload[1] == 201 {
-			pkt.Payload, _ = protos.ParseRTCP(udp.Payload)
+		if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+			pkt.Payload, err = protos.ParseRTCP(udp.Payload)
+			if err != nil {
+				logp.Warn(err)
+				return nil, nil
 		}
 
 	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {

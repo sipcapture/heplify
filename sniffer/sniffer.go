@@ -89,7 +89,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.config.Snaplen = 65535
 	}
 
-	if sniffer.config.Type != "file" && sniffer.config.Type != "af_packet" {
+	if sniffer.config.Type != "af_packet" {
 		sniffer.config.Type = "pcap"
 	}
 
@@ -111,29 +111,24 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "(greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange 5060-5090 or ip[6:2] & 0x1fff != 0))"
 	}
 
-	logp.Info("sniffer", "Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
+	logp.Info("Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
 
 	switch sniffer.config.Type {
-	case "file":
-		sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
-		if err != nil {
-			return fmt.Errorf("couldn't open file %v %v", sniffer.config.ReadFile, err)
-		}
-		err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
-		if err != nil {
-			return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
-		}
-
-		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
-
 	case "pcap":
-		sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
-		if err != nil {
-			return fmt.Errorf("setting pcap live mode: %v", err)
-		}
-		err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
-		if err != nil {
-			return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
+		if sniffer.config.ReadFile != "" {
+			sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
+			if err != nil {
+				return fmt.Errorf("couldn't open file %v! %v", sniffer.config.ReadFile, err)
+			}
+		} else {
+			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
+			if err != nil {
+				return fmt.Errorf("setting pcap live mode: %v", err)
+			}
+			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+			if err != nil {
+				return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
+			}
 		}
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
@@ -298,7 +293,7 @@ func (sniffer *SnifferSetup) Run() error {
 		} else if sniffer.config.WriteFile != "" {
 			err := sniffer.dumper.WritePacket(ci, data)
 			if err != nil {
-				return fmt.Errorf("couldn't write to file %v %v", sniffer.config.WriteFile, err)
+				return fmt.Errorf("couldn't write to file %v! %v", sniffer.config.WriteFile, err)
 			}
 		}
 
@@ -310,8 +305,6 @@ func (sniffer *SnifferSetup) Run() error {
 
 func (sniffer *SnifferSetup) Close() error {
 	switch sniffer.config.Type {
-	case "file":
-		sniffer.pcapHandle.Close()
 	case "pcap":
 		sniffer.pcapHandle.Close()
 	case "af_packet":
@@ -323,8 +316,8 @@ func (sniffer *SnifferSetup) Close() error {
 func (sniffer *SnifferSetup) Reopen() error {
 	var err error
 
-	if sniffer.config.Type != "file" {
-		return fmt.Errorf("Reopen is only possible for files")
+	if sniffer.config.Type != "pcap" || sniffer.config.ReadFile == "" {
+		return fmt.Errorf("Reopen is only possible for files and in pcap mode")
 	}
 
 	sniffer.pcapHandle.Close()
@@ -356,18 +349,14 @@ func (sniffer *SnifferSetup) IsAlive() bool {
 
 func (sniffer *SnifferSetup) printStats() {
 	var err error
+	if sniffer.config.ReadFile != "" {
+		logp.Info("Read in pcap file. Stats won't be generated.")
+		return
+	}
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
 			switch sniffer.config.Type {
-			case "file":
-				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
-				if err != nil {
-					logp.Warn("Stats err: %v", err)
-				}
-				logp.Info("Packets overall received: %d, dropped by OS: %d, dropped by interface: %d",
-					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
-
 			case "pcap":
 				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
 				if err != nil {
