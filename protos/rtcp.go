@@ -190,7 +190,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 		//padding := (data[offset] & 0x20) >> 5
 		receptionReportCount := data[offset] & 0x1f
 		packetType := data[offset+1]
-		//packetLength := binary.BigEndian.Uint16(data[offset+2:])
+		packetLength := binary.BigEndian.Uint16(data[offset+2:])
 
 		offset = offset + 4
 
@@ -249,15 +249,20 @@ func ParseRTCP(data []byte) ([]byte, error) {
 			}
 
 		case TYPE_RTCP_SDES:
-			logp.Info("Discard RTCP_SDES packet type: %d", packetType)
+			logp.Debug("rtcp", "Discard RTCP_SDES packet type: %d", packetType)
+			pktLen -= int(packetLength) * 4
 		case TYPE_RTCP_APP:
-			logp.Info("Discard RTCP_APP packet type: %d", packetType)
+			logp.Debug("rtcp", "Discard RTCP_APP packet type: %d", packetType)
+			pktLen -= int(packetLength) * 4
 		case TYPE_RTCP_BYE:
-			logp.Info("Discard RTCP_BYE packet type: %d", packetType)
+			logp.Debug("rtcp", "Discard RTCP_BYE packet type: %d", packetType)
+			pktLen -= int(packetLength) * 4
 		case TYPE_RTCP_XR:
-			logp.Info("Discard RTCP_XR packet type: %d", packetType)
+			logp.Debug("rtcp", "Discard RTCP_XR packet type: %d", packetType)
+			pktLen -= int(packetLength) * 4
 		default:
-			logp.Info("Discard unsupported packet type: %d", packetType)
+			logp.Debug("rtcp", "Discard unsupported packet type: %d", packetType)
+			pktLen -= int(packetLength) * 4
 		}
 
 		pktLen -= offset
@@ -265,7 +270,6 @@ func ParseRTCP(data []byte) ([]byte, error) {
 	}
 
 	rtcpPkt, err := pkt.MarshalJSON()
-
 	if err != nil {
 		return nil, err
 	}

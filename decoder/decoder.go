@@ -1,9 +1,15 @@
 package decoder
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"hash"
 	"os"
+	"strconv"
+	"time"
 
+	"github.com/allegro/bigcache"
 	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -24,7 +30,10 @@ type Decoder struct {
 	tcpCount     int
 	dnsCount     int
 	unknownCount int
+	IPFlow       gopacket.Flow
+	UDPFlow      gopacket.Flow
 	lru          *lru.ARCCache
+	bigcache     *bigcache.BigCache
 	hash         hash.Hash64
 }
 
@@ -43,16 +52,44 @@ type Packet struct {
 }
 
 func NewDecoder() *Decoder {
-
 	host, err := os.Hostname()
 	if err != nil {
 		host = "sniffer"
 	}
-	l, err := lru.NewARC(8192)
+
+	la, err := lru.NewARC(8192)
 	if err != nil {
 		logp.Err("lru %v", err)
 	}
-	h := xxhash.New()
+
+	xh := xxhash.New()
+
+	bConf := bigcache.Config{
+		// number of shards (must be a power of 2)
+		Shards: 1024,
+		// time after which entry can be evicted
+		LifeWindow: 10 * time.Minute,
+		// rps * lifeWindow, used only in initial memory allocation
+		MaxEntriesInWindow: 1000 * 180 * 60,
+		// max entry size in bytes, used only in initial memory allocation
+		MaxEntrySize: 384,
+		// prints information about additional memory allocation
+		Verbose: true,
+		// cache will not allocate more memory than this limit, value in MB
+		// if value is reached then the oldest entries can be overridden for the new ones
+		// 0 value means no size limit
+		HardMaxCacheSize: 1024,
+		// callback fired when the oldest entry is removed because of its
+		// expiration time or no space left for the new entry. Default value is nil which
+		// means no callback and it prevents from unwrapping the oldest entry.
+		OnRemove: nil,
+	}
+
+	bc, err := bigcache.NewBigCache(bConf)
+	if err != nil {
+		logp.Err("bigcache %v", err)
+	}
+
 	d := &Decoder{
 		Host:         host,
 		defragger:    ip4defrag.NewIPv4Defragmenter(),
@@ -63,8 +100,9 @@ func NewDecoder() *Decoder {
 		tcpCount:     0,
 		dnsCount:     0,
 		unknownCount: 0,
-		lru:          l,
-		hash:         h,
+		lru:          la,
+		hash:         xh,
+		bigcache:     bc,
 	}
 	go d.flushFrag()
 	go d.printStats()
@@ -101,7 +139,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 		}
 
+		d.IPFlow = ip4.NetworkFlow()
 		d.ip4Count++
+
 		pkt.Version = ip4.Version
 		pkt.Protocol = uint8(ip4.Protocol)
 		pkt.Srcip = ip2int(ip4.SrcIP)
@@ -133,10 +173,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			nextDecoder := ip4New.NextLayerType()
 			nextDecoder.Decode(ip4New.Payload, pb)
 		}
-		// TODO: generate a more meaningful CorrelationID
-		if config.Cfg.Mode == "DNS" || config.Cfg.Mode == "LOG" || config.Cfg.Mode == "TLS" {
-			pkt.CorrelationID = []byte(config.Cfg.Mode)
-		}
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -144,15 +180,19 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+
+		d.UDPFlow = udp.TransportFlow()
 		d.udpCount++
+
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
-		if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
-			pkt.Payload, err = protos.ParseRTCP(udp.Payload)
-			if err != nil {
-				logp.Warn(err)
-				return nil, nil
+
+		if config.Cfg.Mode == "SIPRTCP" {
+			d.cacheSDPIPPort(udp.Payload)
+			if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+				pkt.Payload, pkt.CorrelationID = d.correlateRTCP(udp.Payload)
+			}
 		}
 
 	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
@@ -164,6 +204,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
+
+		if config.Cfg.Mode == "SIPRTCP" {
+			d.cacheSDPIPPort(tcp.Payload)
+		}
 	}
 
 	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
@@ -191,4 +235,64 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 	d.unknownCount++
 	return nil, nil
+}
+
+func (d *Decoder) cacheSDPIPPort(payload []byte) error {
+	var SDPIP, RTCPPort string
+	var callID []byte
+
+	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP4 ")), bytes.Index(payload, []byte("m=audio ")); posSDPIP >= 0 && posSDPPort >= 0 {
+		restIP := payload[posSDPIP:]
+		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 0 {
+			SDPIP = string(restIP[len("c=IN IP4 "):bytes.Index(restIP, []byte("\r\n"))])
+		} else {
+			return errors.New("Couldn't find end of SDP IP")
+		}
+
+		restPort := payload[posSDPPort:]
+		if posRestPort := bytes.Index(restIP, []byte(" RTP")); posRestPort >= 0 {
+			SDPPort, err := strconv.Atoi(string(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]))
+			if err != nil {
+				return err
+			}
+			RTCPPort = strconv.Itoa(SDPPort + 1)
+		} else {
+			return errors.New("Couldn't find end of SDP Port")
+		}
+
+		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID >= 0 {
+			restCallID := payload[posCallID:]
+			if posRestCallID := bytes.Index(restIP, []byte("\r\n")); posRestCallID >= 0 {
+				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
+			} else {
+				return errors.New("Couldn't find end of Call-ID")
+			}
+		} else if posID := bytes.Index(payload, []byte("i: ")); posID >= 0 {
+			restID := payload[posID:]
+			if posRestID := bytes.Index(restIP, []byte("\r\n")); posRestID >= 0 {
+				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
+			} else {
+				return errors.New("Couldn't find end of Call-ID")
+			}
+		}
+		d.bigcache.Set(SDPIP+RTCPPort, callID)
+	}
+	return nil
+}
+
+func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte) {
+	jsonRTCP, err := protos.ParseRTCP(payload)
+	if err != nil {
+		logp.Warn("%v", err)
+		return nil, nil
+	}
+
+	corrID, err := d.bigcache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
+	if err != nil {
+		logp.Warn("%v", err)
+		return nil, nil
+	}
+
+	fmt.Println(string(jsonRTCP))
+	return jsonRTCP, corrID
 }
