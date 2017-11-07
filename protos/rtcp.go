@@ -9,118 +9,118 @@ import (
 )
 
 /* RTCP header
-			0               1               2               3              4
-			0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-header      |V=2|P|   RC    |  PT(200-204)  |               length          |
-			+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   RC    |  PT(200-204)  |               length          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 SR:
-				0               1               2               3              4
-				0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	header      |V=2|P|   RC    |    PT=SR=200  |               length          |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                       SSRC of sender                          |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-	sender      |              NTP timestamp,most significant word              |
-	info        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|             NTP timestamp,least significant word              |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                          RTP timestamp                        |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                     sender's packet count                     |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                     sender's octet count                      |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	report      |                     SSRC_1 (SSRC of first source)             |
-	block       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	  1         | fraction lost |      cumulative number of packets lost        |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|       extended highest sequence number received               |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                       interarrival jitter                     |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           last SR (LSR)                       |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                     delay since last SR (DLSR)                |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	report      |                     SSRC_2 (SSRC of second source)            |
-	block       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	  2         :                            ...                                :
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                     profile-specific extensions               |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   RC    |    PT=SR=200  |               length          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       SSRC of sender                          |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|              NTP timestamp,most significant word              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|             NTP timestamp,least significant word              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          RTP timestamp                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     sender's packet count                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     sender's octet count                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     SSRC_1 (SSRC of first source)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| fraction lost |      cumulative number of packets lost        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       extended highest sequence number received               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       interarrival jitter                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           last SR (LSR)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     delay since last SR (DLSR)                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     SSRC_2 (SSRC of second source)            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                            ...                                |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                     profile-specific extensions               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-RR：
-				0               1               2               3              4
-				0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	header      |V=2|P|   RC    |    PT=PR=201  |               length          |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                       SSRC of sender                          |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-	report      |                     SSRC_1 (SSRC of first source)             |
-	block       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	  1         | fraction lost |      cumulative number of packets lost        |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|       extended highest sequence number received               |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                       interarrival jitter                     |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           last SR (LSR)                       |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                     delay since last SR (DLSR)                |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	report      |                     SSRC_2 (SSRC of second source)            |
-	block       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	  2         :                            ...                                :
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                     profile-specific extensions               |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+RR:
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   RC    |    PT=PR=201  |               length          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       SSRC of sender                          |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                     SSRC_1 (SSRC of first source)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| fraction lost |      cumulative number of packets lost        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       extended highest sequence number received               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       interarrival jitter                     |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           last SR (LSR)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     delay since last SR (DLSR)                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     SSRC_2 (SSRC of second source)            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                            ...                                :
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                     profile-specific extensions               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 SDES:
-				0               1               2               3              4
-				0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	header      |V=2|P|   SC    |    PT=SR=202  |               length          |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                           SSRC/CSRC_1                         |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           SDES items                          |
-				|                              ...                              |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                           SSRC/CSRC_2                         |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           SDES items                          |
-				|                              ...                              |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   SC    |    PT=SR=202  |               length          |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                           SSRC/CSRC_1                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           SDES items                          |
+|                              ...                              |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                           SSRC/CSRC_2                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           SDES items                          |
+|                              ...                              |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 
-BYE：
-				 0               1               2               3              4
-				 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	header      |V=2|P|   SC    |    PT=SR=203  |               length          |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           SSRC/CSRC                           |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				:                              ...                              :
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-	(opt)       |    length     |           reason for leaving                ...
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+BYE:
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   SC    |    PT=SR=203  |               length          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           SSRC/CSRC                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+:                              ...                              |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|    length     |           reason for leaving                  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
- APP:
-				0               1               2               3              4
-				0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	header      |V=2|P|   SC    |    PT=SR=204  |               length          |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                           SSRC/CSRC                           |
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				|                           name (ASCII)                        |
-				+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-				|                     application-dependent data              ...
-				+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+APP:
+0               1               2               3              4
+0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|V=2|P|   SC    |    PT=SR=204  |               length          |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                           SSRC/CSRC                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           name (ASCII)                        |
++=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+|                     application-dependent data                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 
 const (
@@ -142,18 +142,18 @@ type RTCP_header struct {
 
 type RTCP_Packet struct {
 	SenderInformation struct {
-		Ssrc              uint32 `json:"ssrc"`               // 32 bit
 		Ntp_timestamp_MSW uint32 `json:"ntp_timestamp_sec"`  // 32 bit
 		Ntp_timestamp_LSW uint32 `json:"ntp_timestamp_usec"` // 32 bit
 		Rtp_timestamp     uint32 `json:"rtp_timestamp"`      // 32 bit
 		Pkt_count         uint32 `json:"packets"`            // 32 bit
 		Octet_count       uint32 `json:"octets"`             // 32 bit
 	} `json:"sender_information"`
+	Ssrc         uint32              `json:"ssrc"` // 32 bit
 	ReportBlocks []RTCP_report_block `json:"report_blocks"`
 }
 
 type RTCP_report_block struct {
-	Ssrc            uint32 `json:"source_ssrc"`    // 32 bit
+	SourceSsrc      uint32 `json:"source_ssrc"`    // 32 bit
 	Fraction_lost   uint8  `json:"fraction_lost"`  // 8 bit
 	Cumulative_lost uint32 `json:"packets_lost"`   // 24 bit
 	Highest_seq_no  uint32 `json:"highest_seq_no"` // 32 bit
@@ -175,15 +175,16 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 }
 
 func ParseRTCP(data []byte) ([]byte, error) {
-	if len(data) < 28 {
-		return nil, fmt.Errorf("No usefull data inside RTCP packet='%s' length=%d", string(data), len(data))
+	dataLen := len(data)
+	if dataLen < 28 {
+		return nil, fmt.Errorf("Useless data inside RTCP packet='%s' length=%d", string(data), len(data))
 	}
 	pkt := &RTCP_Packet{}
 	offset := 0
 
-	for pktLen := len(data); pktLen > 0; {
-		if pktLen%4 != 0 || pktLen < 4 {
-			return nil, fmt.Errorf("Fishy RTCP packet=%v length=%d", data, pktLen)
+	for dataLen > 0 {
+		if dataLen%4 != 0 || dataLen < 4 {
+			return nil, fmt.Errorf("Fishy RTCP packet=%v length=%d", data, dataLen)
 		}
 
 		//version := (data[offset] & 0xc0) >> 6
@@ -204,7 +205,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 				return nil, fmt.Errorf("To small RTCP packet=%v length=%d type=%d", data[offset:RTCPLength], RTCPLength, RTCPType)
 			}
 
-			pkt.SenderInformation.Ssrc = binary.BigEndian.Uint32(data[offset:])
+			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			pkt.SenderInformation.Ntp_timestamp_MSW = binary.BigEndian.Uint32(data[offset+4:])
 			pkt.SenderInformation.Ntp_timestamp_LSW = binary.BigEndian.Uint32(data[offset+8:])
 			pkt.SenderInformation.Rtp_timestamp = binary.BigEndian.Uint32(data[offset+12:])
@@ -215,7 +216,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 			if receptionReportCount > 0 && RTCPLength >= 24 {
 				tmpReportBlocks := make([]RTCP_report_block, receptionReportCount)
 				for i := 0; i < int(receptionReportCount); i++ {
-					tmpReportBlocks[i].Ssrc = binary.BigEndian.Uint32(data[offset:])
+					tmpReportBlocks[i].SourceSsrc = binary.BigEndian.Uint32(data[offset:])
 					tmpReportBlocks[i].Fraction_lost = data[offset+4]
 					var cumBuf [4]byte
 					copy(cumBuf[1:], data[offset+5:offset+8])
@@ -232,14 +233,17 @@ func ParseRTCP(data []byte) ([]byte, error) {
 			}
 
 		case TYPE_RTCP_RR:
-			if RTCPLength < 24 {
+			if RTCPLength < 28 {
 				return nil, fmt.Errorf("To small RTCP packet=%v length=%d type=%d", data[offset:RTCPLength], RTCPLength, RTCPType)
 			}
 
-			if receptionReportCount > 0 && RTCPLength >= 24 {
+			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
+			offset = offset + 4
+
+			if receptionReportCount > 0 && RTCPLength >= 28 {
 				tmpReportBlocks := make([]RTCP_report_block, receptionReportCount)
 				for i := 0; i < int(receptionReportCount); i++ {
-					tmpReportBlocks[i].Ssrc = binary.BigEndian.Uint32(data[offset:])
+					tmpReportBlocks[i].SourceSsrc = binary.BigEndian.Uint32(data[offset:])
 					tmpReportBlocks[i].Fraction_lost = data[offset+4]
 					var cumBuf [4]byte
 					copy(cumBuf[1:], data[offset+5:offset+8])
@@ -272,7 +276,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 			offset = offset + int(RTCPLength)
 		}
 
-		pktLen -= offset
+		dataLen -= offset
 
 	}
 

@@ -246,8 +246,8 @@ func (sniffer *SnifferSetup) Run() error {
 			logp.Debug("sniffer", "End of file")
 			loopCount++
 			if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
-				// time for the publish goroutine to flush
-				time.Sleep(300 * time.Millisecond)
+				// Give the publish goroutine 200 ms to flush
+				time.Sleep(200 * time.Millisecond)
 				sniffer.isAlive = false
 				continue
 			}
@@ -276,7 +276,7 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		if sniffer.config.ReadFile != "" {
-			if lastPktTime != nil && !sniffer.config.TopSpeed {
+			if lastPktTime != nil && !sniffer.config.ReadSpeed {
 				sleep := ci.Timestamp.Sub(*lastPktTime)
 				if sleep > 0 {
 					time.Sleep(sleep)
@@ -286,7 +286,7 @@ func (sniffer *SnifferSetup) Run() error {
 			}
 			_lastPktTime := ci.Timestamp
 			lastPktTime = &_lastPktTime
-			if !sniffer.config.TopSpeed {
+			if !sniffer.config.ReadSpeed {
 				// Overwrite what we get from the pcap
 				ci.Timestamp = time.Now()
 			}
@@ -315,12 +315,13 @@ func (sniffer *SnifferSetup) Close() error {
 
 func (sniffer *SnifferSetup) Reopen() error {
 	var err error
+	time.Sleep(100 * time.Millisecond)
 
 	if sniffer.config.Type != "pcap" || sniffer.config.ReadFile == "" {
 		return fmt.Errorf("Reopen is only possible for files and in pcap mode")
 	}
 
-	sniffer.pcapHandle.Close()
+	sniffer.Close()
 	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
 	if err != nil {
 		return err

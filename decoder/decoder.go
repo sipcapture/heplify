@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"bytes"
-	"errors"
 	"hash"
 	"os"
 	"strconv"
@@ -31,7 +30,7 @@ type Decoder struct {
 	unknownCount int
 	IPFlow       gopacket.Flow
 	UDPFlow      gopacket.Flow
-	lru          *lru.ARCCache
+	lru          *lru.Cache
 	bigcache     *bigcache.BigCache
 	hash         hash.Hash64
 }
@@ -57,7 +56,7 @@ func NewDecoder() *Decoder {
 		host = "sniffer"
 	}
 
-	la, err := lru.NewARC(8192)
+	la, err := lru.New(8000)
 	if err != nil {
 		logp.Err("lru %v", err)
 	}
@@ -68,17 +67,17 @@ func NewDecoder() *Decoder {
 		// number of shards (must be a power of 2)
 		Shards: 1024,
 		// time after which entry can be evicted
-		LifeWindow: 10 * time.Minute,
+		LifeWindow: 180 * time.Minute,
 		// rps * lifeWindow, used only in initial memory allocation
 		MaxEntriesInWindow: 1000 * 180 * 60,
 		// max entry size in bytes, used only in initial memory allocation
-		MaxEntrySize: 384,
+		MaxEntrySize: 300,
 		// prints information about additional memory allocation
 		Verbose: true,
 		// cache will not allocate more memory than this limit, value in MB
 		// if value is reached then the oldest entries can be overridden for the new ones
 		// 0 value means no size limit
-		HardMaxCacheSize: 1024,
+		HardMaxCacheSize: 512,
 		// callback fired when the oldest entry is removed because of its
 		// expiration time or no space left for the new entry. Default value is nil which
 		// means no callback and it prevents from unwrapping the oldest entry.
@@ -239,7 +238,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	return nil, nil
 }
 
-func (d *Decoder) cacheSDPIPPort(payload []byte) error {
+func (d *Decoder) cacheSDPIPPort(payload []byte) {
 	var SDPIP, RTCPPort string
 	var callID []byte
 
@@ -248,18 +247,18 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) error {
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 0 {
 			SDPIP = string(restIP[len("c=IN IP4 "):bytes.Index(restIP, []byte("\r\n"))])
 		} else {
-			return errors.New("Couldn't find end of SDP IP")
+			logp.Warn("Couldn't find end of SDP IP in '%s'", string(restIP))
 		}
 
 		restPort := payload[posSDPPort:]
 		if posRestPort := bytes.Index(restIP, []byte(" RTP")); posRestPort >= 0 {
 			SDPPort, err := strconv.Atoi(string(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]))
 			if err != nil {
-				return err
+				logp.Warn("%v", err)
 			}
 			RTCPPort = strconv.Itoa(SDPPort + 1)
 		} else {
-			return errors.New("Couldn't find end of SDP Port")
+			logp.Warn("Couldn't find end of SDP Port in '%s'", string(restPort))
 		}
 
 		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID >= 0 {
@@ -267,19 +266,18 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) error {
 			if posRestCallID := bytes.Index(restIP, []byte("\r\n")); posRestCallID >= 0 {
 				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
 			} else {
-				return errors.New("Couldn't find end of Call-ID")
+				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restCallID))
 			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID >= 0 {
 			restID := payload[posID:]
 			if posRestID := bytes.Index(restIP, []byte("\r\n")); posRestID >= 0 {
 				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
 			} else {
-				return errors.New("Couldn't find end of Call-ID")
+				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
 			}
 		}
 		d.bigcache.Set(SDPIP+RTCPPort, callID)
 	}
-	return nil
 }
 
 func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
@@ -295,6 +293,6 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return nil, nil, 0
 	}
 
-	//fmt.Println(string(jsonRTCP))
+	logp.Debug("decoder", "RTCP JSON payload: %s", string(jsonRTCP))
 	return jsonRTCP, corrID, 5
 }
