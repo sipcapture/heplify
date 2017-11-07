@@ -23,7 +23,7 @@ type InterfacesConfig struct {
 	WriteFile    string `config:"write_file"`
 	Snaplen      int    `config:"snaplen"`
 	BufferSizeMb int    `config:"buffer_size_mb"`
-	TopSpeed     bool   `config:"top_speed"`
+	ReadSpeed    bool   `config:"top_speed"`
 	OneAtATime   bool   `config:"one_at_a_time"`
 	Loop         int    `config:"loop"`
 }
