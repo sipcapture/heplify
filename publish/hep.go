@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"net"
 
-	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 )
@@ -180,10 +179,16 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
 	case 0x000b:
 		chunck = make([]byte, 6+1)
-		if config.Cfg.Mode == "SIP" {
+		switch h.Type {
+		case 1:
 			chunck[6] = 1 // SIP
-		} else {
+		case 5:
+			chunck[6] = 5 // RTCP
+		case 100:
 			chunck[6] = 100 // LOG
+		default:
+			chunck[6] = 66 // Unknown
+
 		}
 
 	// Chunk capture agent ID
@@ -240,7 +245,7 @@ func newHEPChuncks(h *decoder.Packet) []byte {
 	buf.Write(makeChunck(0x0000, 0x000c, h))
 	buf.Write(makeChunck(0x0000, 0x000e, h))
 	buf.Write(makeChunck(0x0000, 0x000f, h))
-	if config.Cfg.Mode != "SIP" {
+	if h.CorrelationID != nil {
 		buf.Write(makeChunck(0x0000, 0x0011, h))
 	}
 	return buf.Bytes()

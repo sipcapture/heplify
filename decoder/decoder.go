@@ -3,7 +3,6 @@ package decoder
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"hash"
 	"os"
 	"strconv"
@@ -49,6 +48,7 @@ type Packet struct {
 	Dport         uint16
 	CorrelationID []byte
 	Payload       []byte
+	Type          byte
 }
 
 func NewDecoder() *Decoder {
@@ -187,11 +187,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(udp.SrcPort)
 		pkt.Dport = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
+		pkt.Type = 1
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
-				pkt.Payload, pkt.CorrelationID = d.correlateRTCP(udp.Payload)
+				pkt.Payload, pkt.CorrelationID, pkt.Type = d.correlateRTCP(udp.Payload)
 			}
 		}
 
@@ -204,6 +205,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Sport = uint16(tcp.SrcPort)
 		pkt.Dport = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
+		pkt.Type = 1
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(tcp.Payload)
@@ -280,19 +282,19 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) error {
 	return nil
 }
 
-func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte) {
+func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	jsonRTCP, err := protos.ParseRTCP(payload)
 	if err != nil {
 		logp.Warn("%v", err)
-		return nil, nil
+		return nil, nil, 0
 	}
 
 	corrID, err := d.bigcache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
 	if err != nil {
 		logp.Warn("%v", err)
-		return nil, nil
+		return nil, nil, 0
 	}
 
-	fmt.Println(string(jsonRTCP))
-	return jsonRTCP, corrID
+	//fmt.Println(string(jsonRTCP))
+	return jsonRTCP, corrID, 5
 }
