@@ -183,7 +183,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 	offset := 0
 
 	for dataLen > 0 {
-		if dataLen%4 != 0 || dataLen < 4 {
+		if dataLen < 4 || dataLen > 576 {
 			return nil, fmt.Errorf("Fishy RTCP packet=%v length=%d", data, dataLen)
 		}
 

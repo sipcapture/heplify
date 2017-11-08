@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Thanks for the idea to use musl!
+# https://www.moiji-mobile.com/2017/10/15/static-binaries-for-go-with-docker/
+
 set -ex
 
 apk update
