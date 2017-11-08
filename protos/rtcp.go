@@ -177,7 +177,7 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 func ParseRTCP(data []byte) ([]byte, error) {
 	dataLen := len(data)
 	if dataLen < 28 {
-		return nil, fmt.Errorf("Useless data inside RTCP packet='%s' length=%d", string(data), len(data))
+		return nil, fmt.Errorf("Useless data inside RTCP packet='%s' length=%d", string(data), dataLen)
 	}
 	pkt := &RTCP_Packet{}
 	offset := 0
@@ -193,7 +193,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 		RTCPType := data[offset+1]
 		RTCPLength := binary.BigEndian.Uint16(data[offset+2:]) * 4
 
-		offset = offset + 4
+		offset += 4
 
 		if receptionReportCount < 0 || receptionReportCount > 4 {
 			return nil, fmt.Errorf("Fishy RTCP receptionReportCount=%d", receptionReportCount)
@@ -211,7 +211,7 @@ func ParseRTCP(data []byte) ([]byte, error) {
 			pkt.SenderInformation.Rtp_timestamp = binary.BigEndian.Uint32(data[offset+12:])
 			pkt.SenderInformation.Pkt_count = binary.BigEndian.Uint32(data[offset+16:])
 			pkt.SenderInformation.Octet_count = binary.BigEndian.Uint32(data[offset+20:])
-			offset = offset + 24
+			offset += 24
 
 			if receptionReportCount > 0 && RTCPLength >= 24 {
 				tmpReportBlocks := make([]RTCP_report_block, receptionReportCount)
@@ -227,20 +227,21 @@ func ParseRTCP(data []byte) ([]byte, error) {
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
 					tmpReportBlocks[i].ReportCount = receptionReportCount
 					tmpReportBlocks[i].RTCPType = RTCPType
-					offset = offset + 24
+					offset += 24
+					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
 				}
 			}
 
 		case TYPE_RTCP_RR:
-			if RTCPLength < 28 {
+			if RTCPLength < 4 {
 				return nil, fmt.Errorf("To small RTCP packet=%v length=%d type=%d", data[offset:RTCPLength], RTCPLength, RTCPType)
 			}
 
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
-			offset = offset + 4
+			offset += 4
 
-			if receptionReportCount > 0 && RTCPLength >= 28 {
+			if receptionReportCount > 0 && RTCPLength >= 24 {
 				tmpReportBlocks := make([]RTCP_report_block, receptionReportCount)
 				for i := 0; i < int(receptionReportCount); i++ {
 					tmpReportBlocks[i].SourceSsrc = binary.BigEndian.Uint32(data[offset:])
@@ -254,26 +255,27 @@ func ParseRTCP(data []byte) ([]byte, error) {
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
 					tmpReportBlocks[i].ReportCount = receptionReportCount
 					tmpReportBlocks[i].RTCPType = RTCPType
-					offset = offset + 24
+					offset += 24
+					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
 				}
 			}
 
 		case TYPE_RTCP_SDES:
 			logp.Debug("rtcp", "Discard RTCP_SDES packet type: %d", RTCPType)
-			offset = offset + int(RTCPLength)
+			offset += int(RTCPLength)
 		case TYPE_RTCP_APP:
 			logp.Debug("rtcp", "Discard RTCP_APP packet type: %d", RTCPType)
-			offset = offset + int(RTCPLength)
+			offset += int(RTCPLength)
 		case TYPE_RTCP_BYE:
 			logp.Debug("rtcp", "Discard RTCP_BYE packet type: %d", RTCPType)
-			offset = offset + int(RTCPLength)
+			offset += int(RTCPLength)
 		case TYPE_RTCP_XR:
 			logp.Debug("rtcp", "Discard RTCP_XR packet type: %d", RTCPType)
-			offset = offset + int(RTCPLength)
+			offset += int(RTCPLength)
 		default:
 			logp.Debug("rtcp", "Discard unsupported packet type: %d", RTCPType)
-			offset = offset + int(RTCPLength)
+			offset += int(RTCPLength)
 		}
 
 		dataLen -= offset
@@ -285,6 +287,5 @@ func ParseRTCP(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	logp.Debug("rtcp", "RTCP json payload:\n%v\n", string(rtcpPkt))
 	return rtcpPkt, nil
 }

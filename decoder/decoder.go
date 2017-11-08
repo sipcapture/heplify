@@ -30,9 +30,9 @@ type Decoder struct {
 	unknownCount int
 	IPFlow       gopacket.Flow
 	UDPFlow      gopacket.Flow
-	lru          *lru.Cache
-	bigcache     *bigcache.BigCache
-	hash         hash.Hash64
+	SIPHash      hash.Hash64
+	SIPCache     *lru.Cache
+	RTCPCache    *bigcache.BigCache
 }
 
 type Packet struct {
@@ -56,14 +56,14 @@ func NewDecoder() *Decoder {
 		host = "sniffer"
 	}
 
-	la, err := lru.New(8000)
+	sh := xxhash.New()
+
+	sc, err := lru.New(8000)
 	if err != nil {
 		logp.Err("lru %v", err)
 	}
 
-	xh := xxhash.New()
-
-	bConf := bigcache.Config{
+	rcConf := bigcache.Config{
 		// number of shards (must be a power of 2)
 		Shards: 1024,
 		// time after which entry can be evicted
@@ -73,7 +73,7 @@ func NewDecoder() *Decoder {
 		// max entry size in bytes, used only in initial memory allocation
 		MaxEntrySize: 300,
 		// prints information about additional memory allocation
-		Verbose: true,
+		Verbose: false,
 		// cache will not allocate more memory than this limit, value in MB
 		// if value is reached then the oldest entries can be overridden for the new ones
 		// 0 value means no size limit
@@ -84,7 +84,7 @@ func NewDecoder() *Decoder {
 		OnRemove: nil,
 	}
 
-	bc, err := bigcache.NewBigCache(bConf)
+	rc, err := bigcache.NewBigCache(rcConf)
 	if err != nil {
 		logp.Err("bigcache %v", err)
 	}
@@ -99,9 +99,9 @@ func NewDecoder() *Decoder {
 		tcpCount:     0,
 		dnsCount:     0,
 		unknownCount: 0,
-		lru:          la,
-		hash:         xh,
-		bigcache:     bc,
+		SIPHash:      sh,
+		SIPCache:     sc,
+		RTCPCache:    rc,
 	}
 	go d.flushFrag()
 	go d.printStats()
@@ -126,12 +126,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 
 		if config.Cfg.Dedup {
-			d.hash.Write(ip4.Payload)
+			d.SIPHash.Write(ip4.Payload)
 			//key := fastHash(ip4.Payload)
-			key := d.hash.Sum64()
-			d.hash.Reset()
-			_, dup := d.lru.Get(key)
-			d.lru.Add(key, nil)
+			key := d.SIPHash.Sum64()
+			d.SIPHash.Reset()
+			_, dup := d.SIPCache.Get(key)
+			d.SIPCache.Add(key, nil)
 			if dup == true {
 				d.dupCount++
 				return nil, nil
@@ -251,7 +251,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 		}
 
 		restPort := payload[posSDPPort:]
-		if posRestPort := bytes.Index(restIP, []byte(" RTP")); posRestPort >= 0 {
+		if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 0 {
 			SDPPort, err := strconv.Atoi(string(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]))
 			if err != nil {
 				logp.Warn("%v", err)
@@ -263,20 +263,20 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 
 		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID >= 0 {
 			restCallID := payload[posCallID:]
-			if posRestCallID := bytes.Index(restIP, []byte("\r\n")); posRestCallID >= 0 {
+			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 0 {
 				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
 			} else {
 				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restCallID))
 			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID >= 0 {
 			restID := payload[posID:]
-			if posRestID := bytes.Index(restIP, []byte("\r\n")); posRestID >= 0 {
+			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 0 {
 				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
 			} else {
 				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
 			}
 		}
-		d.bigcache.Set(SDPIP+RTCPPort, callID)
+		d.RTCPCache.Set(SDPIP+RTCPPort, callID)
 	}
 }
 
@@ -287,7 +287,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return nil, nil, 0
 	}
 
-	corrID, err := d.bigcache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
+	corrID, err := d.RTCPCache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
 	if err != nil {
 		logp.Warn("%v", err)
 		return nil, nil, 0
