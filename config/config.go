@@ -21,6 +21,7 @@ type InterfacesConfig struct {
 	Type         string `config:"type"`
 	ReadFile     string `config:"read_file"`
 	WriteFile    string `config:"write_file"`
+	PortRange    string `config:"port_range"`
 	Snaplen      int    `config:"snaplen"`
 	BufferSizeMb int    `config:"buffer_size_mb"`
 	ReadSpeed    bool   `config:"top_speed"`
