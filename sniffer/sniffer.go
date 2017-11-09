@@ -120,6 +120,10 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			if err != nil {
 				return fmt.Errorf("couldn't open file %v! %v", sniffer.config.ReadFile, err)
 			}
+			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+			if err != nil {
+				return fmt.Errorf("SetBPFFilter '%s' for ReadFile pcap: %v", sniffer.filter, err)
+			}
 		} else {
 			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
 			if err != nil {

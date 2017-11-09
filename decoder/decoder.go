@@ -5,9 +5,7 @@ import (
 	"hash"
 	"os"
 	"strconv"
-	"time"
 
-	"github.com/allegro/bigcache"
 	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -32,7 +30,8 @@ type Decoder struct {
 	UDPFlow      gopacket.Flow
 	SIPHash      hash.Hash64
 	SIPCache     *lru.Cache
-	RTCPCache    *bigcache.BigCache
+	SDPCache     *lru.Cache
+	RTCPCache    *lru.Cache
 }
 
 type Packet struct {
@@ -56,37 +55,21 @@ func NewDecoder() *Decoder {
 		host = "sniffer"
 	}
 
-	sh := xxhash.New()
+	hSIP := xxhash.New()
 
-	sc, err := lru.New(8000)
+	cSIP, err := lru.New(2000)
 	if err != nil {
-		logp.Err("lru %v", err)
+		logp.Err("SIPCache %v", err)
 	}
 
-	rcConf := bigcache.Config{
-		// number of shards (must be a power of 2)
-		Shards: 1024,
-		// time after which entry can be evicted
-		LifeWindow: 180 * time.Minute,
-		// rps * lifeWindow, used only in initial memory allocation
-		MaxEntriesInWindow: 1000 * 180 * 60,
-		// max entry size in bytes, used only in initial memory allocation
-		MaxEntrySize: 300,
-		// prints information about additional memory allocation
-		Verbose: false,
-		// cache will not allocate more memory than this limit, value in MB
-		// if value is reached then the oldest entries can be overridden for the new ones
-		// 0 value means no size limit
-		HardMaxCacheSize: 512,
-		// callback fired when the oldest entry is removed because of its
-		// expiration time or no space left for the new entry. Default value is nil which
-		// means no callback and it prevents from unwrapping the oldest entry.
-		OnRemove: nil,
+	cSDP, err := lru.New(10000)
+	if err != nil {
+		logp.Err("SDPCache %v", err)
 	}
 
-	rc, err := bigcache.NewBigCache(rcConf)
+	cRTCP, err := lru.New(10000)
 	if err != nil {
-		logp.Err("bigcache %v", err)
+		logp.Err("RTCPCache %v", err)
 	}
 
 	d := &Decoder{
@@ -99,9 +82,10 @@ func NewDecoder() *Decoder {
 		tcpCount:     0,
 		dnsCount:     0,
 		unknownCount: 0,
-		SIPHash:      sh,
-		SIPCache:     sc,
-		RTCPCache:    rc,
+		SIPHash:      hSIP,
+		SIPCache:     cSIP,
+		SDPCache:     cSDP,
+		RTCPCache:    cRTCP,
 	}
 	go d.flushFrag()
 	go d.printStats()
@@ -190,7 +174,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(udp.Payload)
-			if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+			if (udp.Payload[0]&0xc0)>>6 == 2 && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
 				pkt.Payload, pkt.CorrelationID, pkt.Type = d.correlateRTCP(udp.Payload)
 			}
 		}
@@ -276,7 +260,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
 			}
 		}
-		d.RTCPCache.Set(SDPIP+RTCPPort, callID)
+		d.SDPCache.Add(SDPIP+RTCPPort, callID)
 	}
 }
 
@@ -284,15 +268,24 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	jsonRTCP, err := protos.ParseRTCP(payload)
 	if err != nil {
 		logp.Warn("%v", err)
-		return nil, nil, 0
+		if jsonRTCP == nil {
+			return nil, nil, 0
+		}
 	}
 
-	corrID, err := d.RTCPCache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
-	if err != nil {
-		logp.Warn("%v", err)
-		return nil, nil, 0
+	if corrID, ok := d.SDPCache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String()); ok {
+		logp.Debug("decoder", "SDPCache RTCP JSON payload: %s", string(jsonRTCP))
+		d.RTCPCache.Add(d.IPFlow.Src().String()+d.UDPFlow.Src().String(), corrID)
+		//fmt.Println(string(jsonRTCP))
+		//fmt.Println(string(corrID.([]byte)))
+		return jsonRTCP, corrID.([]byte), 5
+	} else if corrID, ok := d.RTCPCache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String()); ok {
+		logp.Debug("decoder", "RTCPCache RTCP JSON payload: %s", string(jsonRTCP))
+		d.RTCPCache.Add(d.IPFlow.Src().String()+d.UDPFlow.Src().String(), corrID)
+		return jsonRTCP, corrID.([]byte), 5
+	} else {
+		logp.Warn("Couldn't find RTCP correlation value for key=%v", d.IPFlow.Src().String()+d.UDPFlow.Src().String())
 	}
 
-	logp.Debug("decoder", "RTCP JSON payload: %s", string(jsonRTCP))
-	return jsonRTCP, corrID, 5
+	return nil, nil, 0
 }
