@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"bytes"
-	"fmt"
 	"hash"
 	"os"
 	"strconv"
@@ -99,7 +98,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Dedup {
 			d.SIPHash.Write(ip4.Payload)
-			//key := fastHash(ip4.Payload)
 			key := strconv.FormatUint(d.SIPHash.Sum64(), 10)
 			d.SIPHash.Reset()
 			_, dup := d.SIPCache.Get(key)
@@ -264,8 +262,6 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	if corrID, ok := d.SDPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
 		logp.Debug("decoder", "SDPCache RTCP JSON payload: %s", string(jsonRTCP))
 		d.RTCPCache.Add(d.FlowSrcIP+d.FlowSrcPort, corrID)
-		fmt.Println(string(jsonRTCP))
-		fmt.Println(string(corrID))
 		return jsonRTCP, corrID, 5
 	} else if corrID, ok := d.RTCPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
 		logp.Debug("decoder", "RTCPCache RTCP JSON payload: %s", string(jsonRTCP))
