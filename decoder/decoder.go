@@ -5,13 +5,10 @@ import (
 	"hash"
 	"os"
 	"strconv"
-	"time"
 
-	"github.com/allegro/bigcache"
 	"github.com/cespare/xxhash"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/hashicorp/golang-lru"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
@@ -28,11 +25,12 @@ type Decoder struct {
 	tcpCount     int
 	dnsCount     int
 	unknownCount int
-	IPFlow       gopacket.Flow
-	UDPFlow      gopacket.Flow
+	FlowSrcIP    string
+	FlowSrcPort  string
 	SIPHash      hash.Hash64
-	SIPCache     *lru.Cache
-	RTCPCache    *bigcache.BigCache
+	SIPCache     *Cache
+	SDPCache     *Cache
+	RTCPCache    *Cache
 }
 
 type Packet struct {
@@ -56,38 +54,10 @@ func NewDecoder() *Decoder {
 		host = "sniffer"
 	}
 
-	sh := xxhash.New()
-
-	sc, err := lru.New(8000)
-	if err != nil {
-		logp.Err("lru %v", err)
-	}
-
-	rcConf := bigcache.Config{
-		// number of shards (must be a power of 2)
-		Shards: 1024,
-		// time after which entry can be evicted
-		LifeWindow: 180 * time.Minute,
-		// rps * lifeWindow, used only in initial memory allocation
-		MaxEntriesInWindow: 1000 * 180 * 60,
-		// max entry size in bytes, used only in initial memory allocation
-		MaxEntrySize: 300,
-		// prints information about additional memory allocation
-		Verbose: false,
-		// cache will not allocate more memory than this limit, value in MB
-		// if value is reached then the oldest entries can be overridden for the new ones
-		// 0 value means no size limit
-		HardMaxCacheSize: 512,
-		// callback fired when the oldest entry is removed because of its
-		// expiration time or no space left for the new entry. Default value is nil which
-		// means no callback and it prevents from unwrapping the oldest entry.
-		OnRemove: nil,
-	}
-
-	rc, err := bigcache.NewBigCache(rcConf)
-	if err != nil {
-		logp.Err("bigcache %v", err)
-	}
+	hSIP := xxhash.New()
+	cSIP := NewLRUCache(4000)
+	cSDP := NewLRUCache(10000)
+	cRTCP := NewLRUCache(100000)
 
 	d := &Decoder{
 		Host:         host,
@@ -99,9 +69,10 @@ func NewDecoder() *Decoder {
 		tcpCount:     0,
 		dnsCount:     0,
 		unknownCount: 0,
-		SIPHash:      sh,
-		SIPCache:     sc,
-		RTCPCache:    rc,
+		SIPHash:      hSIP,
+		SIPCache:     cSIP,
+		SDPCache:     cSDP,
+		RTCPCache:    cRTCP,
 	}
 	go d.flushFrag()
 	go d.printStats()
@@ -127,8 +98,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Dedup {
 			d.SIPHash.Write(ip4.Payload)
-			//key := fastHash(ip4.Payload)
-			key := d.SIPHash.Sum64()
+			key := strconv.FormatUint(d.SIPHash.Sum64(), 10)
 			d.SIPHash.Reset()
 			_, dup := d.SIPCache.Get(key)
 			d.SIPCache.Add(key, nil)
@@ -138,7 +108,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 		}
 
-		d.IPFlow = ip4.NetworkFlow()
+		d.FlowSrcIP = ip4.NetworkFlow().Src().String()
 		d.ip4Count++
 
 		pkt.Version = ip4.Version
@@ -180,7 +150,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		d.UDPFlow = udp.TransportFlow()
+		d.FlowSrcPort = udp.TransportFlow().Src().String()
 		d.udpCount++
 
 		pkt.Sport = uint16(udp.SrcPort)
@@ -190,7 +160,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(udp.Payload)
-			if (udp.Payload[0]&0xc0)>>6 == 2 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+			if (udp.Payload[0]&0xc0)>>6 == 2 && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
 				pkt.Payload, pkt.CorrelationID, pkt.Type = d.correlateRTCP(udp.Payload)
 			}
 		}
@@ -276,23 +246,28 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
 			}
 		}
-		d.RTCPCache.Set(SDPIP+RTCPPort, callID)
+		d.SDPCache.Add(SDPIP+RTCPPort, callID)
 	}
 }
 
 func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
-	jsonRTCP, err := protos.ParseRTCP(payload)
-	if err != nil {
-		logp.Warn("%v", err)
-		return nil, nil, 0
+	jsonRTCP, info := protos.ParseRTCP(payload)
+	if info != "" {
+		logp.Info("%v", info)
+		if jsonRTCP == nil {
+			return nil, nil, 0
+		}
 	}
 
-	corrID, err := d.RTCPCache.Get(d.IPFlow.Src().String() + d.UDPFlow.Src().String())
-	if err != nil {
-		logp.Warn("%v", err)
-		return nil, nil, 0
+	if corrID, ok := d.SDPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
+		logp.Debug("decoder", "SDPCache RTCP JSON payload: %s", string(jsonRTCP))
+		d.RTCPCache.Add(d.FlowSrcIP+d.FlowSrcPort, corrID)
+		return jsonRTCP, corrID, 5
+	} else if corrID, ok := d.RTCPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
+		logp.Debug("decoder", "RTCPCache RTCP JSON payload: %s", string(jsonRTCP))
+		return jsonRTCP, corrID, 5
 	}
 
-	logp.Debug("decoder", "RTCP JSON payload: %s", string(jsonRTCP))
-	return jsonRTCP, corrID, 5
+	logp.Info("Couldn't find RTCP correlation value for key=%v", d.FlowSrcIP+d.FlowSrcPort)
+	return nil, nil, 0
 }
