@@ -1,7 +1,7 @@
 package decoder
 
 import (
-	"bytes"
+	"fmt"
 	"hash"
 	"os"
 	"strconv"
@@ -20,13 +20,16 @@ type Decoder struct {
 	defragger    *ip4defrag.IPv4Defragmenter
 	fragCount    int
 	dupCount     int
-	ip4Count     int
-	udpCount     int
-	tcpCount     int
 	dnsCount     int
+	ip4Count     int
+	rtcpCount    int
+	tcpCount     int
+	udpCount     int
 	unknownCount int
 	FlowSrcIP    string
+	FlowDstIP    string
 	FlowSrcPort  string
+	FlowDstPort  string
 	SIPHash      hash.Hash64
 	SIPCache     *Cache
 	SDPCache     *Cache
@@ -39,13 +42,13 @@ type Packet struct {
 	Tmsec         uint32
 	Version       uint8
 	Protocol      uint8
-	Srcip         uint32
-	Dstip         uint32
-	Sport         uint16
-	Dport         uint16
+	SrcIP         uint32
+	DstIP         uint32
+	SrcPort       uint16
+	DstPort       uint16
 	CorrelationID []byte
 	Payload       []byte
-	Type          byte
+	HEPType       byte
 }
 
 func NewDecoder() *Decoder {
@@ -55,9 +58,9 @@ func NewDecoder() *Decoder {
 	}
 
 	hSIP := xxhash.New()
-	cSIP := NewLRUCache(4000)
-	cSDP := NewLRUCache(10000)
-	cRTCP := NewLRUCache(100000)
+	cSIP := NewLRUCache(10000)
+	cSDP := NewLRUCache(100000)
+	cRTCP := NewLRUCache(200000)
 
 	d := &Decoder{
 		Host:         host,
@@ -74,7 +77,7 @@ func NewDecoder() *Decoder {
 		SDPCache:     cSDP,
 		RTCPCache:    cRTCP,
 	}
-	go d.flushFrag()
+	go d.flushFragments()
 	go d.printStats()
 	return d
 }
@@ -87,7 +90,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	logp.Debug("decoder", "Captured packet layers:\n%v\n", packet)
+	logp.Debug("packet", "\n%v\n", packet.Dump())
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4, ok := ipLayer.(*layers.IPv4)
@@ -108,17 +111,22 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 		}
 
-		d.FlowSrcIP = ip4.NetworkFlow().Src().String()
-		d.ip4Count++
-
 		pkt.Version = ip4.Version
 		pkt.Protocol = uint8(ip4.Protocol)
-		pkt.Srcip = ip2int(ip4.SrcIP)
-		pkt.Dstip = ip2int(ip4.DstIP)
+		pkt.SrcIP = ip2int(ip4.SrcIP)
+		pkt.DstIP = ip2int(ip4.DstIP)
+		d.ip4Count++
+
+		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
+			pkt.HEPType = 1
+		}
+
+		d.FlowSrcIP = ip4.SrcIP.String()
+		d.FlowDstIP = ip4.DstIP.String()
 
 		ip4New, err := d.defragger.DefragIPv4(ip4)
 		if err != nil {
-			logp.Warn("Error while de-fragmenting", err)
+			logp.Warn("%v", err)
 			return nil, nil
 		} else if ip4New == nil {
 			d.fragCount++
@@ -126,14 +134,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 
 		if ip4New.Length != ip4Len {
-			logp.Debug("decoder", "Decoding fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+			logp.Debug("fragment", "Fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
 				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
 			)
 
 			pkt.Version = ip4New.Version
 			pkt.Protocol = uint8(ip4New.Protocol)
-			pkt.Srcip = ip2int(ip4New.SrcIP)
-			pkt.Dstip = ip2int(ip4New.DstIP)
+			pkt.SrcIP = ip2int(ip4New.SrcIP)
+			pkt.DstIP = ip2int(ip4New.DstIP)
 
 			pb, ok := packet.(gopacket.PacketBuilder)
 			if !ok {
@@ -150,18 +158,19 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		d.FlowSrcPort = udp.TransportFlow().Src().String()
+		pkt.SrcPort = uint16(udp.SrcPort)
+		pkt.DstPort = uint16(udp.DstPort)
+		pkt.Payload = udp.Payload
 		d.udpCount++
 
-		pkt.Sport = uint16(udp.SrcPort)
-		pkt.Dport = uint16(udp.DstPort)
-		pkt.Payload = udp.Payload
-		pkt.Type = 1
+		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
+		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
-				pkt.Payload, pkt.CorrelationID, pkt.Type = d.correlateRTCP(udp.Payload)
+				pkt.Payload, pkt.CorrelationID, pkt.HEPType = d.correlateRTCP(udp.Payload)
+				d.rtcpCount++
 			}
 		}
 
@@ -170,33 +179,35 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
-		d.tcpCount++
-		pkt.Sport = uint16(tcp.SrcPort)
-		pkt.Dport = uint16(tcp.DstPort)
+
+		pkt.SrcPort = uint16(tcp.SrcPort)
+		pkt.DstPort = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
-		pkt.Type = 1
+		d.tcpCount++
 
 		if config.Cfg.Mode == "SIPRTCP" {
 			d.cacheSDPIPPort(tcp.Payload)
 		}
 	}
 
-	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
-		dns, ok := dnsLayer.(*layers.DNS)
-		if !ok {
-			return nil, nil
+	// TODO: add more layers like DHCP, NTP
+	if config.Cfg.Mode == "DNS" {
+		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+			dns, ok := dnsLayer.(*layers.DNS)
+			if !ok {
+				return nil, nil
+			}
+			d.dnsCount++
+			pkt.Payload = protos.ParseDNS(dns)
+			pkt.HEPType = 100
 		}
-		d.dnsCount++
-		pkt.Payload = protos.NewDNS(dns)
 	}
 
-	// TODO: add more layers like DHCP, NTP
-
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		if config.Cfg.Mode == "TLS" {
+	if config.Cfg.Mode == "TLS" {
+		if appLayer := packet.ApplicationLayer(); appLayer != nil {
 			pkt.Payload = protos.NewTLS(appLayer.Payload())
-		} else {
-			logp.Debug("decoder", "Captured payload:\n%v\n", string(appLayer.Payload()))
+			pkt.HEPType = 100
+
 		}
 	}
 
@@ -206,68 +217,4 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 	d.unknownCount++
 	return nil, nil
-}
-
-func (d *Decoder) cacheSDPIPPort(payload []byte) {
-	var SDPIP, RTCPPort string
-	var callID []byte
-
-	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP4 ")), bytes.Index(payload, []byte("m=audio ")); posSDPIP >= 0 && posSDPPort >= 0 {
-		restIP := payload[posSDPIP:]
-		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 0 {
-			SDPIP = string(restIP[len("c=IN IP4 "):bytes.Index(restIP, []byte("\r\n"))])
-		} else {
-			logp.Warn("Couldn't find end of SDP IP in '%s'", string(restIP))
-		}
-
-		restPort := payload[posSDPPort:]
-		if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 0 {
-			SDPPort, err := strconv.Atoi(string(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]))
-			if err != nil {
-				logp.Warn("%v", err)
-			}
-			RTCPPort = strconv.Itoa(SDPPort + 1)
-		} else {
-			logp.Warn("Couldn't find end of SDP Port in '%s'", string(restPort))
-		}
-
-		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID >= 0 {
-			restCallID := payload[posCallID:]
-			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 0 {
-				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
-			} else {
-				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restCallID))
-			}
-		} else if posID := bytes.Index(payload, []byte("i: ")); posID >= 0 {
-			restID := payload[posID:]
-			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 0 {
-				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
-			} else {
-				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
-			}
-		}
-		d.SDPCache.Add(SDPIP+RTCPPort, callID)
-	}
-}
-
-func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
-	jsonRTCP, info := protos.ParseRTCP(payload)
-	if info != "" {
-		logp.Info("%v", info)
-		if jsonRTCP == nil {
-			return nil, nil, 0
-		}
-	}
-
-	if corrID, ok := d.SDPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
-		logp.Debug("decoder", "SDPCache RTCP JSON payload: %s", string(jsonRTCP))
-		d.RTCPCache.Add(d.FlowSrcIP+d.FlowSrcPort, corrID)
-		return jsonRTCP, corrID, 5
-	} else if corrID, ok := d.RTCPCache.Get(d.FlowSrcIP + d.FlowSrcPort); ok {
-		logp.Debug("decoder", "RTCPCache RTCP JSON payload: %s", string(jsonRTCP))
-		return jsonRTCP, corrID, 5
-	}
-
-	logp.Info("Couldn't find RTCP correlation value for key=%v", d.FlowSrcIP+d.FlowSrcPort)
-	return nil, nil, 0
 }

@@ -29,7 +29,7 @@ func ip2int(ip net.IP) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
-func (d *Decoder) flushFrag() {
+func (d *Decoder) flushFragments() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
@@ -42,9 +42,9 @@ func (d *Decoder) printStats() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
-			logp.Info("Packets since last minute IPv4: %d, UDP: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
-				d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
-			d.fragCount, d.dupCount, d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0
+			logp.Info("Packets since last minute IPv4: %d, UDP: %d, RTCP: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+				d.ip4Count, d.udpCount, d.rtcpCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
+			d.fragCount, d.dupCount, d.ip4Count, d.udpCount, d.rtcpCount, d.tcpCount, d.dnsCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0
 		}()
 	}
 }
