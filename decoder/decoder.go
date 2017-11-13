@@ -2,11 +2,10 @@ package decoder
 
 import (
 	"fmt"
-	"hash"
 	"os"
-	"strconv"
+	"runtime/debug"
 
-	"github.com/cespare/xxhash"
+	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/negbie/heplify/config"
@@ -16,28 +15,29 @@ import (
 )
 
 type Decoder struct {
-	Host         string
-	defragger    *ip4defrag.IPv4Defragmenter
-	fragCount    int
-	dupCount     int
-	dnsCount     int
-	ip4Count     int
-	rtcpCount    int
-	tcpCount     int
-	udpCount     int
-	unknownCount int
-	FlowSrcIP    string
-	FlowDstIP    string
-	FlowSrcPort  string
-	FlowDstPort  string
-	SIPHash      hash.Hash64
-	SIPCache     *Cache
-	SDPCache     *Cache
-	RTCPCache    *Cache
+	Host          string
+	defragger     *ip4defrag.IPv4Defragmenter
+	fragCount     int
+	dupCount      int
+	dnsCount      int
+	ip4Count      int
+	rtcpCount     int
+	rtcpFailCount int
+	tcpCount      int
+	udpCount      int
+	unknownCount  int
+	FlowSrcIP     string
+	FlowDstIP     string
+	FlowSrcPort   string
+	FlowDstPort   string
+	SIPCache      *freecache.Cache
+	SDPCache      *freecache.Cache
+	RTCPCache     *freecache.Cache
 }
 
 type Packet struct {
 	Host          string
+	HEPType       byte
 	Tsec          uint32
 	Tmsec         uint32
 	Version       uint8
@@ -48,7 +48,6 @@ type Packet struct {
 	DstPort       uint16
 	CorrelationID []byte
 	Payload       []byte
-	HEPType       byte
 }
 
 func NewDecoder() *Decoder {
@@ -57,10 +56,10 @@ func NewDecoder() *Decoder {
 		host = "sniffer"
 	}
 
-	hSIP := xxhash.New()
-	cSIP := NewLRUCache(10000)
-	cSDP := NewLRUCache(100000)
-	cRTCP := NewLRUCache(200000)
+	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
+	cSDP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
+	cRTCP := freecache.NewCache(60 * 1024 * 1024) // 60MB
+	debug.SetGCPercent(20)
 
 	d := &Decoder{
 		Host:         host,
@@ -72,7 +71,6 @@ func NewDecoder() *Decoder {
 		tcpCount:     0,
 		dnsCount:     0,
 		unknownCount: 0,
-		SIPHash:      hSIP,
 		SIPCache:     cSIP,
 		SDPCache:     cSDP,
 		RTCPCache:    cRTCP,
@@ -92,23 +90,26 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("packet", "\n%v\n", packet.Dump())
 
+	if config.Cfg.Dedup {
+		if appLayer := packet.ApplicationLayer(); appLayer != nil {
+
+			_, err := d.SIPCache.Get(appLayer.Payload())
+			if err == nil {
+				d.dupCount++
+				return nil, nil
+			}
+			err = d.SIPCache.Set(appLayer.Payload(), nil, 2)
+			if err != nil {
+				logp.Warn("%v", err)
+			}
+		}
+	}
+
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
 		ip4, ok := ipLayer.(*layers.IPv4)
 		ip4Len := ip4.Length
 		if !ok {
 			return nil, nil
-		}
-
-		if config.Cfg.Dedup {
-			d.SIPHash.Write(ip4.Payload)
-			key := strconv.FormatUint(d.SIPHash.Sum64(), 10)
-			d.SIPHash.Reset()
-			_, dup := d.SIPCache.Get(key)
-			d.SIPCache.Add(key, nil)
-			if dup == true {
-				d.dupCount++
-				return nil, nil
-			}
 		}
 
 		pkt.Version = ip4.Version
@@ -170,7 +171,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
 				pkt.Payload, pkt.CorrelationID, pkt.HEPType = d.correlateRTCP(udp.Payload)
-				d.rtcpCount++
+				if pkt.Payload == nil {
+					d.rtcpFailCount++
+				} else {
+					d.rtcpCount++
+				}
 			}
 		}
 

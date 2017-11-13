@@ -29,7 +29,7 @@ type SnifferSetup struct {
 	mode           string
 	filter         string
 	worker         Worker
-	DataSource     gopacket.ZeroCopyPacketDataSource
+	DataSource     gopacket.PacketDataSource
 	pcapStats      *pcap.Stats
 	afpacketStats  afpacket.Stats
 }
@@ -131,7 +131,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			}
 		}
 
-		sniffer.DataSource = gopacket.ZeroCopyPacketDataSource(sniffer.pcapHandle)
+		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "af_packet":
 		if sniffer.config.BufferSizeMb == 0 {
@@ -153,7 +153,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.filter, err)
 		}
 
-		sniffer.DataSource = gopacket.ZeroCopyPacketDataSource(sniffer.afpacketHandle)
+		sniffer.DataSource = gopacket.PacketDataSource(sniffer.afpacketHandle)
 
 	default:
 		return fmt.Errorf("unknown sniffer type: %s", sniffer.config.Type)
@@ -232,7 +232,7 @@ func (sniffer *SnifferSetup) Run() error {
 			fmt.Scanln()
 		}
 
-		data, ci, err := sniffer.DataSource.ZeroCopyReadPacketData()
+		data, ci, err := sniffer.DataSource.ReadPacketData()
 
 		if config.Cfg.Filter != "" && !bytes.Contains(data, []byte(config.Cfg.Filter)) {
 			continue
@@ -331,7 +331,7 @@ func (sniffer *SnifferSetup) Reopen() error {
 		return err
 	}
 
-	sniffer.DataSource = gopacket.ZeroCopyPacketDataSource(sniffer.pcapHandle)
+	sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	return nil
 }
