@@ -88,11 +88,11 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	logp.Debug("packet", "\n%v\n", packet.Dump())
+	logp.Debug("layers", "\n%v", packet)
 
 	if config.Cfg.Dedup {
 		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-
+			logp.Debug("payload", "\n%v", string(appLayer.Payload()))
 			_, err := d.SIPCache.Get(appLayer.Payload())
 			if err == nil {
 				d.dupCount++

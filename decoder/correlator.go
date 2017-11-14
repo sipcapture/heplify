@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"bytes"
-	"encoding/binary"
 	"strconv"
 
 	"github.com/negbie/heplify/logp"
@@ -23,7 +22,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
 			SDPIP = string(restIP[len("c=IN IP4 "):bytes.Index(restIP, []byte("\r\n"))])
 		} else {
-			logp.Warn("Couldn't find end of SDP IP in '%s'", string(restIP))
+			logp.Warn("No end or fishy SDP IP in '%s'", string(restIP))
 			return
 		}
 
@@ -33,7 +32,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
 				RTCPPort = string(restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))])
 			} else {
-				logp.Warn("Couldn't find end of SDP Port in '%s'", string(restRTCPPort))
+				logp.Warn("No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
 				return
 			}
 		} else {
@@ -46,7 +45,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				}
 				RTCPPort = strconv.Itoa(SDPPort + 1)
 			} else {
-				logp.Warn("Couldn't find end of SDP Port in '%s'", string(restPort))
+				logp.Warn("No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return
 			}
 		}
@@ -57,7 +56,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
 				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
 			} else {
-				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restCallID))
+				logp.Warn("No end or fishy Call-ID in '%s'", string(restCallID))
 				return
 			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
@@ -66,11 +65,11 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
 				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
 			} else {
-				logp.Warn("Couldn't find end of Call-ID in '%s'", string(restID))
+				logp.Warn("No end or fishy Call-ID in '%s'", string(restID))
 				return
 			}
 		} else {
-			logp.Warn("Couldn't find Call-ID in '%s'", string(payload))
+			logp.Warn("No Call-ID in '%s'", string(payload))
 			return
 		}
 		logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", SDPIP+RTCPPort, string(callID))
@@ -89,14 +88,14 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	keySDP := []byte(d.FlowSrcIP + d.FlowSrcPort)
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcpfail", "%v, ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s", info, binary.BigEndian.Uint32(keyRTCP), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort)
+		logp.Debug("rtcpfail", "%v, ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s", info, keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort)
 		if jsonRTCP == nil {
 			return nil, nil, 0
 		}
 	}
 
 	if corrID, err := d.RTCPCache.Get(keyRTCP); err == nil && keyRTCP != nil {
-		logp.Debug("rtcp", "Found '%d:%s' in RTCPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", binary.BigEndian.Uint32(keyRTCP), string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+		logp.Debug("rtcp", "Found '%d:%s' in RTCPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", keyRTCP, string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
 		return jsonRTCP, corrID, 5
 	} else if corrID, err := d.SDPCache.Get(keySDP); err == nil {
 		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", string(keySDP), string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
