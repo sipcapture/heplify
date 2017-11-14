@@ -19,7 +19,7 @@ type HepOutputer struct {
 func NewHepOutputer(serverAddr string) (*HepOutputer, error) {
 	ho := &HepOutputer{
 		addr:     serverAddr,
-		hepQueue: make(chan []byte, 1024),
+		hepQueue: make(chan []byte, 10000),
 	}
 	err := ho.Init()
 	if err != nil {
@@ -143,12 +143,12 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk IPv4 source address
 	case 0x0003:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], h.Srcip)
+		binary.BigEndian.PutUint32(chunck[6:], h.SrcIP)
 
 	// Chunk IPv4 destination address
 	case 0x0004:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], h.Dstip)
+		binary.BigEndian.PutUint32(chunck[6:], h.DstIP)
 
 	// Chunk IPv6 source address
 	// case 0x0005:
@@ -159,12 +159,12 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk protocol source port
 	case 0x0007:
 		chunck = make([]byte, 6+2)
-		binary.BigEndian.PutUint16(chunck[6:], h.Sport)
+		binary.BigEndian.PutUint16(chunck[6:], h.SrcPort)
 
-	// Chunk destination source port
+	// Chunk protocol destination port
 	case 0x0008:
 		chunck = make([]byte, 6+2)
-		binary.BigEndian.PutUint16(chunck[6:], h.Dport)
+		binary.BigEndian.PutUint16(chunck[6:], h.DstPort)
 
 	// Chunk unix timestamp, seconds
 	case 0x0009:
@@ -179,7 +179,7 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
 	case 0x000b:
 		chunck = make([]byte, 6+1)
-		switch h.Type {
+		switch h.HEPType {
 		case 1:
 			chunck[6] = 1 // SIP
 		case 5:

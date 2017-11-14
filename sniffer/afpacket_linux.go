@@ -46,6 +46,10 @@ func newAfpacketHandle(device string, snaplen int, block_size int, num_blocks in
 }
 
 func (h *afpacketHandle) ReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
+	return h.TPacket.ReadPacketData()
+}
+
+func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
 	return h.TPacket.ZeroCopyReadPacketData()
 }
 

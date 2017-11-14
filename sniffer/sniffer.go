@@ -26,16 +26,12 @@ type SnifferSetup struct {
 	config         *config.InterfacesConfig
 	isAlive        bool
 	dumper         *pcapgo.Writer
-
-	// bpf filter
-	mode   string
-	filter string
-
-	// Decoder    *decoder.DecoderStruct
-	worker        Worker
-	DataSource    gopacket.PacketDataSource
-	pcapStats     *pcap.Stats
-	afpacketStats afpacket.Stats
+	mode           string
+	filter         string
+	worker         Worker
+	DataSource     gopacket.PacketDataSource
+	pcapStats      *pcap.Stats
+	afpacketStats  afpacket.Stats
 }
 
 type MainWorker struct {

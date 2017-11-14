@@ -173,10 +173,10 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 	return bytes, err
 }
 
-func ParseRTCP(data []byte) (rtcpPkt []byte, infoMsg string) {
+func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 	dataLen := len(data)
 	if dataLen < 28 {
-		return nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
+		return nil, nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
 	}
 	var err error
 	pkt := &RTCP_Packet{}
@@ -184,7 +184,7 @@ func ParseRTCP(data []byte) (rtcpPkt []byte, infoMsg string) {
 
 	for dataLen > 0 {
 		if dataLen < 4 || dataLen > 576 {
-			return rtcpPkt, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
+			return ssrcBytes, rtcpPkt, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
 		}
 
 		RTCPVersion := int((data[offset] & 0xc0) >> 6)
@@ -195,17 +195,18 @@ func ParseRTCP(data []byte) (rtcpPkt []byte, infoMsg string) {
 		offset += 4
 
 		if RTCPVersion != 2 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > dataLen {
-			return rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+			return ssrcBytes, rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 				RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 		}
 
 		switch RTCPType {
 		case TYPE_RTCP_SR:
 			if RTCPLength < 24 || offset+24 > len(data) {
-				return rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				return ssrcBytes, rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 			}
 
+			ssrcBytes = data[offset : offset+4]
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			pkt.SenderInformation.Ntp_timestamp_MSW = binary.BigEndian.Uint32(data[offset+4:])
 			pkt.SenderInformation.Ntp_timestamp_LSW = binary.BigEndian.Uint32(data[offset+8:])
@@ -235,16 +236,17 @@ func ParseRTCP(data []byte) (rtcpPkt []byte, infoMsg string) {
 			}
 			rtcpPkt, err = pkt.MarshalJSON()
 			if err != nil {
-				return nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
+				return nil, nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
 			}
 
 		case TYPE_RTCP_RR:
 			if RTCPLength < 4 || offset+4 > len(data) {
-				return rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				return ssrcBytes, rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 			}
 
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
+			ssrcBytes = data[offset : offset+4]
 			offset += 4
 
 			if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= len(data) {
@@ -268,7 +270,7 @@ func ParseRTCP(data []byte) (rtcpPkt []byte, infoMsg string) {
 			}
 			rtcpPkt, err = pkt.MarshalJSON()
 			if err != nil {
-				return nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
+				return nil, nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
 			}
 
 		case TYPE_RTCP_SDES:

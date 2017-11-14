@@ -46,7 +46,7 @@ type DNSResourceRecord struct {
 	CNAME string `json:"cname,omitempty"`
 }
 
-func setDNS(dns *layers.DNS) (d *DNS) {
+func newDNS(dns *layers.DNS) (d *DNS) {
 	d = &DNS{}
 
 	d.ID = dns.ID
@@ -90,11 +90,17 @@ func setDNS(dns *layers.DNS) (d *DNS) {
 	return d
 }
 
-func NewDNS(d *layers.DNS) []byte {
-	nd, err := json.Marshal(setDNS(d))
+func (d *DNS) MarshalJSON() ([]byte, error) {
+	bytes, err := json.Marshal(*d)
+	return bytes, err
+}
+
+func ParseDNS(d *layers.DNS) []byte {
+	dns, err := newDNS(d).MarshalJSON()
 	if err != nil {
-		logp.Warn("NewDNS marshal", err)
+		logp.Warn("%v", err)
 		return nil
 	}
-	return nd
+	logp.Debug("dns", "Payload=%v", string(dns))
+	return dns
 }

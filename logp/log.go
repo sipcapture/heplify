@@ -20,6 +20,7 @@ const (
 	LOG_CRIT
 	LOG_ERR
 	LOG_WARNING
+	LOG_NOTICE
 	LOG_INFO
 	LOG_DEBUG
 )
@@ -75,7 +76,7 @@ func parseSelectors(selectors []string) (map[string]struct{}, bool) {
 
 func debugMessage(calldepth int, selector, format string, v ...interface{}) {
 	if _log.level >= LOG_DEBUG && IsDebug(selector) {
-		send(calldepth+1, LOG_DEBUG, "DBG", format, v...)
+		send(calldepth+1, LOG_DEBUG, "DBG", fmt.Sprintf("[%s] ", selector)+format, v...)
 	}
 }
 

@@ -1,10 +1,9 @@
 package decoder
 
 import (
-	"container/list"
 	"encoding/binary"
+	"encoding/json"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/negbie/heplify/logp"
@@ -29,7 +28,13 @@ func ip2int(ip net.IP) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
-func (d *Decoder) flushFrag() {
+func int2ip(nn uint32) net.IP {
+	ip := make(net.IP, 4)
+	binary.BigEndian.PutUint32(ip, nn)
+	return ip
+}
+
+func (d *Decoder) flushFragments() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
@@ -38,78 +43,68 @@ func (d *Decoder) flushFrag() {
 	}
 }
 
+func (p *Packet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Host          string
+		HEPType       byte
+		Tsec          uint32
+		Tmsec         uint32
+		Version       uint8
+		Protocol      uint8
+		SrcIP         net.IP
+		DstIP         net.IP
+		SrcPort       uint16
+		DstPort       uint16
+		CorrelationID string
+		Payload       string
+	}{
+		Host:          p.Host,
+		HEPType:       p.HEPType,
+		Tsec:          p.Tsec,
+		Tmsec:         p.Tmsec,
+		Version:       p.Version,
+		Protocol:      p.Protocol,
+		SrcIP:         int2ip(p.SrcIP),
+		DstIP:         int2ip(p.DstIP),
+		SrcPort:       p.SrcPort,
+		DstPort:       p.DstPort,
+		CorrelationID: string(p.CorrelationID),
+		Payload:       string(p.Payload),
+	})
+}
+
+func (d *Decoder) printPacketStats() {
+	logp.Info("Packets since last minute IPv4: %d, UDP: %d, RTCP: %d, RTCPFail: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+		d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
+	d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0
+}
+
+func (d *Decoder) printSIPCacheStats() {
+	logp.Info("SIPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
+		d.SIPCache.EntryCount(), d.SIPCache.LookupCount(), d.SIPCache.HitCount(), d.SIPCache.ExpiredCount(), d.SIPCache.OverwriteCount())
+	d.SIPCache.ResetStatistics()
+}
+
+func (d *Decoder) printSDPCacheStats() {
+	logp.Info("SDPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
+		d.SDPCache.EntryCount(), d.SDPCache.LookupCount(), d.SDPCache.HitCount(), d.SDPCache.ExpiredCount(), d.SDPCache.OverwriteCount())
+	d.SDPCache.ResetStatistics()
+}
+
+func (d *Decoder) printRTCPCacheStats() {
+	logp.Info("RTCPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
+		d.RTCPCache.EntryCount(), d.RTCPCache.LookupCount(), d.RTCPCache.HitCount(), d.RTCPCache.ExpiredCount(), d.RTCPCache.OverwriteCount())
+	d.RTCPCache.ResetStatistics()
+}
+
 func (d *Decoder) printStats() {
 	for {
-		<-time.After(1 * time.Minute)
+		<-time.After(60 * time.Second)
 		go func() {
-			logp.Info("Packets since last minute IPv4: %d, UDP: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
-				d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
-			d.fragCount, d.dupCount, d.ip4Count, d.udpCount, d.tcpCount, d.dnsCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0
+			d.printPacketStats()
+			d.printSIPCacheStats()
+			d.printSDPCacheStats()
+			d.printRTCPCacheStats()
 		}()
 	}
-}
-
-type cacheValue struct {
-	key   string
-	bytes []byte
-}
-
-// Just an estimate
-func (v *cacheValue) size() uint64 {
-	return uint64(len([]byte(v.key)) + len(v.bytes))
-}
-
-type Cache struct {
-	sync.Mutex
-	Size     uint64
-	capacity uint64
-	list     *list.List
-	table    map[string]*list.Element
-}
-
-// NewLRUCache with a maximum size of capacity bytes.
-func NewLRUCache(capacity uint64) *Cache {
-	return &Cache{
-		capacity: capacity,
-		list:     list.New(),
-		table:    make(map[string]*list.Element),
-	}
-}
-
-// Set some {key, document} into the cache. Doesn't do anything if the key is already present.
-func (c *Cache) Add(key string, document []byte) {
-	c.Lock()
-	defer c.Unlock()
-
-	_, ok := c.table[key]
-	if ok {
-		return
-	}
-	v := &cacheValue{key, document}
-	elt := c.list.PushFront(v)
-	c.table[key] = elt
-	c.Size += v.size()
-	for c.Size > c.capacity {
-		elt := c.list.Back()
-		if elt == nil {
-			return
-		}
-		v := c.list.Remove(elt).(*cacheValue)
-		delete(c.table, v.key)
-		c.Size -= v.size()
-	}
-}
-
-// Get retrieves a value from the cache and returns the value and an indicator boolean to show whether it was
-// present.
-func (c *Cache) Get(key string) (document []byte, ok bool) {
-	c.Lock()
-	defer c.Unlock()
-
-	elt, ok := c.table[key]
-	if !ok {
-		return nil, false
-	}
-	c.list.MoveToFront(elt)
-	return elt.Value.(*cacheValue).bytes, true
 }
