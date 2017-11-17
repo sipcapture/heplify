@@ -1,0 +1,19 @@
+# cp heplify.service /etc/systemd/system/
+# systemctl daemon-reload
+# systemctl start heplify
+# systemctl enable heplify
+
+[Unit]
+Description=Captures packets from wire and sends them to Homer
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/heplify
+ExecStart=/opt/heplify/heplify -i any -t af_packet -m SIPRTCP
+ExecStop=/bin/kill ${MAINPID}
+Restart=on-failure
+RestartSec=10s
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
