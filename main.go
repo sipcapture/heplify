@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
@@ -75,7 +74,7 @@ func main() {
 		fmt.Printf("\nYou might need sudo or be root!\n\n")
 		os.Exit(1)
 	}
-	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	capture := &sniffer.SnifferSetup{}
 	err = capture.Init(false, config.Cfg.Mode, sniffer.NewWorker, config.Cfg.Iface)
 	checkCritErr(err)
