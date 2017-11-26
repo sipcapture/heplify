@@ -5,11 +5,19 @@ Right now heplify is able to send SIP, correlated RTCP and very basic DNS, LOG o
 handle fragmented and duplicate packets out of the box.
 <img align="right" width="300" src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png">
 ### Requirements
-* None if you use the binary from the [releases](https://github.com/sipcapture/heplify/releases)  
+Linux:
+* None if you use the binary from the releases
+
+Windows:
+* [WinPcap](https://www.winpcap.org/install/default.htm)
 
 ### Installation
-Simply grab it from the [releases](https://github.com/sipcapture/heplify/releases)  
-chmod +x heplify  
+Linux:
+* Download [heplify](https://github.com/sipcapture/heplify/releases)  
+* chmod +x heplify  
+
+Windows:
+* Download [heplify.exe](https://github.com/sipcapture/heplify/releases)  
 
 ### Usage
 ```bash
