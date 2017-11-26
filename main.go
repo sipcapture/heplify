@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
@@ -30,7 +29,7 @@ func parseFlags() {
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to pcap file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
-	flag.IntVar(&ifaceConfig.Snaplen, "s", 32768, "Snaplength")
+	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
 	flag.IntVar(&keepLogFiles, "kl", 4, "Rotate the number of log files")
@@ -43,7 +42,7 @@ func parseFlags() {
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
-	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
+	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
@@ -75,7 +74,7 @@ func main() {
 		fmt.Printf("\nYou might need sudo or be root!\n\n")
 		os.Exit(1)
 	}
-	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	capture := &sniffer.SnifferSetup{}
 	err = capture.Init(false, config.Cfg.Mode, sniffer.NewWorker, config.Cfg.Iface)
 	checkCritErr(err)

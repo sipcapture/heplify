@@ -73,7 +73,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			return
 		}
 		logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", SDPIP+RTCPPort, string(callID))
-		err := d.SDPCache.Set([]byte(SDPIP+RTCPPort), callID, 60)
+		err := d.SDPCache.Set([]byte(SDPIP+RTCPPort), callID, 120)
 		if err != nil {
 			logp.Warn("%v", err)
 		}
@@ -99,7 +99,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return jsonRTCP, corrID, 5
 	} else if corrID, err := d.SDPCache.Get(keySDP); err == nil {
 		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", string(keySDP), string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
-		err = d.RTCPCache.Set(keyRTCP, corrID, 0)
+		err = d.RTCPCache.Set(keyRTCP, corrID, 64800)
 		if err != nil {
 			logp.Warn("%v", err)
 			return nil, nil, 0
