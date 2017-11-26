@@ -166,7 +166,14 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFact
 	var err error
 	sniffer.mode = mode
 
-	if interfaces.Device == "" && interfaces.ReadFile == "" {
+	if interfaces.ReadFile == "" {
+		if interfaces.Device == "any" {
+			// OS X or Windows
+			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+				return fmt.Errorf("'-i any' is not supported on %s", runtime.GOOS)
+			}
+		}
+	} else if interfaces.Device == "" && interfaces.ReadFile == "" {
 		fmt.Printf("Please use one of the following devices:\n\n")
 		_, err := ListDeviceNames(false, false)
 		if err != nil {
@@ -184,15 +191,6 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFact
 		err = sniffer.setFromConfig(interfaces)
 		if err != nil {
 			return err
-		}
-	}
-
-	if interfaces.ReadFile == "" {
-		if interfaces.Device == "any" {
-			// OS X or Windows
-			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-				return fmt.Errorf("any interface is not supported on %s", runtime.GOOS)
-			}
 		}
 	}
 
@@ -319,7 +317,7 @@ func (sniffer *SnifferSetup) Close() error {
 
 func (sniffer *SnifferSetup) Reopen() error {
 	var err error
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	if sniffer.config.Type != "pcap" || sniffer.config.ReadFile == "" {
 		return fmt.Errorf("Reopen is only possible for files and in pcap mode")

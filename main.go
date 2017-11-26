@@ -42,7 +42,7 @@ func parseFlags() {
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
-	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP Server address")
+	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
