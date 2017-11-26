@@ -148,7 +148,7 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
 
-		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.filter)
+		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.filter, sniffer.config.Snaplen)
 		if err != nil {
 			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.filter, err)
 		}

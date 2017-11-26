@@ -54,8 +54,8 @@ func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.Capt
 }
 
 // TODO: check this function more deeply. Seems it could be done better.
-func (h *afpacketHandle) SetBPFFilter(filter string) (err error) {
-	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, 65535, filter)
+func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) (err error) {
+	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, snaplen, filter)
 	if err != nil {
 		logp.Err("CompileBPFFilter failed: %v\n", err)
 		return err

@@ -29,7 +29,7 @@ func parseFlags() {
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to pcap file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
-	flag.IntVar(&ifaceConfig.Snaplen, "s", 32768, "Snaplength")
+	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
 	flag.IntVar(&keepLogFiles, "kl", 4, "Rotate the number of log files")
