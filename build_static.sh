@@ -6,7 +6,7 @@
 set -ex
 
 apk update
-apk add linux-headers musl-dev gcc go libpcap-dev ca-certificates  git
+apk add linux-headers musl-dev gcc go libpcap-dev ca-certificates git
 
 mkdir /go
 export GOPATH=/go

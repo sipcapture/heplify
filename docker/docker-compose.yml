@@ -1,0 +1,6 @@
+version: '2'
+services:
+  heplify:
+    image: "negbie/heplify:latest"
+    command: "./heplify -i any -t af_packet -m SIPRTCP -e"
+    container_name: "heplify"
