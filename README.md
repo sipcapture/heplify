@@ -1,9 +1,9 @@
 # heplify
+<img align="left" width="300" src="https://user-images.githubusercontent.com/20154956/33374900-42c9253a-d508-11e7-8a9e-ea73a515a514.png">
 heplify is captagents little brother. While it offers a compareable performance the design goal was simplicity.
 It's a single binary which you can run to capture packets and send them to Homer. 
 Right now heplify is able to send SIP, correlated RTCP and very basic DNS, LOG or TLS handshakes into homer. It's able to 
 handle fragmented and duplicate packets out of the box.
-<img align="right" width="300" src="https://user-images.githubusercontent.com/20154956/30700149-0278a246-9ee7-11e7-8aef-8d68baef554a.png">
 ### Requirements
 Linux:
 * None if you use the binary from the releases
