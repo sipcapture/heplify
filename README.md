@@ -33,7 +33,7 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 # Capture SIP and RTCP packets on any interface and send them to 127.0.0.1:9060
 ./heplify
 
-# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print debug log level to stdout
+# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print debug to stdout
 ./heplify -hs 192.168.1.1:9060 -e -l debug
 
 # Capture SIP and RTCP packets with custom port range on eth2 and send them to 192.168.1.1:9060
