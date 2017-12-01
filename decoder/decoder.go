@@ -16,6 +16,7 @@ import (
 
 type Decoder struct {
 	Host          string
+	LayerType     gopacket.LayerType
 	defragger     *ip4defrag.IPv4Defragmenter
 	fragCount     int
 	dupCount      int
@@ -40,6 +41,7 @@ type Packet struct {
 	HEPType       byte
 	Tsec          uint32
 	Tmsec         uint32
+	Vlan          uint16
 	Version       uint8
 	Protocol      uint8
 	SrcIP         uint32
@@ -50,10 +52,20 @@ type Packet struct {
 	Payload       []byte
 }
 
-func NewDecoder() *Decoder {
+func NewDecoder(datalink layers.LinkType) *Decoder {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "sniffer"
+	}
+	var lt gopacket.LayerType
+
+	switch datalink {
+	case layers.LinkTypeEthernet:
+		lt = layers.LayerTypeEthernet
+	case layers.LinkTypeLinuxSLL:
+		lt = layers.LayerTypeLinuxSLL
+	default:
+		lt = layers.LayerTypeEthernet
 	}
 
 	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
@@ -63,6 +75,7 @@ func NewDecoder() *Decoder {
 
 	d := &Decoder{
 		Host:         host,
+		LayerType:    lt,
 		defragger:    ip4defrag.NewIPv4Defragmenter(),
 		fragCount:    0,
 		dupCount:     0,
@@ -87,8 +100,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
-	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	logp.Debug("layers", "\n%v", packet)
+	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+	logp.Debug("layer", "\n%v", packet)
 
 	if config.Cfg.Dedup {
 		if appLayer := packet.ApplicationLayer(); appLayer != nil {
@@ -103,6 +116,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				logp.Warn("%v", err)
 			}
 		}
+	}
+
+	if dot1qLayer := packet.Layer(layers.LayerTypeDot1Q); dot1qLayer != nil {
+		dot1q, ok := dot1qLayer.(*layers.Dot1Q)
+		if !ok {
+			return nil, nil
+		}
+		pkt.Vlan = dot1q.VLANIdentifier
 	}
 
 	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
@@ -196,16 +217,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	// TODO: add more layers like DHCP, NTP
-	if config.Cfg.Mode == "DNS" {
-		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
-			dns, ok := dnsLayer.(*layers.DNS)
-			if !ok {
-				return nil, nil
-			}
-			d.dnsCount++
-			pkt.Payload = protos.ParseDNS(dns)
-			pkt.HEPType = 100
+	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+		dns, ok := dnsLayer.(*layers.DNS)
+		if !ok {
+			return nil, nil
 		}
+		d.dnsCount++
+		pkt.Payload = protos.ParseDNS(dns)
+		pkt.HEPType = 53
 	}
 
 	if config.Cfg.Mode == "TLS" {

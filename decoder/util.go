@@ -49,6 +49,7 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		HEPType       byte
 		Tsec          uint32
 		Tmsec         uint32
+		Vlan          uint16
 		Version       uint8
 		Protocol      uint8
 		SrcIP         net.IP
@@ -62,6 +63,7 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		HEPType:       p.HEPType,
 		Tsec:          p.Tsec,
 		Tmsec:         p.Tmsec,
+		Vlan:          p.Vlan,
 		Version:       p.Version,
 		Protocol:      p.Protocol,
 		SrcIP:         int2ip(p.SrcIP),
