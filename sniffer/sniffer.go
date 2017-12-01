@@ -45,7 +45,7 @@ type Worker interface {
 
 type WorkerFactory func(layers.LinkType) (Worker, error)
 
-func NewWorker(dl layers.LinkType) (Worker, error) {
+func NewWorker(lt layers.LinkType) (Worker, error) {
 	var o publish.Outputer
 	var err error
 
@@ -60,7 +60,7 @@ func NewWorker(dl layers.LinkType) (Worker, error) {
 	}
 
 	p := publish.NewPublisher(o)
-	d := decoder.NewDecoder()
+	d := decoder.NewDecoder(lt)
 	w := &MainWorker{publisher: p, decoder: d}
 	return w, nil
 }
@@ -91,20 +91,20 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 
 	switch sniffer.mode {
 	case "SIP":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0))"
+		sniffer.filter = "greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0"
+	case "SIPDNS":
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (greater 32 and ip and dst port 53)"
 	case "RTCP":
 		sniffer.filter = "(ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	case "SIPRTCP":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
-	case "LOG":
-		sniffer.filter = "greater 128 and port 514"
-	case "DNS":
-		sniffer.filter = "greater 32 and ip and dst port 53"
+	case "SIPLOG":
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (greater 128 and ip and dst port 514)"
 	case "TLS":
 		sniffer.filter = "tcp and port 443 and tcp[(((tcp[12:1] & 0xf0) >> 2)):1] = 0x16 and ((tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x01) or (tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x02))"
 	default:
 		sniffer.mode = "SIP"
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (vlan and (greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0))"
+		sniffer.filter = "greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0"
 	}
 
 	logp.Info("Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
@@ -162,28 +162,26 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	return nil
 }
 
-func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFactory, interfaces *config.InterfacesConfig) error {
+func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config.InterfacesConfig) error {
 	var err error
 	sniffer.mode = mode
 
 	if interfaces.ReadFile == "" {
 		if interfaces.Device == "any" {
-			// OS X or Windows
+			// Windows or MacOS
 			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 				return fmt.Errorf("'-i any' is not supported on %s", runtime.GOOS)
 			}
 		}
-	} else if interfaces.Device == "" && interfaces.ReadFile == "" {
+	}
+
+	if interfaces.Device == "" && interfaces.ReadFile == "" {
 		fmt.Printf("Please use one of the following devices:\n\n")
 		_, err := ListDeviceNames(false, false)
 		if err != nil {
 			return fmt.Errorf("getting devices list: %v", err)
 		}
 		fmt.Println("")
-		os.Exit(1)
-	} else if interfaces.Device == "any" && interfaces.Type == "pcap" {
-		fmt.Println("Interface 'any' and capture type 'pcap' will break VLAN capture!")
-		fmt.Println("To listen on interface 'any' please use 'af_packet' capture type!")
 		os.Exit(1)
 	}
 
@@ -194,7 +192,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, factory WorkerFact
 		}
 	}
 
-	sniffer.worker, err = factory(sniffer.Datalink())
+	sniffer.worker, err = NewWorker(sniffer.Datalink())
 	if err != nil {
 		return fmt.Errorf("creating decoder: %v", err)
 	}
@@ -240,7 +238,7 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			logp.Debug("sniffer", "Idle")
+			//logp.Debug("sniffer", "Idle")
 			continue
 		}
 
@@ -342,6 +340,8 @@ func (sniffer *SnifferSetup) Stop() error {
 func (sniffer *SnifferSetup) Datalink() layers.LinkType {
 	if sniffer.config.Type == "pcap" {
 		return sniffer.pcapHandle.LinkType()
+	} else if sniffer.config.Type == "af_packet" {
+		return sniffer.afpacketHandle.LinkType()
 	}
 	return layers.LinkTypeEthernet
 }

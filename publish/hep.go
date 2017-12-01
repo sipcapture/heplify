@@ -184,6 +184,8 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 			chunck[6] = 1 // SIP
 		case 5:
 			chunck[6] = 5 // RTCP
+		case 53:
+			chunck[6] = 53 // DNS
 		case 100:
 			chunck[6] = 100 // LOG
 		default:
@@ -216,6 +218,11 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	case 0x0011:
 		chunck = make([]byte, len(h.CorrelationID)+6)
 		copy(chunck[6:], h.CorrelationID)
+
+	// Chunk VLAN
+	case 0x0012:
+		chunck = make([]byte, 6+2)
+		binary.BigEndian.PutUint16(chunck[6:], h.Vlan)
 
 	// Chunk MOS only
 	case 0x0020:

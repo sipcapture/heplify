@@ -23,7 +23,7 @@ func parseFlags() {
 	var rotateEveryKB uint64
 	var keepLogFiles int
 
-	flag.StringVar(&ifaceConfig.Device, "i", "", "Listen on interface")
+	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from pcap file")
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to pcap file")
@@ -38,7 +38,7 @@ func parseFlags() {
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 16384, "Log filesize (KB)")
-	flag.StringVar(&config.Cfg.Mode, "m", "SIP", "Capture modes [DNS, LOG, SIP, SIPRTCP, TLS]")
+	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIPRTCP, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
@@ -76,7 +76,7 @@ func main() {
 	}
 
 	capture := &sniffer.SnifferSetup{}
-	err = capture.Init(false, config.Cfg.Mode, sniffer.NewWorker, config.Cfg.Iface)
+	err = capture.Init(false, config.Cfg.Mode, config.Cfg.Iface)
 	checkCritErr(err)
 	defer capture.Close()
 	err = capture.Run()

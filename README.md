@@ -14,9 +14,9 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 
 ### Usage
 ```bash
-  -i    Listen on interface
+  -i    Listen on interface (default "any")
   -t    Capture types are [pcap, af_packet] (default "pcap")
-  -m    Capture modes [DNS, LOG, SIP, SIPRTCP, TLS] (default "SIP")
+  -m    Capture modes [SIPDNS, SIPLOG, SIPRTCP, SIP, TLS] (default "SIPRTCP")
   -pr   Portrange to capture SIP (default "5060-5090")
   -hs   HEP Server address (default "127.0.0.1:9060")
   -di   Discard uninteresting packets
@@ -25,26 +25,24 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
   -wf   Write packets to pcap file
   -e    Log to stderr and disable syslog/file output
   -l    Log level [debug, info, warning, error] (default "info")
+  -d    Enable certain debug selectors [layer, fragment, sdp, rtcp, rtcpfail]
 ```
 
 ### Examples
 ```bash
-# Capture SIP packets on eth2 and send them to 192.168.1.1:9060
-./heplify -i eth2 -hs 192.168.1.1:9060 &
+# Capture SIP and RTCP packets on any interface and send them to 127.0.0.1:9060
+./heplify
 
-# Capture SIP packets on eth2 and send them to 192.168.1.1:9060. Print debug log level to stdout
-./heplify -i eth2 -hs 192.168.1.1:9060 -e -l debug
+# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print debug log level to stdout
+./heplify -hs 192.168.1.1:9060 -e -l debug
 
-# Capture SIP packets with custom port range on eth2 and send them to 192.168.1.1:9060
-./heplify -i eth2 -pr 6000-6010 -hs 192.168.1.1:9060 &
+# Capture SIP and RTCP packets with custom port range on eth2 and send them to 192.168.1.1:9060
+./heplify -i eth2 -pr 6000-6010 -hs 192.168.1.1:9060
 
-# Use af_packet to capture SIP and correlated RTCP packets on eth2 and send them to 192.168.1.1:9060
-./heplify -i eth2 -hs 192.168.1.1:9060 -t af_packet -m SIPRTCP &
-
-# Capture SIP packets on eth2 and save them to pcap into current folder
-./heplify -i eth2 -wf capture.pcap -t af_packet &
+# Capture SIP and RTCP packets on eth2 and save them to pcap into current folder
+./heplify -i eth2 -wf capture.pcap
 
 # Read example/rtp_rtcp_sip.pcap and send SIP and correlated RTCP packets to 192.168.1.1:9060
-./heplify -rf example/rtp_rtcp_sip.pcap -m SIPRTCP -hs 192.168.1.1:9060 &
+./heplify -rf example/rtp_rtcp_sip.pcap -hs 192.168.1.1:9060
 
 ```

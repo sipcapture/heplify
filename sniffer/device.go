@@ -91,7 +91,7 @@ func deviceNameFromIndex(index int, devices []string) (string, error) {
 
 func filterDeviceName(name []string) {
 	for _, d := range name {
-		if strings.HasPrefix(d, "any") || strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
+		if strings.HasPrefix(d, "bluetooth") || strings.HasPrefix(d, "dbus") || strings.HasPrefix(d, "nf") || strings.HasPrefix(d, "usb") {
 			continue
 		}
 		fmt.Printf("./heplify -i %s\n", d)
