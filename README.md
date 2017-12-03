@@ -21,8 +21,9 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
   -hs   HEP Server address (default "127.0.0.1:9060")
   -di   Discard uninteresting packets
   -fi   Filter interesting packets
-  -rf   Read packets from pcap file
-  -wf   Write packets to pcap file
+  -rf   Read pcap file
+  -wf   Path to write pcap file
+  -zf   Gzip pcap file
   -e    Log to stderr and disable syslog/file output
   -l    Log level [debug, info, warning, error] (default "info")
   -d    Enable certain debug selectors [layer, fragment, sdp, rtcp, rtcpfail]
@@ -39,8 +40,8 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 # Capture SIP and RTCP packets with custom port range on eth2 and send them to 192.168.1.1:9060
 ./heplify -i eth2 -pr 6000-6010 -hs 192.168.1.1:9060
 
-# Capture SIP and RTCP packets on eth2 and save them to pcap into current folder
-./heplify -i eth2 -wf capture.pcap
+# Capture SIP and RTCP packets on eth2, send them to homer and compressed to /srv/pcapdumps/
+./heplify -i eth2 -hs 192.168.1.1:9060 -wf /srv/pcapdumps/ -zf
 
 # Read example/rtp_rtcp_sip.pcap and send SIP and correlated RTCP packets to 192.168.1.1:9060
 ./heplify -rf example/rtp_rtcp_sip.pcap -hs 192.168.1.1:9060

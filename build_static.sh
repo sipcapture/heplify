@@ -1,7 +1,13 @@
 #!/bin/sh
 
-# Thanks for the idea to use musl!
+# Thanks @zecke42 for the idea to use musl!
 # https://www.moiji-mobile.com/2017/10/15/static-binaries-for-go-with-docker/
+
+# Make a static 64 bit binary:
+# docker run --rm=true -itv $PWD:/mnt alpine:3.6 /mnt/build_static.sh
+
+# Make a static 32 bit binary:
+# docker run --rm=true -itv $PWD:/mnt i386/alpine:3.6 /mnt/build_static.sh
 
 set -ex
 

@@ -10,10 +10,12 @@ import (
 	"github.com/negbie/heplify/sniffer"
 )
 
+const version = "heplify 0.95"
+
 func parseFlags() {
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s [option]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Use %s like: %s [option]\n", version, os.Args[0])
 		flag.PrintDefaults()
 	}
 
@@ -25,8 +27,10 @@ func parseFlags() {
 
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
-	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read packets from pcap file")
-	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Write packets to pcap file")
+	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
+	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Path to write pcap file")
+	flag.IntVar(&ifaceConfig.RotationTime, "rt", 60, "Pcap rotation time in minutes")
+	flag.BoolVar(&ifaceConfig.ZipPcap, "zf", false, "Gzip pcap file")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
