@@ -13,7 +13,6 @@ import (
 	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pcapgo"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
@@ -25,13 +24,18 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	dumper         *pcapgo.Writer
+	chPcapDumper   chan PacketFrame
 	mode           string
 	filter         string
 	worker         Worker
 	DataSource     gopacket.PacketDataSource
 	pcapStats      *pcap.Stats
 	afpacketStats  afpacket.Stats
+}
+
+type PacketFrame struct {
+	ci   gopacket.CaptureInfo
+	data []byte
 }
 
 type MainWorker struct {
@@ -198,17 +202,8 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 	}
 
 	if sniffer.config.WriteFile != "" {
-		f, err := os.Create(sniffer.config.WriteFile)
-		if err != nil {
-			return fmt.Errorf("creating pcap: %v", err)
-		}
-		w := pcapgo.NewWriter(f)
-		err = w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
-		if err != nil {
-			return fmt.Errorf("pcap writer: %v", err)
-		}
-
-		sniffer.dumper = w
+		sniffer.chPcapDumper = make(chan PacketFrame, 400000)
+		go sniffer.dumpPcap()
 	}
 
 	sniffer.isAlive = true
@@ -291,10 +286,7 @@ func (sniffer *SnifferSetup) Run() error {
 				ci.Timestamp = time.Now()
 			}
 		} else if sniffer.config.WriteFile != "" {
-			err := sniffer.dumper.WritePacket(ci, data)
-			if err != nil {
-				return fmt.Errorf("couldn't write to file %v! %v", sniffer.config.WriteFile, err)
-			}
+			sniffer.chPcapDumper <- PacketFrame{ci, data}
 		}
 
 		sniffer.worker.OnPacket(data, &ci)
