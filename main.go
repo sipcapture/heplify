@@ -47,6 +47,7 @@ func parseFlags() {
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
+	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP NodeID")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
@@ -60,6 +61,10 @@ func parseFlags() {
 		logging.Files.KeepFiles = &keepLogFiles
 	}
 	config.Cfg.Logging = &logging
+
+	if config.Cfg.HepNodeID > 0xFFFFFFFE {
+		config.Cfg.HepNodeID = 0xFFFFFFFE
+	}
 }
 
 func checkCritErr(err error) {

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"net"
 
+	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 )
@@ -130,10 +131,11 @@ func NewHEP(h *decoder.Packet) []byte {
 func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	var chunck []byte
 	switch chunckType {
-	// Chunk IP protocol family (0x02=IPv4)
+	// Chunk IP protocol family (0x02=IPv4, 0x0a=IPv6)
 	case 0x0001:
 		chunck = make([]byte, 6+1)
-		chunck[6] = h.Version
+		chunck[6] = 0x02
+		//chunck[6] = h.Version
 
 	// Chunk IP protocol ID (0x11=UDP)
 	case 0x0002:
@@ -196,7 +198,7 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk capture agent ID
 	case 0x000c:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], 0x00001111)
+		binary.BigEndian.PutUint32(chunck[6:], uint32(config.Cfg.HepNodeID))
 
 	// Chunk keep alive timer
 	// case 0x000d:

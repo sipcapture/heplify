@@ -7,11 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcapgo"
+	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
 )
 
@@ -68,7 +70,7 @@ func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error)
 }
 
 func (sniffer *SnifferSetup) movePcap(tempName, outputPath string) error {
-	dateString := time.Now().Format("2006/01/02/02.01.2006T15:04:05.pcap")
+	dateString := time.Now().Format("2006/01/02/02.01.2006T15:04:05") + "_node-" + strconv.Itoa(int(config.Cfg.HepNodeID)) + ".pcap"
 	if sniffer.config.ZipPcap {
 		dateString = dateString + ".gz"
 		tempName = tempName + ".gz"
