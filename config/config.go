@@ -14,6 +14,7 @@ type Config struct {
 	Filter    string
 	Discard   string
 	HepServer string
+	HepNodeID uint
 }
 
 type InterfacesConfig struct {
