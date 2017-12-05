@@ -21,14 +21,14 @@ func fastHash(s []byte) (h uint64) {
 	return
 }
 
-func ip2int(ip net.IP) uint32 {
+func IP2int(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
 	}
 	return binary.BigEndian.Uint32(ip)
 }
 
-func int2ip(nn uint32) net.IP {
+func Int2IP(nn uint32) net.IP {
 	ip := make(net.IP, 4)
 	binary.BigEndian.PutUint32(ip, nn)
 	return ip
@@ -66,8 +66,8 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		Vlan:          p.Vlan,
 		Version:       p.Version,
 		Protocol:      p.Protocol,
-		SrcIP:         int2ip(p.SrcIP),
-		DstIP:         int2ip(p.DstIP),
+		SrcIP:         p.SrcIP,
+		DstIP:         p.DstIP,
 		SrcPort:       p.SrcPort,
 		DstPort:       p.DstPort,
 		CorrelationID: string(p.CorrelationID),

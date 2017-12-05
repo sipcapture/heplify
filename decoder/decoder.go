@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"runtime/debug"
 
@@ -44,8 +45,8 @@ type Packet struct {
 	Vlan          uint16
 	Version       uint8
 	Protocol      uint8
-	SrcIP         uint32
-	DstIP         uint32
+	SrcIP         net.IP
+	DstIP         net.IP
 	SrcPort       uint16
 	DstPort       uint16
 	CorrelationID []byte
@@ -126,8 +127,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Vlan = dot1q.VLANIdentifier
 	}
 
-	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		ip4, ok := ipLayer.(*layers.IPv4)
+	if ipv4Layer := packet.Layer(layers.LayerTypeIPv4); ipv4Layer != nil {
+		ip4, ok := ipv4Layer.(*layers.IPv4)
 		ip4Len := ip4.Length
 		if !ok {
 			return nil, nil
@@ -135,8 +136,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		pkt.Version = ip4.Version
 		pkt.Protocol = uint8(ip4.Protocol)
-		pkt.SrcIP = ip2int(ip4.SrcIP)
-		pkt.DstIP = ip2int(ip4.DstIP)
+		pkt.SrcIP = ip4.SrcIP
+		pkt.DstIP = ip4.DstIP
 		d.ip4Count++
 
 		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
@@ -162,8 +163,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 			pkt.Version = ip4New.Version
 			pkt.Protocol = uint8(ip4New.Protocol)
-			pkt.SrcIP = ip2int(ip4New.SrcIP)
-			pkt.DstIP = ip2int(ip4New.DstIP)
+			pkt.SrcIP = ip4New.SrcIP
+			pkt.DstIP = ip4New.DstIP
 
 			pb, ok := packet.(gopacket.PacketBuilder)
 			if !ok {
@@ -171,6 +172,22 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 			nextDecoder := ip4New.NextLayerType()
 			nextDecoder.Decode(ip4New.Payload, pb)
+		}
+	}
+
+	if ipv6Layer := packet.Layer(layers.LayerTypeIPv6); ipv6Layer != nil {
+		ip6, ok := ipv6Layer.(*layers.IPv6)
+		if !ok {
+			return nil, nil
+		}
+
+		pkt.Version = ip6.Version
+		pkt.Protocol = uint8(ip6.NextHeader)
+		pkt.SrcIP = ip6.SrcIP
+		pkt.DstIP = ip6.DstIP
+
+		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
+			pkt.HEPType = 1
 		}
 	}
 
