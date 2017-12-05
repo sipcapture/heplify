@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime/debug"
 
 	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
@@ -23,6 +22,7 @@ type Decoder struct {
 	dupCount      int
 	dnsCount      int
 	ip4Count      int
+	ip6Count      int
 	rtcpCount     int
 	rtcpFailCount int
 	tcpCount      int
@@ -72,22 +72,15 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
 	cSDP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
 	cRTCP := freecache.NewCache(60 * 1024 * 1024) // 60MB
-	debug.SetGCPercent(20)
+	//debug.SetGCPercent(20)
 
 	d := &Decoder{
-		Host:         host,
-		LayerType:    lt,
-		defragger:    ip4defrag.NewIPv4Defragmenter(),
-		fragCount:    0,
-		dupCount:     0,
-		ip4Count:     0,
-		udpCount:     0,
-		tcpCount:     0,
-		dnsCount:     0,
-		unknownCount: 0,
-		SIPCache:     cSIP,
-		SDPCache:     cSDP,
-		RTCPCache:    cRTCP,
+		Host:      host,
+		LayerType: lt,
+		defragger: ip4defrag.NewIPv4Defragmenter(),
+		SIPCache:  cSIP,
+		SDPCache:  cSDP,
+		RTCPCache: cRTCP,
 	}
 	go d.flushFragments()
 	go d.printStats()
@@ -185,6 +178,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Protocol = uint8(ip6.NextHeader)
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
+		d.ip6Count++
 
 		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
 			pkt.HEPType = 1

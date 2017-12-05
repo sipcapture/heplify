@@ -76,9 +76,9 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Decoder) printPacketStats() {
-	logp.Info("Packets since last minute IPv4: %d, UDP: %d, RTCP: %d, RTCPFail: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
-		d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
-	d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0
+	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+		d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
+	d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 }
 
 func (d *Decoder) printSIPCacheStats() {
