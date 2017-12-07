@@ -21,14 +21,14 @@ func fastHash(s []byte) (h uint64) {
 	return
 }
 
-func ip2int(ip net.IP) uint32 {
+func IP2int(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
 	}
 	return binary.BigEndian.Uint32(ip)
 }
 
-func int2ip(nn uint32) net.IP {
+func Int2IP(nn uint32) net.IP {
 	ip := make(net.IP, 4)
 	binary.BigEndian.PutUint32(ip, nn)
 	return ip
@@ -46,12 +46,12 @@ func (d *Decoder) flushFragments() {
 func (p *Packet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Host          string
-		HEPType       byte
 		Tsec          uint32
 		Tmsec         uint32
 		Vlan          uint16
 		Version       uint8
 		Protocol      uint8
+		ProtoType     uint8
 		SrcIP         net.IP
 		DstIP         net.IP
 		SrcPort       uint16
@@ -60,14 +60,14 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		Payload       string
 	}{
 		Host:          p.Host,
-		HEPType:       p.HEPType,
 		Tsec:          p.Tsec,
 		Tmsec:         p.Tmsec,
 		Vlan:          p.Vlan,
 		Version:       p.Version,
 		Protocol:      p.Protocol,
-		SrcIP:         int2ip(p.SrcIP),
-		DstIP:         int2ip(p.DstIP),
+		ProtoType:     p.ProtoType,
+		SrcIP:         p.SrcIP,
+		DstIP:         p.DstIP,
 		SrcPort:       p.SrcPort,
 		DstPort:       p.DstPort,
 		CorrelationID: string(p.CorrelationID),
@@ -76,9 +76,9 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Decoder) printPacketStats() {
-	logp.Info("Packets since last minute IPv4: %d, UDP: %d, RTCP: %d, RTCPFail: %d, TCP: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
-		d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
-	d.ip4Count, d.udpCount, d.rtcpCount, d.rtcpFailCount, d.tcpCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0
+	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+		d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
+	d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 }
 
 func (d *Decoder) printSIPCacheStats() {

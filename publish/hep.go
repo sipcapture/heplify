@@ -20,7 +20,7 @@ type HepOutputer struct {
 func NewHepOutputer(serverAddr string) (*HepOutputer, error) {
 	ho := &HepOutputer{
 		addr:     serverAddr,
-		hepQueue: make(chan []byte, 10000),
+		hepQueue: make(chan []byte, 20000),
 	}
 	err := ho.Init()
 	if err != nil {
@@ -134,29 +134,38 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk IP protocol family (0x02=IPv4, 0x0a=IPv6)
 	case 0x0001:
 		chunck = make([]byte, 6+1)
-		chunck[6] = 0x02
-		//chunck[6] = h.Version
+		if h.Version == 4 {
+			chunck[6] = 0x02
+		} else if h.Version == 6 {
+			chunck[6] = 0x0a
+		} else {
+			chunck[6] = 0x02
+		}
 
-	// Chunk IP protocol ID (0x11=UDP)
+	// Chunk IP protocol ID (0x06=TCP, 0x11=UDP)
 	case 0x0002:
 		chunck = make([]byte, 6+1)
 		chunck[6] = h.Protocol
 
 	// Chunk IPv4 source address
 	case 0x0003:
-		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], h.SrcIP)
+		chunck = make([]byte, 6+len(h.SrcIP))
+		copy(chunck[6:], h.SrcIP)
 
 	// Chunk IPv4 destination address
 	case 0x0004:
-		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], h.DstIP)
+		chunck = make([]byte, 6+len(h.DstIP))
+		copy(chunck[6:], h.DstIP)
 
 	// Chunk IPv6 source address
-	// case 0x0005:
+	case 0x0005:
+		chunck = make([]byte, 6+len(h.SrcIP))
+		copy(chunck[6:], h.SrcIP)
 
 	// Chunk IPv6 destination address
-	// case 0x0006:
+	case 0x0006:
+		chunck = make([]byte, 6+len(h.DstIP))
+		copy(chunck[6:], h.DstIP)
 
 	// Chunk protocol source port
 	case 0x0007:
@@ -178,22 +187,10 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 		chunck = make([]byte, 6+4)
 		binary.BigEndian.PutUint32(chunck[6:], h.Tmsec)
 
-	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
+	// Chunk protocol type (DNS, LOG, RTCP, SIP)
 	case 0x000b:
 		chunck = make([]byte, 6+1)
-		switch h.HEPType {
-		case 1:
-			chunck[6] = 1 // SIP
-		case 5:
-			chunck[6] = 5 // RTCP
-		case 53:
-			chunck[6] = 53 // DNS
-		case 100:
-			chunck[6] = 100 // LOG
-		default:
-			chunck[6] = 66 // Unknown
-
-		}
+		chunck[6] = h.ProtoType
 
 	// Chunk capture agent ID
 	case 0x000c:
@@ -244,8 +241,13 @@ func newHEPChuncks(h *decoder.Packet) []byte {
 
 	buf.Write(makeChunck(0x0000, 0x0001, h))
 	buf.Write(makeChunck(0x0000, 0x0002, h))
-	buf.Write(makeChunck(0x0000, 0x0003, h))
-	buf.Write(makeChunck(0x0000, 0x0004, h))
+	if h.Version == 4 {
+		buf.Write(makeChunck(0x0000, 0x0003, h))
+		buf.Write(makeChunck(0x0000, 0x0004, h))
+	} else if h.Version == 6 {
+		buf.Write(makeChunck(0x0000, 0x0005, h))
+		buf.Write(makeChunck(0x0000, 0x0006, h))
+	}
 	buf.Write(makeChunck(0x0000, 0x0007, h))
 	buf.Write(makeChunck(0x0000, 0x0008, h))
 	buf.Write(makeChunck(0x0000, 0x0009, h))
