@@ -39,12 +39,12 @@ type Decoder struct {
 
 type Packet struct {
 	Host          string
-	HEPType       byte
 	Tsec          uint32
 	Tmsec         uint32
 	Vlan          uint16
 	Version       uint8
 	Protocol      uint8
+	ProtoType     uint8
 	SrcIP         net.IP
 	DstIP         net.IP
 	SrcPort       uint16
@@ -129,13 +129,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		pkt.Version = ip4.Version
 		pkt.Protocol = uint8(ip4.Protocol)
+		pkt.ProtoType = 1
 		pkt.SrcIP = ip4.SrcIP
 		pkt.DstIP = ip4.DstIP
 		d.ip4Count++
-
-		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
-			pkt.HEPType = 1
-		}
 
 		d.FlowSrcIP = ip4.SrcIP.String()
 		d.FlowDstIP = ip4.DstIP.String()
@@ -176,13 +173,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		pkt.Version = ip6.Version
 		pkt.Protocol = uint8(ip6.NextHeader)
+		pkt.ProtoType = 1
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
 		d.ip6Count++
-
-		if config.Cfg.Mode == "SIP" || config.Cfg.Mode == "SIPRTCP" {
-			pkt.HEPType = 1
-		}
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -199,18 +193,23 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
 		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
-		if config.Cfg.Mode == "SIPRTCP" {
+		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
 			d.cacheSDPIPPort(udp.Payload)
-			if (udp.Payload[0]&0xc0)>>6 == 2 && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
-				pkt.Payload, pkt.CorrelationID, pkt.HEPType = d.correlateRTCP(udp.Payload)
-				if pkt.Payload == nil {
-					d.rtcpFailCount++
+			if (udp.Payload[0]&0xc0)>>6 == 2 {
+				if udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
+					if pkt.Payload == nil {
+						d.rtcpFailCount++
+					} else {
+						d.rtcpCount++
+					}
 				} else {
-					d.rtcpCount++
+					logp.Debug("rtp", "\n%v", packet)
+					pkt.Payload = nil
+					return nil, nil
 				}
 			}
 		}
-
 	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		tcp, ok := tcpLayer.(*layers.TCP)
 		if !ok {
@@ -222,7 +221,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = tcp.Payload
 		d.tcpCount++
 
-		if config.Cfg.Mode == "SIPRTCP" {
+		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
 			d.cacheSDPIPPort(tcp.Payload)
 		}
 	}
@@ -235,13 +234,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 		d.dnsCount++
 		pkt.Payload = protos.ParseDNS(dns)
-		pkt.HEPType = 53
+		pkt.ProtoType = 53
 	}
 
 	if config.Cfg.Mode == "TLS" {
 		if appLayer := packet.ApplicationLayer(); appLayer != nil {
 			pkt.Payload = protos.NewTLS(appLayer.Payload())
-			pkt.HEPType = 100
+			pkt.ProtoType = 100
 
 		}
 	}

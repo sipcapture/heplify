@@ -187,22 +187,10 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 		chunck = make([]byte, 6+4)
 		binary.BigEndian.PutUint32(chunck[6:], h.Tmsec)
 
-	// Chunk protocol type (SIP/H323/RTP/MGCP/M2UA)
+	// Chunk protocol type (DNS, LOG, RTCP, SIP)
 	case 0x000b:
 		chunck = make([]byte, 6+1)
-		switch h.HEPType {
-		case 1:
-			chunck[6] = 1 // SIP
-		case 5:
-			chunck[6] = 5 // RTCP
-		case 53:
-			chunck[6] = 53 // DNS
-		case 100:
-			chunck[6] = 100 // LOG
-		default:
-			chunck[6] = 66 // Unknown
-
-		}
+		chunck[6] = h.ProtoType
 
 	// Chunk capture agent ID
 	case 0x000c:
