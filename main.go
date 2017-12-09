@@ -48,6 +48,8 @@ func parseFlags() {
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP NodeID")
+	flag.StringVar(&config.Cfg.NsqdTCPAddress, "ns", "", "NSQ TCP server address")
+	flag.StringVar(&config.Cfg.NsqdTopic, "nt", "Kamailio-Topic", "NSQ publish topic")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig

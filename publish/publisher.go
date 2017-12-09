@@ -42,7 +42,7 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 		}
 	}()
 
-	if config.Cfg.HepServer != "" {
+	if config.Cfg.HepServer != "" || config.Cfg.NsqdTCPAddress != "" {
 		hepPacket := NewHEP(pkt)
 		pub.outputer.Output(hepPacket)
 	} else {

@@ -53,8 +53,10 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 	var o publish.Outputer
 	var err error
 
-	if config.Cfg.HepServer != "" {
-		o, err = publish.NewHepOutputer(config.Cfg.HepServer)
+	if config.Cfg.NsqdTCPAddress != "" {
+		o, err = publish.NewNSQOutputer(config.Cfg.NsqdTCPAddress, config.Cfg.NsqdTopic)
+	} else if config.Cfg.HepServer != "" {
+		o, err = publish.NewHEPOutputer(config.Cfg.HepServer)
 	} else {
 		o, err = publish.NewFileOutputer()
 	}
