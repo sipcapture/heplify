@@ -70,7 +70,7 @@ func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error)
 }
 
 func (sniffer *SnifferSetup) movePcap(tempName, outputPath string) error {
-	dateString := time.Now().Format("2006/01/02/02.01.2006T15:04:05") + "_node-" + strconv.Itoa(int(config.Cfg.HepNodeID)) + ".pcap"
+	dateString := time.Now().Format("2006/01/02/02.01.2006T15-04-05") + "_node" + strconv.Itoa(int(config.Cfg.HepNodeID)) + ".pcap"
 	if sniffer.config.ZipPcap {
 		dateString = dateString + ".gz"
 		tempName = tempName + ".gz"
