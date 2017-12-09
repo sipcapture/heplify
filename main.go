@@ -10,7 +10,7 @@ import (
 	"github.com/negbie/heplify/sniffer"
 )
 
-const version = "heplify 0.96"
+const version = "heplify 0.97"
 
 func parseFlags() {
 
