@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
 	"github.com/nsqio/go-nsq"
 )
@@ -24,7 +25,7 @@ func NewNSQOutputer(addrs string, topic string) (*NSQOutputer, error) {
 	nq := &NSQOutputer{
 		Addr:     addrs,
 		Topic:    topic,
-		nsqQueue: make(chan []byte, 10000),
+		nsqQueue: make(chan []byte, 1000),
 	}
 	err := nq.Init()
 	if err != nil {
@@ -61,11 +62,15 @@ func (nq *NSQOutputer) Init() error {
 
 func (nq *NSQOutputer) Output(msg []byte) {
 	logp.Debug("nsq", "NSQ packet: %s", msg)
-	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
-	w.Write(msg)
-	w.Close()
-	nq.nsqQueue <- buf.Bytes()
+	if !config.Cfg.Gzip {
+		nq.nsqQueue <- msg
+	} else {
+		var buf bytes.Buffer
+		w := zlib.NewWriter(&buf)
+		w.Write(msg)
+		w.Close()
+		nq.nsqQueue <- buf.Bytes()
+	}
 }
 
 func (nq *NSQOutputer) Send(msg []byte) {

@@ -13,6 +13,7 @@ type Config struct {
 	Dedup          bool
 	Filter         string
 	Discard        string
+	Gzip           bool
 	HepServer      string
 	HepNodeID      uint
 	NsqdTCPAddress string
@@ -24,7 +25,6 @@ type InterfacesConfig struct {
 	Type         string `config:"type"`
 	ReadFile     string `config:"read_file"`
 	WriteFile    string `config:"write_file"`
-	ZipPcap      bool   `config:"zip_pcap"`
 	RotationTime int    `config:"rotation_time"`
 	PortRange    string `config:"port_range"`
 	Snaplen      int    `config:"snaplen"`
