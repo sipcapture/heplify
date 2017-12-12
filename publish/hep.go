@@ -16,7 +16,7 @@ type HEPOutputer struct {
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 	ho := &HEPOutputer{
 		addr:     serverAddr,
-		hepQueue: make(chan []byte, 20000),
+		hepQueue: make(chan []byte, 10000),
 	}
 	err := ho.Init()
 	if err != nil {
