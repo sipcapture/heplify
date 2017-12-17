@@ -16,11 +16,11 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 	var SDPIP, RTCPPort string
 	var callID []byte
 
-	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP4 ")), bytes.Index(payload, []byte("m=audio ")); posSDPIP > 0 && posSDPPort > 0 {
+	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP")), bytes.Index(payload, []byte("m=audio ")); posSDPIP > 0 && posSDPPort > 0 {
 		restIP := payload[posSDPIP:]
 		// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
-			SDPIP = string(restIP[len("c=IN IP4 "):bytes.Index(restIP, []byte("\r\n"))])
+			SDPIP = string(restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))])
 		} else {
 			logp.Warn("No end or fishy SDP IP in '%s'", string(restIP))
 			return

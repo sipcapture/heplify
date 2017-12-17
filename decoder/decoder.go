@@ -175,6 +175,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
 		d.ip6Count++
+
+		d.FlowSrcIP = ip6.SrcIP.String()
+		d.FlowDstIP = ip6.DstIP.String()
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
