@@ -175,6 +175,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
 		d.ip6Count++
+
+		d.FlowSrcIP = ip6.SrcIP.String()
+		d.FlowDstIP = ip6.DstIP.String()
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -195,12 +198,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
-				if udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 && (udp.Payload[1] == 200 || udp.Payload[1] == 201) {
+				if (udp.Payload[1] == 200 || udp.Payload[1] == 201) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
-					if pkt.Payload == nil {
-						d.rtcpFailCount++
-					} else {
+					if pkt.Payload != nil {
 						d.rtcpCount++
+					} else {
+						d.rtcpFailCount++
+						return nil, nil
 					}
 				} else {
 					logp.Debug("rtplayer", "\n%v", packet)
