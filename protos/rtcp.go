@@ -315,7 +315,6 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			}
 			offset += RTCPLength
 		}
-
 		dataLen -= offset
 	}
 

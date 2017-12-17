@@ -9,6 +9,7 @@ var Cfg Config
 type Config struct {
 	Iface          *InterfacesConfig
 	Logging        *logp.Logging
+	Pprof          string
 	Mode           string
 	Dedup          bool
 	Filter         string
