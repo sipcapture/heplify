@@ -135,32 +135,46 @@ type RTCP_header struct {
 	Version     uint8  `json:"version"`      // 2 bit
 	Padding     uint8  `json:"padding"`      // 1 bit
 	ReportCount uint8  `json:"report_count"` // 5 bit
-	RTCPType    uint8  `json:"type"`         // 8 bit
-	Length      uint16 `json:"length"`       // 16 bit
+	RTCPType    uint8  `json:"type"`
+	Length      uint16 `json:"length"`
 }
 
 type RTCP_Packet struct {
 	SenderInformation struct {
-		Ntp_timestamp_MSW uint32 `json:"ntp_timestamp_sec"`  // 32 bit
-		Ntp_timestamp_LSW uint32 `json:"ntp_timestamp_usec"` // 32 bit
-		Rtp_timestamp     uint32 `json:"rtp_timestamp"`      // 32 bit
-		Pkt_count         uint32 `json:"packets"`            // 32 bit
-		Octet_count       uint32 `json:"octets"`             // 32 bit
+		Ntp_timestamp_MSW uint32 `json:"ntp_timestamp_sec"`
+		Ntp_timestamp_LSW uint32 `json:"ntp_timestamp_usec"`
+		Rtp_timestamp     uint32 `json:"rtp_timestamp"`
+		Pkt_count         uint32 `json:"packets"`
+		Octet_count       uint32 `json:"octets"`
 	} `json:"sender_information"`
-	Ssrc         uint32              `json:"ssrc"` // 32 bit
-	ReportBlocks []RTCP_report_block `json:"report_blocks"`
+	Ssrc           uint32               `json:"ssrc"`
+	ReportBlocks   []RTCP_report_block  `json:"report_blocks"`
+	ReportBlocksXr RTCP_report_block_xr `json:"report_blocks_xr"`
 }
 
 type RTCP_report_block struct {
-	SourceSsrc      uint32 `json:"source_ssrc"`    // 32 bit
-	Fraction_lost   uint8  `json:"fraction_lost"`  // 8 bit
-	Cumulative_lost uint32 `json:"packets_lost"`   // 24 bit
-	Highest_seq_no  uint32 `json:"highest_seq_no"` // 32 bit
-	Jitter          uint32 `json:"ia_jitter"`      // 32 bit
-	LastSR          uint32 `json:"lsr"`            // 32 bit
-	Delay_last_SR   uint32 `json:"dlsr"`           // 32 bit
-	ReportCount     uint8  `json:"report_count"`   // 8 bit
-	RTCPType        uint8  `json:"type"`           // 8 bit
+	SourceSsrc      uint32 `json:"source_ssrc"`
+	Fraction_lost   uint8  `json:"fraction_lost"`
+	Cumulative_lost uint32 `json:"packets_lost"` // 24 bit
+	Highest_seq_no  uint32 `json:"highest_seq_no"`
+	Jitter          uint32 `json:"ia_jitter"`
+	LastSR          uint32 `json:"lsr"`
+	Delay_last_SR   uint32 `json:"dlsr"`
+	ReportCount     uint8  `json:"report_count"`
+	RTCPType        uint8  `json:"type"`
+}
+
+type RTCP_report_block_xr struct {
+	Type             uint8  `json:"type"`
+	ID               uint32 `json:"id"`
+	Fraction_lost    uint8  `json:"fraction_lost"`
+	Fraction_discard uint8  `json:"fraction_discard"`
+	Burst_density    uint8  `json:"burst_density"`
+	Gap_density      uint8  `json:"gap_density"`
+	Burst_duration   uint16 `json:"burst_duration"`
+	Gap_Duration     uint16 `json:"gap_Duration"`
+	Round_trip_delay uint16 `json:"round_trip_delay"`
+	End_system_delay uint16 `json:"end_system_delay"`
 }
 
 func (rp *RTCP_Packet) AddReportBlock(rb RTCP_report_block) []RTCP_report_block {
@@ -283,7 +297,30 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			infoMsg = fmt.Sprintf("Discard RTCP_BYE packet type=%d", RTCPType)
 			offset += RTCPLength
 		case TYPE_RTCP_XR:
-			infoMsg = fmt.Sprintf("Discard RTCP_XR packet type=%d", RTCPType)
+			if RTCPLength < 8 || offset+8 > len(data) {
+				return ssrcBytes, rtcpPkt, fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+			}
+
+			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
+			pkt.ReportBlocksXr.Type = data[offset+4]
+			offset += 8
+			if pkt.ReportBlocksXr.Type == 7 && RTCPLength >= 16 && offset+16 <= len(data) {
+				pkt.ReportBlocksXr.ID = binary.BigEndian.Uint32(data[offset:])
+				pkt.ReportBlocksXr.Fraction_lost = data[offset+4]
+				pkt.ReportBlocksXr.Fraction_discard = data[offset+5]
+				pkt.ReportBlocksXr.Burst_density = data[offset+6]
+				pkt.ReportBlocksXr.Gap_density = data[offset+7]
+				pkt.ReportBlocksXr.Burst_duration = binary.BigEndian.Uint16(data[offset+8:])
+				pkt.ReportBlocksXr.Gap_Duration = binary.BigEndian.Uint16(data[offset+10:])
+				pkt.ReportBlocksXr.Round_trip_delay = binary.BigEndian.Uint16(data[offset+12:])
+				pkt.ReportBlocksXr.End_system_delay = binary.BigEndian.Uint16(data[offset+14:])
+			}
+			rtcpPkt, err = pkt.MarshalJSON()
+			if err != nil {
+				return nil, nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
+			}
+
 			offset += RTCPLength
 		}
 
