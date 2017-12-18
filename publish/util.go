@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 )
 
@@ -85,7 +84,7 @@ func makeChunck(chunckVen uint16, chunckType uint16, h *decoder.Packet) []byte {
 	// Chunk capture agent ID
 	case 0x000c:
 		chunck = make([]byte, 6+4)
-		binary.BigEndian.PutUint32(chunck[6:], uint32(config.Cfg.HepNodeID))
+		binary.BigEndian.PutUint32(chunck[6:], h.Node)
 
 	// Chunk keep alive timer
 	// case 0x000d:

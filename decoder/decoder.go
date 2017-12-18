@@ -16,6 +16,7 @@ import (
 
 type Decoder struct {
 	Host          string
+	Node          uint32
 	LayerType     gopacket.LayerType
 	defragger     *ip4defrag.IPv4Defragmenter
 	fragCount     int
@@ -39,6 +40,7 @@ type Decoder struct {
 
 type Packet struct {
 	Host          string
+	Node          uint32
 	Tsec          uint32
 	Tmsec         uint32
 	Vlan          uint16
@@ -76,6 +78,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	d := &Decoder{
 		Host:      host,
+		Node:      uint32(config.Cfg.HepNodeID),
 		LayerType: lt,
 		defragger: ip4defrag.NewIPv4Defragmenter(),
 		SIPCache:  cSIP,
@@ -90,6 +93,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
 	pkt := &Packet{
 		Host:  d.Host,
+		Node:  d.Node,
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
