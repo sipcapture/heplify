@@ -259,8 +259,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 				break
 			}
 
-			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			ssrcBytes = data[offset : offset+4]
+			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			offset += 4
 
 			if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= len(data) {
@@ -299,19 +299,20 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 				break
 			}
 
+			ssrcBytes = data[offset : offset+4]
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			pkt.ReportBlocksXr.Type = data[offset+4]
-			offset += 8
-			if pkt.ReportBlocksXr.Type == 7 && RTCPLength >= 16 && offset+16 <= len(data) {
-				pkt.ReportBlocksXr.ID = binary.BigEndian.Uint32(data[offset:])
-				pkt.ReportBlocksXr.Fraction_lost = data[offset+4]
-				pkt.ReportBlocksXr.Fraction_discard = data[offset+5]
-				pkt.ReportBlocksXr.Burst_density = data[offset+6]
-				pkt.ReportBlocksXr.Gap_density = data[offset+7]
-				pkt.ReportBlocksXr.Burst_duration = binary.BigEndian.Uint16(data[offset+8:])
-				pkt.ReportBlocksXr.Gap_Duration = binary.BigEndian.Uint16(data[offset+10:])
-				pkt.ReportBlocksXr.Round_trip_delay = binary.BigEndian.Uint16(data[offset+12:])
-				pkt.ReportBlocksXr.End_system_delay = binary.BigEndian.Uint16(data[offset+14:])
+
+			if pkt.ReportBlocksXr.Type == 7 && RTCPLength >= 24 && offset+24 <= len(data) {
+				pkt.ReportBlocksXr.ID = binary.BigEndian.Uint32(data[offset+8:])
+				pkt.ReportBlocksXr.Fraction_lost = data[offset+12]
+				pkt.ReportBlocksXr.Fraction_discard = data[offset+13]
+				pkt.ReportBlocksXr.Burst_density = data[offset+14]
+				pkt.ReportBlocksXr.Gap_density = data[offset+15]
+				pkt.ReportBlocksXr.Burst_duration = binary.BigEndian.Uint16(data[offset+16:])
+				pkt.ReportBlocksXr.Gap_Duration = binary.BigEndian.Uint16(data[offset+18:])
+				pkt.ReportBlocksXr.Round_trip_delay = binary.BigEndian.Uint16(data[offset+20:])
+				pkt.ReportBlocksXr.End_system_delay = binary.BigEndian.Uint16(data[offset+22:])
 			}
 			offset += RTCPLength
 		}
