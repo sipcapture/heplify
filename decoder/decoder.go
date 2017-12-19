@@ -58,7 +58,7 @@ type Packet struct {
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	host, err := os.Hostname()
 	if err != nil {
-		host = "sniffer"
+		host = "heplify-host"
 	}
 	var lt gopacket.LayerType
 

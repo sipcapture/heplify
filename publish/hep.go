@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"net"
 
+	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 )
 
@@ -16,7 +17,7 @@ type HEPOutputer struct {
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 	ho := &HEPOutputer{
 		addr:     serverAddr,
-		hepQueue: make(chan []byte, 10000),
+		hepQueue: make(chan []byte, 40000),
 	}
 	err := ho.Init()
 	if err != nil {
@@ -61,8 +62,8 @@ func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 	return conn, nil
 }
 
-func (ho *HEPOutputer) Output(msg []byte) {
-	ho.hepQueue <- msg
+func (ho *HEPOutputer) Output(pkt *decoder.Packet) {
+	ho.hepQueue <- NewHEP(pkt)
 }
 
 func (ho *HEPOutputer) Send(msg []byte) {

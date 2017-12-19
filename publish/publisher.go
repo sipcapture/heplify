@@ -1,30 +1,28 @@
 package publish
 
 import (
-	"encoding/json"
 	"time"
 
-	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 )
 
 type Outputer interface {
-	Output(msg []byte)
+	Output(pkt *decoder.Packet)
 }
 
 type Publisher struct {
-	hepQueue chan *decoder.Packet
+	pktQueue chan *decoder.Packet
 	pubCount int
 	outputer Outputer
 }
 
-func NewPublisher(o Outputer) *Publisher {
+func NewPublisher(out Outputer) *Publisher {
 
 	p := &Publisher{
-		hepQueue: make(chan *decoder.Packet),
+		outputer: out,
+		pktQueue: make(chan *decoder.Packet),
 		pubCount: 0,
-		outputer: o,
 	}
 	go p.Start()
 	go p.printStats()
@@ -32,7 +30,7 @@ func NewPublisher(o Outputer) *Publisher {
 }
 
 func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
-	pub.hepQueue <- pkt
+	pub.pktQueue <- pkt
 }
 
 func (pub *Publisher) output(pkt *decoder.Packet) {
@@ -41,34 +39,13 @@ func (pub *Publisher) output(pkt *decoder.Packet) {
 			logp.Err("recover %v", err)
 		}
 	}()
-
-	if config.Cfg.NsqdTCPAddress != "" {
-		jsonPacket, err := json.Marshal(pkt)
-		if err != nil {
-			logp.Err("json %v", err)
-			return
-		}
-		pub.outputer.Output(jsonPacket)
-		//hepPacket := NewHEP(pkt)
-		//pub.outputer.Output(hepPacket)
-
-	} else if config.Cfg.HepServer != "" {
-		hepPacket := NewHEP(pkt)
-		pub.outputer.Output(hepPacket)
-	} else {
-		jsonPacket, err := json.MarshalIndent(pkt, "", "  ")
-		if err != nil {
-			logp.Err("json %v", err)
-			return
-		}
-		pub.outputer.Output(jsonPacket)
-	}
+	pub.outputer.Output(pkt)
 }
 
 func (pub *Publisher) Start() {
 	for {
 		select {
-		case pkt := <-pub.hepQueue:
+		case pkt := <-pub.pktQueue:
 			pub.pubCount++
 			pub.output(pkt)
 		}
