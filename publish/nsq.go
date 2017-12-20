@@ -70,7 +70,7 @@ func (nq *NSQOutputer) Output(pkt *decoder.Packet) {
 	}
 
 	logp.Debug("nsq", "NSQ packet: %s", jsonPkt)
-	if !config.Cfg.Gzip {
+	if !config.Cfg.Zip {
 		nq.nsqQueue <- jsonPkt
 	} else {
 		var buf bytes.Buffer

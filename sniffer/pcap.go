@@ -47,7 +47,7 @@ func (wrapper *gzipPcapWriter) Close() error {
 }
 
 func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error) {
-	if config.Cfg.Gzip {
+	if config.Cfg.Zip {
 		baseFilename = baseFilename + ".gz"
 	}
 	logp.Info("opening new pcap file %s", baseFilename)
@@ -55,7 +55,7 @@ func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error)
 	if err != nil {
 		return nil, err
 	}
-	if config.Cfg.Gzip {
+	if config.Cfg.Zip {
 		o := gzip.NewWriter(f)
 		w := pcapgo.NewWriter(o)
 		w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
@@ -71,7 +71,7 @@ func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error)
 
 func (sniffer *SnifferSetup) movePcap(tempName, outputPath string) error {
 	dateString := time.Now().Format("2006/01/02/02.01.2006T15-04-05") + "_node" + strconv.Itoa(int(config.Cfg.HepNodeID)) + ".pcap"
-	if config.Cfg.Gzip {
+	if config.Cfg.Zip {
 		dateString = dateString + ".gz"
 		tempName = tempName + ".gz"
 	}
