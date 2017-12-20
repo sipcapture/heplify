@@ -1,7 +1,6 @@
 package sniffer
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +23,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	chPcapDumper   chan PacketFrame
+	dumpChan       chan DumpPacket
 	mode           string
 	filter         string
 	worker         Worker
@@ -33,7 +32,7 @@ type SnifferSetup struct {
 	afpacketStats  afpacket.Stats
 }
 
-type PacketFrame struct {
+type DumpPacket struct {
 	ci   gopacket.CaptureInfo
 	data []byte
 }
@@ -204,7 +203,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 	}
 
 	if sniffer.config.WriteFile != "" {
-		sniffer.chPcapDumper = make(chan PacketFrame, 400000)
+		sniffer.dumpChan = make(chan DumpPacket, 100000)
 		go sniffer.dumpPcap()
 	}
 
@@ -226,13 +225,6 @@ func (sniffer *SnifferSetup) Run() error {
 		}
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
-
-		if config.Cfg.Filter != "" && !bytes.Contains(data, []byte(config.Cfg.Filter)) {
-			continue
-		}
-		if config.Cfg.Discard != "" && bytes.Contains(data, []byte(config.Cfg.Discard)) {
-			continue
-		}
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
 			//logp.Debug("sniffer", "Idle")
@@ -288,7 +280,7 @@ func (sniffer *SnifferSetup) Run() error {
 				ci.Timestamp = time.Now()
 			}
 		} else if sniffer.config.WriteFile != "" {
-			sniffer.chPcapDumper <- PacketFrame{ci, data}
+			sniffer.dumpChan <- DumpPacket{ci, data}
 		}
 
 		sniffer.worker.OnPacket(data, &ci)

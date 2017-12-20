@@ -110,7 +110,7 @@ func (sniffer *SnifferSetup) dumpPcap() {
 
 	for {
 		select {
-		case packet := <-sniffer.chPcapDumper:
+		case packet := <-sniffer.dumpChan:
 			err := w.WritePacket(packet.ci, packet.data)
 			if err != nil {
 				w.Close()

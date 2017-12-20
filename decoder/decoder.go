@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -103,7 +104,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 	if config.Cfg.Dedup {
 		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			logp.Debug("payload", "\n%v", string(appLayer.Payload()))
 			_, err := d.SIPCache.Get(appLayer.Payload())
 			if err == nil {
 				d.dupCount++
@@ -113,6 +113,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			if err != nil {
 				logp.Warn("%v", err)
 			}
+			if config.Cfg.Filter != "" && !bytes.Contains(appLayer.Payload(), []byte(config.Cfg.Filter)) {
+				return nil, nil
+			}
+			if config.Cfg.Discard != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.Discard)) {
+				return nil, nil
+			}
+			logp.Debug("payload", "\n%v", string(appLayer.Payload()))
 		}
 	}
 

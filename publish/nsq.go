@@ -27,7 +27,7 @@ func NewNSQOutputer(addrs string, topic string) (*NSQOutputer, error) {
 	nq := &NSQOutputer{
 		Addr:     addrs,
 		Topic:    topic,
-		nsqQueue: make(chan []byte, 40000),
+		nsqQueue: make(chan []byte),
 	}
 	err := nq.Init()
 	if err != nil {

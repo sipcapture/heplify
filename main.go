@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"time"
 
 	"github.com/negbie/heplify/config"
@@ -45,7 +46,7 @@ func parseFlags() {
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.Uint64Var(&rotateEveryKB, "r", 16384, "Log filesize (KB)")
-	flag.StringVar(&config.Cfg.Pprof, "pprof", "", "Profile CPU & RAM for 2 min and exit")
+	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for 2 min and exit")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIPRTCP, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
@@ -83,7 +84,7 @@ func checkCritErr(err error) {
 
 func runProfile() {
 	go func() {
-		cpuFile, err := os.Create(config.Cfg.Pprof + "_cpu")
+		cpuFile, err := os.Create("cpu.pprof")
 		if err != nil {
 			fmt.Printf("Could not create CPU profile: %v", err)
 		}
@@ -91,19 +92,32 @@ func runProfile() {
 			fmt.Printf("Could not start CPU profile: %v", err)
 		}
 
+		traceFile, err := os.Create("trace.out")
+		if err != nil {
+			fmt.Printf("Could not create trace file: %v", err)
+		}
+		if err := trace.Start(traceFile); err != nil {
+			fmt.Printf("Could not start trace: %v", err)
+		}
+
 		time.Sleep(120 * time.Second)
-		ramFile, err := os.Create(config.Cfg.Pprof + "_ram")
+		ramFile, err := os.Create("ram.pprof")
 		if err != nil {
 			fmt.Printf("Could not create RAM profile: %vs", err)
 		}
-		runtime.GC() // get up-to-date statistics
+		runtime.GC() // update gc statistics
 		if err := pprof.WriteHeapProfile(ramFile); err != nil {
 			fmt.Printf("Could not write RAM profile: %v", err)
 		}
-		pprof.StopCPUProfile()
 		ramFile.Close()
+
+		pprof.StopCPUProfile()
 		cpuFile.Close()
-		fmt.Println("Finished CPU & RAM profiling!")
+
+		trace.Stop()
+		traceFile.Close()
+
+		fmt.Println("Benchmark finished!")
 		os.Exit(1)
 	}()
 }
@@ -124,7 +138,7 @@ func main() {
 	err = capture.Init(false, config.Cfg.Mode, config.Cfg.Iface)
 	checkCritErr(err)
 
-	if config.Cfg.Pprof != "" {
+	if config.Cfg.Bench {
 		runProfile()
 	}
 

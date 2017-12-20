@@ -21,7 +21,7 @@ func NewPublisher(out Outputer) *Publisher {
 
 	p := &Publisher{
 		outputer: out,
-		pktQueue: make(chan *decoder.Packet),
+		pktQueue: make(chan *decoder.Packet, 100000),
 		pubCount: 0,
 	}
 	go p.Start()
