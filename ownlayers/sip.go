@@ -11,7 +11,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-var LayerTypeSIP = gopacket.RegisterLayerType(2001, gopacket.LayerTypeMetadata{Name: "SIP", Decoder: gopacket.DecodeFunc(decodeSIP)})
+var LayerTypeSIP = gopacket.RegisterLayerType(2011, gopacket.LayerTypeMetadata{Name: "SIP", Decoder: gopacket.DecodeFunc(decodeSIP)})
 
 // SIPVersion defines the different versions of the SIP Protocol
 type SIPVersion uint8

@@ -214,9 +214,11 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 }
 
 func (sniffer *SnifferSetup) Run() error {
-	loopCount := 1
-	var lastPktTime *time.Time
-	var retError error
+	var (
+		loopCount   = 1
+		lastPktTime *time.Time
+		retError    error
+	)
 
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
@@ -227,7 +229,7 @@ func (sniffer *SnifferSetup) Run() error {
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			//logp.Debug("sniffer", "Idle")
+			logp.Debug("sniffer", "Interrupted")
 			continue
 		}
 

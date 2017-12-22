@@ -99,29 +99,27 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
+	if config.Cfg.Dedup && len(data) > 56 {
+		_, err := d.SIPCache.Get(data[56:])
+		if err == nil {
+			d.dupCount++
+			return nil, nil
+		}
+		err = d.SIPCache.Set(data[56:], nil, 2)
+		if err != nil {
+			logp.Warn("%v", err)
+		}
+		if config.Cfg.Filter != "" && !bytes.Contains(data[42:], []byte(config.Cfg.Filter)) {
+			return nil, nil
+		}
+		if config.Cfg.Discard != "" && bytes.Contains(data[42:], []byte(config.Cfg.Discard)) {
+			return nil, nil
+		}
+		logp.Debug("payload", "\n%v", string(data[42:]))
+	}
+
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("layer", "\n%v", packet)
-
-	if config.Cfg.Dedup {
-		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			_, err := d.SIPCache.Get(appLayer.Payload())
-			if err == nil {
-				d.dupCount++
-				return nil, nil
-			}
-			err = d.SIPCache.Set(appLayer.Payload(), nil, 2)
-			if err != nil {
-				logp.Warn("%v", err)
-			}
-			if config.Cfg.Filter != "" && !bytes.Contains(appLayer.Payload(), []byte(config.Cfg.Filter)) {
-				return nil, nil
-			}
-			if config.Cfg.Discard != "" && bytes.Contains(appLayer.Payload(), []byte(config.Cfg.Discard)) {
-				return nil, nil
-			}
-			logp.Debug("payload", "\n%v", string(appLayer.Payload()))
-		}
-	}
 
 	if dot1qLayer := packet.Layer(layers.LayerTypeDot1Q); dot1qLayer != nil {
 		dot1q, ok := dot1qLayer.(*layers.Dot1Q)
@@ -218,7 +216,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 						return nil, nil
 					}
 				} else {
-					logp.Debug("rtplayer", "\n%v", packet)
+					logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
 					pkt.Payload = nil
 					return nil, nil
 				}
