@@ -22,7 +22,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
 			SDPIP = string(restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))])
 		} else {
-			logp.Warn("No end or fishy SDP IP in '%s'", string(restIP))
+			logp.Debug("sdp", "No end or fishy SDP IP in '%s'", string(restIP))
 			return
 		}
 
@@ -32,7 +32,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
 				RTCPPort = string(restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))])
 			} else {
-				logp.Warn("No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
+				logp.Debug("sdp", "No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
 				return
 			}
 		} else {
@@ -45,7 +45,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				}
 				RTCPPort = strconv.Itoa(SDPPort + 1)
 			} else {
-				logp.Warn("No end or fishy SDP RTP Port in '%s'", string(restPort))
+				logp.Debug("sdp", "No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return
 			}
 		}
@@ -56,7 +56,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
 				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
 			} else {
-				logp.Warn("No end or fishy Call-ID in '%s'", string(restCallID))
+				logp.Debug("sdp", "No end or fishy Call-ID in '%s'", string(restCallID))
 				return
 			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
@@ -65,7 +65,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
 				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
 			} else {
-				logp.Warn("No end or fishy Call-ID in '%s'", string(restID))
+				logp.Debug("sdp", "No end or fishy Call-ID in '%s'", string(restID))
 				return
 			}
 		} else {

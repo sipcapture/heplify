@@ -1,10 +1,23 @@
 package logp
 
 import (
-	"time"
-
 	"go.uber.org/zap/zapcore"
 )
+
+var baseEncodingConfig = zapcore.EncoderConfig{
+	TimeKey:        "timestamp",
+	LevelKey:       "level",
+	NameKey:        "logger",
+	CallerKey:      "caller",
+	MessageKey:     "message",
+	StacktraceKey:  "stacktrace",
+	LineEnding:     zapcore.DefaultLineEnding,
+	EncodeLevel:    zapcore.LowercaseLevelEncoder,
+	EncodeTime:     zapcore.ISO8601TimeEncoder,
+	EncodeDuration: zapcore.NanosDurationEncoder,
+	EncodeCaller:   zapcore.ShortCallerEncoder,
+	EncodeName:     zapcore.FullNameEncoder,
+}
 
 func buildEncoder(cfg Config) zapcore.Encoder {
 	if cfg.JSON {
@@ -17,37 +30,14 @@ func buildEncoder(cfg Config) zapcore.Encoder {
 }
 
 func jsonEncoderConfig() zapcore.EncoderConfig {
-	return zapcore.EncoderConfig{
-		TimeKey:        "timestamp",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		MessageKey:     "message",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,
-		EncodeTime:     zapcore.ISO8601TimeEncoder,
-		EncodeDuration: millisecondsDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-		EncodeName:     zapcore.FullNameEncoder,
-	}
+	return baseEncodingConfig
 }
 
 func consoleEncoderConfig() zapcore.EncoderConfig {
-	return zapcore.EncoderConfig{
-		TimeKey:        "timestamp",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		MessageKey:     "message",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalLevelEncoder,
-		EncodeTime:     zapcore.ISO8601TimeEncoder,
-		EncodeDuration: millisecondsDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-		EncodeName:     bracketedNameEncoder,
-	}
+	c := baseEncodingConfig
+	c.EncodeLevel = zapcore.CapitalLevelEncoder
+	c.EncodeName = bracketedNameEncoder
+	return c
 }
 
 func syslogEncoderConfig() zapcore.EncoderConfig {
@@ -55,10 +45,6 @@ func syslogEncoderConfig() zapcore.EncoderConfig {
 	// Time is added by syslog.
 	c.TimeKey = ""
 	return c
-}
-
-func millisecondsDurationEncoder(d time.Duration, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendFloat64(float64(d) / float64(time.Millisecond))
 }
 
 func bracketedNameEncoder(loggerName string, enc zapcore.PrimitiveArrayEncoder) {

@@ -52,6 +52,8 @@ func Configure(cfg Config) error {
 		sink, err = makeStderrOutput(cfg)
 	case cfg.ToSyslog:
 		sink, err = makeSyslogOutput(cfg)
+	case cfg.ToEventLog:
+		sink, err = makeEventLogOutput(cfg)
 	case cfg.ToFiles:
 		fallthrough
 	default:
@@ -155,19 +157,21 @@ func makeSyslogOutput(cfg Config) (zapcore.Core, error) {
 	return newSyslog(buildEncoder(cfg), cfg.Level.zapLevel())
 }
 
+func makeEventLogOutput(cfg Config) (zapcore.Core, error) {
+	return newEventLog(cfg.Beat, buildEncoder(cfg), cfg.Level.zapLevel())
+}
+
 func makeFileOutput(cfg Config) (zapcore.Core, error) {
 	name := cfg.Beat
 	if cfg.Files.Name != "" {
 		name = cfg.Files.Name
 	}
-
 	exPath, err := os.Executable()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get heplify dir")
 	}
 	exPathDir := filepath.Dir(exPath)
 	filename := exPathDir + "/" + name
-	//filename := paths.Resolve(paths.Logs, filepath.Join(cfg.Files.Path, name))
 
 	rotator, err := NewFileRotator(filename,
 		MaxSizeBytes(cfg.Files.MaxSize),

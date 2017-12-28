@@ -10,6 +10,7 @@ func NewRTP(raw []byte) string {
 	rtp, ok := rtpl.Layers()[0].(*ownlayers.RTP)
 	if !ok {
 		//return nil
+		return "this is not a RTP packet!"
 	}
 
 	return rtp.String()

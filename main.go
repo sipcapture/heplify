@@ -64,7 +64,7 @@ func checkCritErr(err error) {
 	}
 }
 
-func runProfile() {
+func benchmark() {
 	go func() {
 		cpuFile, err := os.Create("cpu.pprof")
 		if err != nil {
@@ -121,7 +121,7 @@ func main() {
 	checkCritErr(err)
 
 	if config.Cfg.Bench {
-		runProfile()
+		benchmark()
 	}
 
 	err = capture.Run()
