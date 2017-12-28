@@ -207,7 +207,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
-				if (udp.Payload[1] == 200 || udp.Payload[1] == 201) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
+				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
@@ -215,7 +215,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 						d.rtcpFailCount++
 						return nil, nil
 					}
-				} else {
+				} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
 					logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
 					pkt.Payload = nil
 					return nil, nil

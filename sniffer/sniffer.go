@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
@@ -344,9 +345,13 @@ func (sniffer *SnifferSetup) printStats() {
 		logp.Info("Read in pcap file. Stats won't be generated.")
 		return
 	}
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	ticker := time.NewTicker(1 * time.Minute)
+
 	for {
-		<-time.After(1 * time.Minute)
-		go func() {
+		select {
+		case <-ticker.C:
 			switch sniffer.config.Type {
 			case "pcap":
 				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
@@ -364,6 +369,11 @@ func (sniffer *SnifferSetup) printStats() {
 				logp.Info("Packets overall received: %d, polls: %d",
 					sniffer.afpacketStats.Packets, sniffer.afpacketStats.Polls)
 			}
-		}()
+
+		case <-signals:
+			logp.Info("Sniffer received stop signal")
+			time.Sleep(1 * time.Second)
+			os.Exit(0)
+		}
 	}
 }

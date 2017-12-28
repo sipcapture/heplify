@@ -96,6 +96,10 @@ func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	r.Ssrc = binary.BigEndian.Uint32(data[8:])
 	offset := 12
 
+	if r.Padding > 1 || r.Extension > 1 || r.Marker > 1 {
+		return errors.New("No valid RTP packet")
+	}
+
 	if r.CC > 0 {
 		if len(data[offset:]) < int(r.CC*4) {
 			return errors.New("Not enough octets left in RTP header to get CC")

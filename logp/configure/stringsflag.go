@@ -30,7 +30,7 @@ type StringsFlag struct {
 }
 
 func init() {
-	StringArrVarFlag(nil, &debugSelectors, "d", "Enable certain debug selectors [*,fragment,layer,payload,rtcp,rtcpfail,sdp]")
+	StringArrVarFlag(nil, &debugSelectors, "d", "Enable certain debug selectors [fragment,layer,payload,rtcp,rtcpfail,sdp]")
 }
 
 // StringArrFlag creates and registers a new StringsFlag with the given FlagSet.

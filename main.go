@@ -31,7 +31,7 @@ func parseFlags() {
 	flag.StringVar(&ifaceConf.ReadFile, "rf", "", "Read pcap file")
 	flag.StringVar(&ifaceConf.WriteFile, "wf", "", "Path to write pcap file")
 	flag.IntVar(&ifaceConf.RotationTime, "rt", 60, "Pcap rotation time in minutes")
-	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable output compression")
+	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable pcap compression")
 	flag.IntVar(&ifaceConf.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
 	flag.BoolVar(&ifaceConf.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
 	flag.IntVar(&ifaceConf.Snaplen, "s", 16384, "Snaplength")
