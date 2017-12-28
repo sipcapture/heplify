@@ -18,14 +18,14 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
   -t    Capture types are [pcap, af_packet] (default "pcap")
   -m    Capture modes [SIPDNS, SIPLOG, SIPRTCP, SIP, TLS] (default "SIPRTCP")
   -pr   Portrange to capture SIP (default "5060-5090")
-  -hs   HEP Server address (default "127.0.0.1:9060")
+  -hs   HEP UDP server address (default "127.0.0.1:9060")
+  -hi   HEP Node ID (default 2002)
   -di   Discard uninteresting packets
   -fi   Filter interesting packets
   -rf   Read pcap file
   -wf   Path to write pcap file
-  -zf   Gzip pcap file
+  -zf   Enable pcap compression
   -e    Log to stderr and disable syslog/file output
-  -l    Log level [debug, info, warning, error] (default "info")
   -d    Enable certain debug selectors [fragment,layer,payload,rtcp,rtcpfail,sdp]
 ```
 
