@@ -88,7 +88,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	keySDP := []byte(d.FlowSrcIP + d.FlowSrcPort)
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcpfail", "%v, ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s", info, keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort)
+		logp.Debug("rtcp", "%v, ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s", info, keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort)
 		if jsonRTCP == nil {
 			return nil, nil, 0
 		}
@@ -107,6 +107,6 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return jsonRTCP, corrID, 5
 	}
 
-	logp.Debug("rtcpfail", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+	logp.Debug("rtcp", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
 	return nil, nil, 0
 }

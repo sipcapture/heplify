@@ -148,8 +148,11 @@ type RTCP_Packet struct {
 		Octet_count       uint32 `json:"octets"`
 	} `json:"sender_information"`
 	Ssrc           uint32               `json:"ssrc"`
+	Type           uint8                `json:"type"`
+	ReportCount    uint8                `json:"report_count"`
 	ReportBlocks   []RTCP_report_block  `json:"report_blocks"`
 	ReportBlocksXr RTCP_report_block_xr `json:"report_blocks_xr"`
+	Sdes_ssrc      uint32               `json:"sdes_ssrc"`
 }
 
 type RTCP_report_block struct {
@@ -160,8 +163,6 @@ type RTCP_report_block struct {
 	Jitter          uint32 `json:"ia_jitter"`
 	LastSR          uint32 `json:"lsr"`
 	Delay_last_SR   uint32 `json:"dlsr"`
-	ReportCount     uint8  `json:"report_count"`
-	RTCPType        uint8  `json:"type"`
 }
 
 type RTCP_report_block_xr struct {
@@ -215,6 +216,9 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			break
 		}
 
+		pkt.Type = uint8(RTCPType)
+		pkt.ReportCount = uint8(RTCPReportCount)
+
 		switch RTCPType {
 		case TYPE_RTCP_SR:
 			if RTCPLength < 24 || offset+24 > len(data) {
@@ -225,6 +229,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 
 			ssrcBytes = data[offset : offset+4]
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
+
 			pkt.SenderInformation.Ntp_timestamp_MSW = binary.BigEndian.Uint32(data[offset+4:])
 			pkt.SenderInformation.Ntp_timestamp_LSW = binary.BigEndian.Uint32(data[offset+8:])
 			pkt.SenderInformation.Rtp_timestamp = binary.BigEndian.Uint32(data[offset+12:])
@@ -244,8 +249,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 					tmpReportBlocks[i].Jitter = binary.BigEndian.Uint32(data[offset+12:])
 					tmpReportBlocks[i].LastSR = binary.BigEndian.Uint32(data[offset+16:])
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
-					tmpReportBlocks[i].ReportCount = uint8(RTCPReportCount)
-					tmpReportBlocks[i].RTCPType = uint8(RTCPType)
+
 					offset += 24
 					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
@@ -275,8 +279,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 					tmpReportBlocks[i].Jitter = binary.BigEndian.Uint32(data[offset+12:])
 					tmpReportBlocks[i].LastSR = binary.BigEndian.Uint32(data[offset+16:])
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
-					tmpReportBlocks[i].ReportCount = uint8(RTCPReportCount)
-					tmpReportBlocks[i].RTCPType = uint8(RTCPType)
+
 					offset += 24
 					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
@@ -284,8 +287,16 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			}
 
 		case TYPE_RTCP_SDES:
-			infoMsg = fmt.Sprintf("Discard RTCP_SDES packet type=%d", RTCPType)
+			if RTCPLength < 4 || offset+4 > len(data) {
+				infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+				break
+			}
+
+			ssrcBytes = data[offset : offset+4]
+			pkt.Sdes_ssrc = binary.BigEndian.Uint32(data[offset:])
 			offset += RTCPLength
+
 		case TYPE_RTCP_APP:
 			infoMsg = fmt.Sprintf("Discard RTCP_APP packet type=%d", RTCPType)
 			offset += RTCPLength

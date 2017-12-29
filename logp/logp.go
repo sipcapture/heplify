@@ -31,7 +31,7 @@ func init() {
 	startTime = time.Now()
 
 	toStderr = flag.Bool("e", false, "Log to stderr and disable syslog/file output")
-	debugSelectorsStr = flag.String("d", "", "Enable certain debug selectors")
+	debugSelectorsStr = flag.String("d", "", "Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]")
 }
 
 func HandleFlags(name string) error {
