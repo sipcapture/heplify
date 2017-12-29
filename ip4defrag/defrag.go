@@ -36,7 +36,7 @@ const (
 	IPv4MinimumFragmentSize    = 576   // Minimum size of a single fragment
 	IPv4MaximumSize            = 65535 // Maximum size of a fragment (2^16)
 	IPv4MaximumFragmentOffset  = 8189  // Maximum offset of a fragment
-	IPv4MaximumFragmentListLen = 8     // Back out if we get more than this many fragments
+	IPv4MaximumFragmentListLen = 16    // Back out if we get more than this many fragments
 )
 
 // DefragIPv4 takes in an IPv4 packet with a fragment payload.
@@ -229,10 +229,8 @@ func (f *fragmentList) insert(in *layers.IPv4, t time.Time) (*layers.IPv4, error
 				// In this situation we completely
 				// ignore CC and the complete packet can
 				// never be reassembled.
-				debug.Printf("defrag: ignoring frag %d as we already have it (duplicate?)\n",
-					fragOffset)
-				logp.Warn("ignoring %d byte fragment from %v to %v as we already have it. Payload:\n%s\n",
-					fragOffset, in.SrcIP.String(), in.DstIP.String(), string(in.Payload))
+				logp.Debug("fragment", "ignore fragment '%s' from %s to %s as we already have it.\n",
+					string(in.Payload), in.SrcIP.String(), in.DstIP.String())
 				return nil, nil
 			}
 			if in.FragOffset < frag.FragOffset {

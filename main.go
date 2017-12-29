@@ -11,7 +11,6 @@ import (
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
-	"github.com/negbie/heplify/logp/configure"
 	"github.com/negbie/heplify/sniffer"
 )
 
@@ -24,22 +23,28 @@ func parseFlags() {
 		flag.PrintDefaults()
 	}
 
-	var ifaceConf config.InterfacesConfig
+	var (
+		ifaceConfig config.InterfacesConfig
+		logging     logp.Logging
+		fileRotator logp.FileRotator
+	)
 
-	flag.StringVar(&ifaceConf.Device, "i", "any", "Listen on interface")
-	flag.StringVar(&ifaceConf.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
-	flag.StringVar(&ifaceConf.ReadFile, "rf", "", "Read pcap file")
-	flag.StringVar(&ifaceConf.WriteFile, "wf", "", "Path to write pcap file")
-	flag.IntVar(&ifaceConf.RotationTime, "rt", 60, "Pcap rotation time in minutes")
+	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
+	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
+	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
+	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Path to write pcap file")
+	flag.IntVar(&ifaceConfig.RotationTime, "rt", 60, "Pcap rotation time in minutes")
 	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable pcap compression")
-	flag.IntVar(&ifaceConf.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
-	flag.BoolVar(&ifaceConf.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
-	flag.IntVar(&ifaceConf.Snaplen, "s", 16384, "Snaplength")
-	flag.StringVar(&ifaceConf.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
-	flag.IntVar(&ifaceConf.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
-	flag.BoolVar(&ifaceConf.OneAtATime, "o", false, "Read packet for packet")
-	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for 2 min and exit")
-	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIP, SIPRTP, SIPRTCP, TLS]")
+	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
+	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
+	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
+	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
+	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
+	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
+	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
+	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
+	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
+	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIPRTCP, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
@@ -49,7 +54,9 @@ func parseFlags() {
 	flag.StringVar(&config.Cfg.NsqdTopic, "nt", "Kamailio-Topic", "NSQ publish topic")
 	flag.Parse()
 
-	config.Cfg.Iface = &ifaceConf
+	config.Cfg.Iface = &ifaceConfig
+	logging.Files = &fileRotator
+	config.Cfg.Logging = &logging
 
 	if config.Cfg.HepNodeID > 0xFFFFFFFE {
 		config.Cfg.HepNodeID = 0xFFFFFFFE
@@ -107,7 +114,7 @@ func benchmark() {
 func main() {
 	parseFlags()
 
-	err := configure.Logging("heplify.log")
+	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
 
 	if os.Geteuid() != 0 {
