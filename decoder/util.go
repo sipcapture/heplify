@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"net"
+	"runtime"
 	"time"
 
 	"github.com/negbie/heplify/logp"
@@ -106,9 +107,11 @@ func (d *Decoder) printStats() {
 		<-time.After(60 * time.Second)
 		go func() {
 			d.printPacketStats()
-			d.printSIPCacheStats()
-			d.printSDPCacheStats()
-			d.printRTCPCacheStats()
+			if runtime.GOARCH == "amd64" {
+				d.printSIPCacheStats()
+				d.printSDPCacheStats()
+				d.printRTCPCacheStats()
+			}
 		}()
 	}
 }
