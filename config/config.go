@@ -16,6 +16,7 @@ type Config struct {
 	Discard        string
 	Zip            bool
 	HepServer      string
+	HepTLSProxy    string
 	HepNodeID      uint
 	NsqdTCPAddress string
 	NsqdTopic      string

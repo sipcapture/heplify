@@ -55,14 +55,15 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 
 	if config.Cfg.NsqdTCPAddress != "" {
 		o, err = publish.NewNSQOutputer(config.Cfg.NsqdTCPAddress, config.Cfg.NsqdTopic)
+	} else if config.Cfg.HepTLSProxy != "" {
+		o, err = publish.NewHEPOutputer(config.Cfg.HepTLSProxy)
 	} else if config.Cfg.HepServer != "" {
 		o, err = publish.NewHEPOutputer(config.Cfg.HepServer)
 	} else {
 		o, err = publish.NewFileOutputer()
 	}
 	if err != nil {
-		logp.Critical("NewWorker %v", err)
-		panic(err)
+		return nil, err
 	}
 
 	p := publish.NewPublisher(o)
