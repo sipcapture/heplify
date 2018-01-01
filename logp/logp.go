@@ -8,13 +8,9 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/negbie/heplify/paths"
 )
 
 var (
-	// cmd line flags
-	verbose           *bool
 	toStderr          *bool
 	debugSelectorsStr *string
 
@@ -34,20 +30,12 @@ type Logging struct {
 func init() {
 	startTime = time.Now()
 
-	// Adds logging specific flags: -v, -e and -d.
-	verbose = flag.Bool("v", false, "Log at INFO level")
 	toStderr = flag.Bool("e", false, "Log to stderr and disable syslog/file output")
-	debugSelectorsStr = flag.String("d", "", "Enable certain debug selectors")
+	debugSelectorsStr = flag.String("d", "", "Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]")
 }
 
 func HandleFlags(name string) error {
 	level := _log.level
-	if *verbose {
-		if LOG_INFO > level {
-			level = LOG_INFO
-		}
-	}
-
 	selectors := strings.Split(*debugSelectorsStr, ",")
 	debugSelectors, debugAll := parseSelectors(selectors)
 	if debugAll || len(debugSelectors) > 0 {
@@ -79,12 +67,6 @@ func Init(name string, config *Logging) error {
 		return err
 	}
 
-	if *verbose {
-		if LOG_INFO > logLevel {
-			logLevel = LOG_INFO
-		}
-	}
-
 	debugSelectors := config.Selectors
 	if logLevel == LOG_DEBUG {
 		if len(debugSelectors) == 0 {
@@ -97,7 +79,7 @@ func Init(name string, config *Logging) error {
 	}
 
 	// default log location is in the logs path
-	defaultFilePath := paths.Resolve(paths.Logs, "")
+	defaultFilePath := Resolve(Logs, "")
 
 	var toSyslog, toFiles bool
 	if config.ToSyslog != nil {

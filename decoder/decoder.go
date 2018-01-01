@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 type Decoder struct {
 	Host          string
+	Node          uint32
 	LayerType     gopacket.LayerType
 	defragger     *ip4defrag.IPv4Defragmenter
 	fragCount     int
@@ -39,6 +41,7 @@ type Decoder struct {
 
 type Packet struct {
 	Host          string
+	Node          uint32
 	Tsec          uint32
 	Tmsec         uint32
 	Vlan          uint16
@@ -56,7 +59,7 @@ type Packet struct {
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	host, err := os.Hostname()
 	if err != nil {
-		host = "sniffer"
+		host = "heplify-host"
 	}
 	var lt gopacket.LayerType
 
@@ -76,6 +79,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	d := &Decoder{
 		Host:      host,
+		Node:      uint32(config.Cfg.HepNodeID),
 		LayerType: lt,
 		defragger: ip4defrag.NewIPv4Defragmenter(),
 		SIPCache:  cSIP,
@@ -90,27 +94,32 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
 	pkt := &Packet{
 		Host:  d.Host,
+		Node:  d.Node,
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
+	if config.Cfg.Dedup && len(data) > 56 {
+		_, err := d.SIPCache.Get(data[56:])
+		if err == nil {
+			d.dupCount++
+			return nil, nil
+		}
+		err = d.SIPCache.Set(data[56:], nil, 2)
+		if err != nil {
+			logp.Warn("%v", err)
+		}
+		if config.Cfg.Filter != "" && !bytes.Contains(data[42:], []byte(config.Cfg.Filter)) {
+			return nil, nil
+		}
+		if config.Cfg.Discard != "" && bytes.Contains(data[42:], []byte(config.Cfg.Discard)) {
+			return nil, nil
+		}
+		logp.Debug("payload", "\n%v", string(data[42:]))
+	}
+
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("layer", "\n%v", packet)
-
-	if config.Cfg.Dedup {
-		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			logp.Debug("payload", "\n%v", string(appLayer.Payload()))
-			_, err := d.SIPCache.Get(appLayer.Payload())
-			if err == nil {
-				d.dupCount++
-				return nil, nil
-			}
-			err = d.SIPCache.Set(appLayer.Payload(), nil, 2)
-			if err != nil {
-				logp.Warn("%v", err)
-			}
-		}
-	}
 
 	if dot1qLayer := packet.Layer(layers.LayerTypeDot1Q); dot1qLayer != nil {
 		dot1q, ok := dot1qLayer.(*layers.Dot1Q)
@@ -198,7 +207,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
-				if (udp.Payload[1] == 200 || udp.Payload[1] == 201) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
+				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
@@ -206,8 +215,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 						d.rtcpFailCount++
 						return nil, nil
 					}
-				} else {
-					logp.Debug("rtplayer", "\n%v", packet)
+				} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
+					logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
 					pkt.Payload = nil
 					return nil, nil
 				}

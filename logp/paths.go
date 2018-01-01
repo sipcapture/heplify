@@ -18,7 +18,7 @@
 // to look for a file in the config path:
 //
 // cfgfilePath := paths.Resolve(paths.Config, "beat.yml"
-package paths
+package logp
 
 import (
 	"fmt"

@@ -3,6 +3,7 @@ package publish
 import (
 	"bytes"
 	"compress/zlib"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/negbie/heplify/config"
+	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
 	"github.com/nsqio/go-nsq"
 )
@@ -25,7 +27,7 @@ func NewNSQOutputer(addrs string, topic string) (*NSQOutputer, error) {
 	nq := &NSQOutputer{
 		Addr:     addrs,
 		Topic:    topic,
-		nsqQueue: make(chan []byte, 1000),
+		nsqQueue: make(chan []byte),
 	}
 	err := nq.Init()
 	if err != nil {
@@ -60,14 +62,20 @@ func (nq *NSQOutputer) Init() error {
 	return nil
 }
 
-func (nq *NSQOutputer) Output(msg []byte) {
-	logp.Debug("nsq", "NSQ packet: %s", msg)
-	if !config.Cfg.Gzip {
-		nq.nsqQueue <- msg
+func (nq *NSQOutputer) Output(pkt *decoder.Packet) {
+	jsonPkt, err := json.Marshal(pkt)
+	if err != nil {
+		logp.Err("json %v", err)
+		return
+	}
+
+	logp.Debug("nsq", "NSQ packet: %s", jsonPkt)
+	if !config.Cfg.Zip {
+		nq.nsqQueue <- jsonPkt
 	} else {
 		var buf bytes.Buffer
 		w := zlib.NewWriter(&buf)
-		w.Write(msg)
+		w.Write(jsonPkt)
 		w.Close()
 		nq.nsqQueue <- buf.Bytes()
 	}

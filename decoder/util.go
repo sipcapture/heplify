@@ -46,6 +46,7 @@ func (d *Decoder) flushFragments() {
 func (p *Packet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Host          string
+		Node          uint32
 		Tsec          uint32
 		Tmsec         uint32
 		Vlan          uint16
@@ -60,6 +61,7 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		Payload       string
 	}{
 		Host:          p.Host,
+		Node:          p.Node,
 		Tsec:          p.Tsec,
 		Tmsec:         p.Tmsec,
 		Vlan:          p.Vlan,

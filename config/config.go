@@ -9,12 +9,14 @@ var Cfg Config
 type Config struct {
 	Iface          *InterfacesConfig
 	Logging        *logp.Logging
+	Bench          bool
 	Mode           string
 	Dedup          bool
 	Filter         string
 	Discard        string
-	Gzip           bool
+	Zip            bool
 	HepServer      string
+	HepTLSProxy    string
 	HepNodeID      uint
 	NsqdTCPAddress string
 	NsqdTopic      string

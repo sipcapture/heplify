@@ -1,10 +1,10 @@
 package sniffer
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
@@ -24,7 +24,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	chPcapDumper   chan PacketFrame
+	dumpChan       chan DumpPacket
 	mode           string
 	filter         string
 	worker         Worker
@@ -33,7 +33,7 @@ type SnifferSetup struct {
 	afpacketStats  afpacket.Stats
 }
 
-type PacketFrame struct {
+type DumpPacket struct {
 	ci   gopacket.CaptureInfo
 	data []byte
 }
@@ -55,14 +55,15 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 
 	if config.Cfg.NsqdTCPAddress != "" {
 		o, err = publish.NewNSQOutputer(config.Cfg.NsqdTCPAddress, config.Cfg.NsqdTopic)
+	} else if config.Cfg.HepTLSProxy != "" {
+		o, err = publish.NewHEPOutputer(config.Cfg.HepTLSProxy)
 	} else if config.Cfg.HepServer != "" {
 		o, err = publish.NewHEPOutputer(config.Cfg.HepServer)
 	} else {
 		o, err = publish.NewFileOutputer()
 	}
 	if err != nil {
-		logp.Critical("NewWorker %v", err)
-		panic(err)
+		return nil, err
 	}
 
 	p := publish.NewPublisher(o)
@@ -204,7 +205,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 	}
 
 	if sniffer.config.WriteFile != "" {
-		sniffer.chPcapDumper = make(chan PacketFrame, 400000)
+		sniffer.dumpChan = make(chan DumpPacket, 100000)
 		go sniffer.dumpPcap()
 	}
 
@@ -215,9 +216,11 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 }
 
 func (sniffer *SnifferSetup) Run() error {
-	loopCount := 1
-	var lastPktTime *time.Time
-	var retError error
+	var (
+		loopCount   = 1
+		lastPktTime *time.Time
+		retError    error
+	)
 
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
@@ -227,15 +230,8 @@ func (sniffer *SnifferSetup) Run() error {
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
-		if config.Cfg.Filter != "" && !bytes.Contains(data, []byte(config.Cfg.Filter)) {
-			continue
-		}
-		if config.Cfg.Discard != "" && bytes.Contains(data, []byte(config.Cfg.Discard)) {
-			continue
-		}
-
 		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			//logp.Debug("sniffer", "Idle")
+			logp.Debug("sniffer", "Interrupted")
 			continue
 		}
 
@@ -288,7 +284,7 @@ func (sniffer *SnifferSetup) Run() error {
 				ci.Timestamp = time.Now()
 			}
 		} else if sniffer.config.WriteFile != "" {
-			sniffer.chPcapDumper <- PacketFrame{ci, data}
+			sniffer.dumpChan <- DumpPacket{ci, data}
 		}
 
 		sniffer.worker.OnPacket(data, &ci)
@@ -350,9 +346,13 @@ func (sniffer *SnifferSetup) printStats() {
 		logp.Info("Read in pcap file. Stats won't be generated.")
 		return
 	}
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	ticker := time.NewTicker(1 * time.Minute)
+
 	for {
-		<-time.After(1 * time.Minute)
-		go func() {
+		select {
+		case <-ticker.C:
 			switch sniffer.config.Type {
 			case "pcap":
 				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
@@ -370,6 +370,11 @@ func (sniffer *SnifferSetup) printStats() {
 				logp.Info("Packets overall received: %d, polls: %d",
 					sniffer.afpacketStats.Packets, sniffer.afpacketStats.Polls)
 			}
-		}()
+
+		case <-signals:
+			logp.Info("Sniffer received stop signal")
+			time.Sleep(1 * time.Second)
+			os.Exit(0)
+		}
 	}
 }
