@@ -99,13 +99,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
-	if config.Cfg.Dedup && len(data) > 56 {
-		_, err := d.SIPCache.Get(data[56:])
+	if config.Cfg.Dedup && len(data) > 42 {
+		_, err := d.SIPCache.Get(data[42:])
 		if err == nil {
 			d.dupCount++
 			return nil, nil
 		}
-		err = d.SIPCache.Set(data[56:], nil, 2)
+		err = d.SIPCache.Set(data[42:], nil, 1)
 		if err != nil {
 			logp.Warn("%v", err)
 		}
