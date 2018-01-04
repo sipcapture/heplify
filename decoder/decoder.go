@@ -99,21 +99,27 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
-	if config.Cfg.Dedup && len(data) > 56 {
-		_, err := d.SIPCache.Get(data[56:])
-		if err == nil {
-			d.dupCount++
-			return nil, nil
+	if len(data) > 42 {
+		if config.Cfg.Dedup {
+			_, err := d.SIPCache.Get(data[42:])
+			if err == nil {
+				d.dupCount++
+				return nil, nil
+			}
+			err = d.SIPCache.Set(data[42:], nil, 1)
+			if err != nil {
+				logp.Warn("%v", err)
+			}
 		}
-		err = d.SIPCache.Set(data[56:], nil, 2)
-		if err != nil {
-			logp.Warn("%v", err)
+		if config.Cfg.Filter != "" {
+			if !bytes.Contains(data[42:], []byte(config.Cfg.Filter)) {
+				return nil, nil
+			}
 		}
-		if config.Cfg.Filter != "" && !bytes.Contains(data[42:], []byte(config.Cfg.Filter)) {
-			return nil, nil
-		}
-		if config.Cfg.Discard != "" && bytes.Contains(data[42:], []byte(config.Cfg.Discard)) {
-			return nil, nil
+		if config.Cfg.Discard != "" {
+			if bytes.Contains(data[42:], []byte(config.Cfg.Discard)) {
+				return nil, nil
+			}
 		}
 		logp.Debug("payload", "\n%v", string(data[42:]))
 	}

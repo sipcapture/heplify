@@ -114,7 +114,8 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0"
 	}
 
-	logp.Info("Sniffer type: [%s] device: [%s] mode: [%s]", sniffer.config.Type, sniffer.config.Device, sniffer.mode)
+	logp.Info("Sniffer [type:%s, device:%s, mode:%s] OS [type:%s, arch:%s]",
+		sniffer.config.Type, sniffer.config.Device, sniffer.mode, runtime.GOOS, runtime.GOARCH)
 
 	switch sniffer.config.Type {
 	case "pcap":

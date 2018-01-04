@@ -204,15 +204,15 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 		}
 
 		RTCPVersion := int((data[offset] & 0xc0) >> 6)
-		//padding := (data[offset] & 0x20) >> 5
+		RTCPPadding := (data[offset] & 0x20) >> 5
 		RTCPReportCount := int(data[offset] & 0x1f)
 		RTCPType := int(data[offset+1])
 		RTCPLength := int(binary.BigEndian.Uint16(data[offset+2:]) * 4)
 		offset += 4
 
-		if RTCPVersion != 2 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > dataLen {
-			infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
-				RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+		if RTCPVersion != 2 || RTCPPadding > 1 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > dataLen {
+			infoMsg = fmt.Sprintf("Fishy RTCP_Header RTCPVersion=%d, RTCPPadding=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, packetLen=%d, dataLen=%d, offset=%d in packet:\n%v",
+				RTCPVersion, RTCPPadding, RTCPReportCount, RTCPType, RTCPLength, len(data), dataLen, offset, hex.Dump(data))
 			break
 		}
 
@@ -222,7 +222,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 		switch RTCPType {
 		case TYPE_RTCP_SR:
 			if RTCPLength < 24 || offset+24 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				infoMsg = fmt.Sprintf("Fishy RTCP_SR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 				break
 			}
@@ -251,14 +251,13 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
 
 					offset += 24
-					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
 				}
 			}
 
 		case TYPE_RTCP_RR:
 			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				infoMsg = fmt.Sprintf("Fishy RTCP_RR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 				break
 			}
@@ -281,14 +280,13 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 					tmpReportBlocks[i].Delay_last_SR = binary.BigEndian.Uint32(data[offset+20:])
 
 					offset += 24
-					RTCPLength -= 24
 					pkt.ReportBlocks = pkt.AddReportBlock(tmpReportBlocks[i])
 				}
 			}
 
 		case TYPE_RTCP_SDES:
 			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				infoMsg = fmt.Sprintf("Fishy RTCP_SDES RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 				break
 			}
@@ -305,7 +303,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			offset += RTCPLength
 		case TYPE_RTCP_XR:
 			if RTCPLength < 8 || offset+8 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
+				infoMsg = fmt.Sprintf("Fishy RTCP_XR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
 					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
 				break
 			}
@@ -327,7 +325,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			}
 			offset += RTCPLength
 		}
-		dataLen -= offset
+		dataLen -= RTCPLength + 4
 	}
 
 	rtcpPkt, err = pkt.MarshalJSON()

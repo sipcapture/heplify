@@ -40,7 +40,7 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print debug selectors
 ./heplify -hs 192.168.1.1:9060 -e -d fragment,payload,rtcp
 
-# Capture SIP and RTCP packets with custom port range on eth2 and send them to 192.168.1.1:9060
+# Capture SIP and RTCP packets with custom SIP port range on eth2 and send them to 192.168.1.1:9060
 ./heplify -i eth2 -pr 6000-6010 -hs 192.168.1.1:9060
 
 # Capture SIP and RTCP packets on eth2, send them to homer and compressed to /srv/pcapdumps/
