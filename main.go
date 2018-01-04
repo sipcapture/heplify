@@ -75,13 +75,9 @@ func main() {
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
 
-	if os.Geteuid() != 0 {
-		fmt.Printf("\nYou might need sudo or be root!\n\n")
-		os.Exit(1)
-	}
-
 	capture := &sniffer.SnifferSetup{}
 	defer capture.Close()
+
 	err = capture.Init(false, config.Cfg.Mode, config.Cfg.Iface)
 	checkCritErr(err)
 
