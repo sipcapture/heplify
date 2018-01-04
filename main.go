@@ -4,10 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
-	"time"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
@@ -44,6 +40,7 @@ func parseFlags() {
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
+	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for the next 2 minutes and exit")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIPRTP, SIPRTCP, SIP, TLS]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
@@ -72,46 +69,6 @@ func checkCritErr(err error) {
 	}
 }
 
-func benchmark() {
-	go func() {
-		cpuFile, err := os.Create("cpu.pprof")
-		if err != nil {
-			fmt.Printf("Could not create CPU profile: %v", err)
-		}
-		if err := pprof.StartCPUProfile(cpuFile); err != nil {
-			fmt.Printf("Could not start CPU profile: %v", err)
-		}
-
-		traceFile, err := os.Create("trace.out")
-		if err != nil {
-			fmt.Printf("Could not create trace file: %v", err)
-		}
-		if err := trace.Start(traceFile); err != nil {
-			fmt.Printf("Could not start trace: %v", err)
-		}
-
-		time.Sleep(120 * time.Second)
-		ramFile, err := os.Create("ram.pprof")
-		if err != nil {
-			fmt.Printf("Could not create RAM profile: %vs", err)
-		}
-		runtime.GC() // update gc statistics
-		if err := pprof.WriteHeapProfile(ramFile); err != nil {
-			fmt.Printf("Could not write RAM profile: %v", err)
-		}
-		ramFile.Close()
-
-		pprof.StopCPUProfile()
-		cpuFile.Close()
-
-		trace.Stop()
-		traceFile.Close()
-
-		fmt.Println("Benchmark finished!")
-		os.Exit(1)
-	}()
-}
-
 func main() {
 	parseFlags()
 
@@ -127,10 +84,6 @@ func main() {
 	defer capture.Close()
 	err = capture.Init(false, config.Cfg.Mode, config.Cfg.Iface)
 	checkCritErr(err)
-
-	if config.Cfg.Bench {
-		benchmark()
-	}
 
 	err = capture.Run()
 	checkCritErr(err)

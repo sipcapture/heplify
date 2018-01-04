@@ -223,6 +223,10 @@ func (sniffer *SnifferSetup) Run() error {
 		retError    error
 	)
 
+	if config.Cfg.Bench {
+		benchmark()
+	}
+
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
 			fmt.Println("Press enter to read next packet")
