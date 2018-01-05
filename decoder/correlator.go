@@ -13,10 +13,10 @@ import (
 // If there is one rtcp attribute in the SDP body it will use it as RTCP port. Otherwise it will add 1 to
 // the RTP source port. These data will be used for the SDPCache as key:value pairs.
 func (d *Decoder) cacheSDPIPPort(payload []byte) {
-	var SDPIP, RTCPPort string
-	var callID []byte
-
 	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP")), bytes.Index(payload, []byte("m=audio ")); posSDPIP > 0 && posSDPPort > 0 {
+		var SDPIP, RTCPPort string
+		var callID []byte
+
 		restIP := payload[posSDPIP:]
 		// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
@@ -81,9 +81,8 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 }
 
 func (d *Decoder) cacheCallID(payload []byte) {
-	var callID []byte
-
 	if posInvite, posRegister := bytes.Index(payload, []byte(" INVITE")), bytes.Index(payload, []byte(" REGISTER")); posInvite > 0 || posRegister > 0 {
+		var callID []byte
 		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID > 0 {
 			restCallID := payload[posCallID:]
 			// Minimum Call-ID length of "Call-ID: a" = 10
@@ -142,18 +141,16 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 }
 
 func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
-	var callID []byte
-	var posRestID int
-
 	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
+		var callID []byte
 		restID := payload[posID:]
 		// Minimum Call-ID length of "ID=a" = 4
-		if posRestID = bytes.Index(restID, []byte(" ")); posRestID >= 4 {
+		if posRestID := bytes.Index(restID, []byte(" ")); posRestID >= 4 {
 			callID = restID[len("ID="):bytes.Index(restID, []byte(" "))]
-		} else if len(restID) > 4 && len(restID) < 64 {
+		} else if len(restID) >= 8 && len(restID) <= 64 {
 			callID = restID[3:]
 		} else {
-			logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restID))
+			logp.Debug("logwarn", "No end or fishy Call-ID in '%s'", string(restID))
 			return nil, nil, 0
 		}
 		/*
@@ -164,7 +161,7 @@ func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
 			}
 		*/
 		if callID != nil {
-			logp.Debug("log", "Found CallID: %s and Logline: '%s'", string(callID), string(payload))
+			logp.Debug("log", "Found CallID: %s in Logline: '%s'", string(callID), string(payload))
 			return payload, callID, 100
 
 		}

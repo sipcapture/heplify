@@ -209,7 +209,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
 		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
-		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
+		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
 				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
@@ -227,7 +227,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 					return nil, nil
 				}
 			}
-		} else if config.Cfg.Mode == "SIPLOG" {
+		}
+		if config.Cfg.Mode == "SIPLOG" {
 			//d.cacheCallID(udp.Payload)
 			if udp.DstPort == 514 {
 				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
@@ -247,7 +248,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = tcp.Payload
 		d.tcpCount++
 
-		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
+		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(tcp.Payload)
 		}
 	}
