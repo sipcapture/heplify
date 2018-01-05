@@ -22,7 +22,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
 			SDPIP = string(restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))])
 		} else {
-			logp.Debug("sdp", "No end or fishy SDP IP in '%s'", string(restIP))
+			logp.Debug("sdpwarn", "No end or fishy SDP IP in '%s'", string(restIP))
 			return
 		}
 
@@ -32,7 +32,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
 				RTCPPort = string(restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))])
 			} else {
-				logp.Debug("sdp", "No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
+				logp.Debug("sdpwarn", "No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
 				return
 			}
 		} else {
@@ -45,7 +45,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				}
 				RTCPPort = strconv.Itoa(SDPPort + 1)
 			} else {
-				logp.Debug("sdp", "No end or fishy SDP RTP Port in '%s'", string(restPort))
+				logp.Debug("sdpwarn", "No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return
 			}
 		}
@@ -56,7 +56,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
 				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
 			} else {
-				logp.Debug("sdp", "No end or fishy Call-ID in '%s'", string(restCallID))
+				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
 				return
 			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
@@ -65,7 +65,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
 				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
 			} else {
-				logp.Debug("sdp", "No end or fishy Call-ID in '%s'", string(restID))
+				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restID))
 				return
 			}
 		} else {
@@ -80,6 +80,36 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 	}
 }
 
+func (d *Decoder) cacheCallID(payload []byte) {
+	var callID []byte
+
+	if posInvite, posRegister := bytes.Index(payload, []byte(" INVITE")), bytes.Index(payload, []byte(" REGISTER")); posInvite > 0 || posRegister > 0 {
+		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID > 0 {
+			restCallID := payload[posCallID:]
+			// Minimum Call-ID length of "Call-ID: a" = 10
+			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
+				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
+			} else {
+				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
+				return
+			}
+		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
+			restID := payload[posID:]
+			// Minimum Call-ID length of "i: a" = 4
+			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
+				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
+			} else {
+				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restID))
+				return
+			}
+		}
+		err := d.SIPCache.Set(callID, nil, 2)
+		if err != nil {
+			logp.Warn("%v", err)
+		}
+	}
+}
+
 // correlateRTCP will try to correlate RTCP data with SIP messages.
 // First it will look inside the longlive RTCPCache with the ssrc as key.
 // If it can't find a value it will look inside the shortlive SDPCache with (SDPIP+RTCPPort) as key.
@@ -88,7 +118,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 	keySDP := []byte(d.FlowSrcIP + d.FlowSrcPort)
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcp", "ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, %v", keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, info)
+		logp.Debug("rtcpwarn", "ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, %v", keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, info)
 		if jsonRTCP == nil {
 			return nil, nil, 0
 		}
@@ -107,6 +137,37 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return jsonRTCP, corrID, 5
 	}
 
-	logp.Debug("rtcp", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+	logp.Debug("rtcpwarn", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+	return nil, nil, 0
+}
+
+func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
+	var callID []byte
+	var posRestID int
+
+	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
+		restID := payload[posID:]
+		// Minimum Call-ID length of "ID=a" = 4
+		if posRestID = bytes.Index(restID, []byte(" ")); posRestID >= 4 {
+			callID = restID[len("ID="):bytes.Index(restID, []byte(" "))]
+		} else if len(restID) > 4 && len(restID) < 64 {
+			callID = restID[3:]
+		} else {
+			logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restID))
+			return nil, nil, 0
+		}
+		/*
+			_, err := d.SIPCache.Get(callID)
+			if err == nil {
+				logp.Debug("log", "Found CallID: %s and Logline: '%s'", string(callID), string(payload))
+				return payload, callID, 100
+			}
+		*/
+		if callID != nil {
+			logp.Debug("log", "Found CallID: %s and Logline: '%s'", string(callID), string(payload))
+			return payload, callID, 100
+
+		}
+	}
 	return nil, nil, 0
 }

@@ -201,7 +201,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
 		pkt.SrcPort = uint16(udp.SrcPort)
 		pkt.DstPort = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
@@ -217,6 +216,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
+						return pkt, nil
 					} else {
 						d.rtcpFailCount++
 						return nil, nil
@@ -227,6 +227,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 					return nil, nil
 				}
 			}
+		} else if config.Cfg.Mode == "SIPLOG" {
+			//d.cacheCallID(udp.Payload)
+			if udp.DstPort == 514 {
+				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
+				if pkt.Payload != nil {
+					return pkt, nil
+				}
+			}
 		}
 	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 		tcp, ok := tcpLayer.(*layers.TCP)
@@ -234,7 +242,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
 		pkt.SrcPort = uint16(tcp.SrcPort)
 		pkt.DstPort = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
@@ -257,10 +264,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.dnsCount++
 	}
 
-	if config.Cfg.Mode == "TLS" {
-		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			pkt.ProtoType = 100
+	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		if bytes.Contains(appLayer.Payload(), []byte("sip")) || bytes.Contains(appLayer.Payload(), []byte("SIP")) {
+			pkt.ProtoType = 1
+		}
+		if config.Cfg.Mode == "TLS" {
 			pkt.Payload = protos.NewTLS(appLayer.Payload())
+			if pkt.Payload != nil {
+				pkt.ProtoType = 100
+			}
 		}
 	}
 

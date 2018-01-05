@@ -229,7 +229,7 @@ func (f *fragmentList) insert(in *layers.IPv4, t time.Time) (*layers.IPv4, error
 				// In this situation we completely
 				// ignore CC and the complete packet can
 				// never be reassembled.
-				logp.Debug("fragment", "ignore fragment '%s' from %s to %s as we already have it.\n",
+				logp.Debug("fragmentwarn", "ignore fragment '%s' from %s to %s as we already have it.\n",
 					string(in.Payload), in.SrcIP.String(), in.DstIP.String())
 				return nil, nil
 			}
