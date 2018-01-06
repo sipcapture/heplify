@@ -110,8 +110,8 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	case "TLS":
 		sniffer.filter = "tcp and port 443 and tcp[(((tcp[12:1] & 0xf0) >> 2)):1] = 0x16 and ((tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x01) or (tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x02))"
 	default:
-		sniffer.mode = "SIP"
-		sniffer.filter = "greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0"
+		sniffer.mode = "SIPRTCP"
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
 	logp.Info("Sniffer [type:%s, device:%s, mode:%s] OS [type:%s, arch:%s]",
