@@ -16,10 +16,31 @@ import (
 )
 
 type Decoder struct {
-	Host          string
-	Node          uint32
-	LayerType     gopacket.LayerType
-	defragger     *ip4defrag.IPv4Defragmenter
+	Host            string
+	Node            uint32
+	LayerType       gopacket.LayerType
+	defragger       *ip4defrag.IPv4Defragmenter
+	eth             layers.Ethernet
+	sll             layers.LinuxSLL
+	dot1q           layers.Dot1Q
+	ip4             layers.IPv4
+	ip6             layers.IPv6
+	udp             layers.UDP
+	tcp             layers.TCP
+	dns             layers.DNS
+	payload         gopacket.Payload
+	foundLayerTypes []gopacket.LayerType
+	FlowSrcIP       string
+	FlowDstIP       string
+	FlowSrcPort     string
+	FlowDstPort     string
+	SIPCache        *freecache.Cache
+	SDPCache        *freecache.Cache
+	RTCPCache       *freecache.Cache
+	Stats
+}
+
+type Stats struct {
 	fragCount     int
 	dupCount      int
 	dnsCount      int
@@ -30,13 +51,6 @@ type Decoder struct {
 	tcpCount      int
 	udpCount      int
 	unknownCount  int
-	FlowSrcIP     string
-	FlowDstIP     string
-	FlowSrcPort   string
-	FlowDstPort   string
-	SIPCache      *freecache.Cache
-	SDPCache      *freecache.Cache
-	RTCPCache     *freecache.Cache
 }
 
 type Packet struct {
@@ -78,17 +92,23 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	//debug.SetGCPercent(20)
 
 	d := &Decoder{
-		Host:      host,
-		Node:      uint32(config.Cfg.HepNodeID),
-		LayerType: lt,
-		defragger: ip4defrag.NewIPv4Defragmenter(),
-		SIPCache:  cSIP,
-		SDPCache:  cSDP,
-		RTCPCache: cRTCP,
+		Host:            host,
+		Node:            uint32(config.Cfg.HepNodeID),
+		LayerType:       lt,
+		defragger:       ip4defrag.NewIPv4Defragmenter(),
+		SIPCache:        cSIP,
+		SDPCache:        cSDP,
+		RTCPCache:       cRTCP,
+		foundLayerTypes: make([]gopacket.LayerType, 0, 10),
 	}
+
 	go d.flushFragments()
 	go d.printStats()
 	return d
+}
+
+func (d *Decoder) defragIPv4(ip4frag layers.IPv4) (ip4 *layers.IPv4, err error) {
+	return d.defragger.DefragIPv4(&ip4frag)
 }
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
@@ -98,6 +118,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		Tsec:  uint32(ci.Timestamp.Unix()),
 		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
+
+	logp.Debug("raw", "\n%x", data)
 
 	if len(data) > 42 {
 		if config.Cfg.Dedup {
@@ -124,156 +146,126 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		logp.Debug("payload", "\n%v", string(data[42:]))
 	}
 
-	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-	logp.Debug("layer", "\n%v", packet)
+	parser := gopacket.NewDecodingLayerParser(d.LayerType, &d.eth, &d.sll, &d.dot1q, &d.ip4, &d.ip6, &d.udp, &d.tcp, &d.dns, &d.payload)
+	logp.Debug("layer", "found following layers %v", d.foundLayerTypes)
 
-	if dot1qLayer := packet.Layer(layers.LayerTypeDot1Q); dot1qLayer != nil {
-		dot1q, ok := dot1qLayer.(*layers.Dot1Q)
-		if !ok {
-			return nil, nil
-		}
-		pkt.Vlan = dot1q.VLANIdentifier
+	err := parser.DecodeLayers(data, &d.foundLayerTypes)
+	if err != nil {
+		logp.Debug("layerwarn", "%v but found following layers %v with payload [%s]", err, d.foundLayerTypes, string(data))
 	}
 
-	if ipv4Layer := packet.Layer(layers.LayerTypeIPv4); ipv4Layer != nil {
-		ip4, ok := ipv4Layer.(*layers.IPv4)
-		ip4Len := ip4.Length
-		if !ok {
-			return nil, nil
-		}
+	for _, layerType := range d.foundLayerTypes {
+		switch layerType {
+		case layers.LayerTypeDot1Q:
+			pkt.Vlan = d.dot1q.VLANIdentifier
 
-		pkt.Version = ip4.Version
-		pkt.Protocol = uint8(ip4.Protocol)
-		pkt.SrcIP = ip4.SrcIP
-		pkt.DstIP = ip4.DstIP
-		d.ip4Count++
+		case layers.LayerTypeIPv4:
+			pkt.Version = d.ip4.Version
+			pkt.Protocol = uint8(d.ip4.Protocol)
+			pkt.SrcIP = d.ip4.SrcIP
+			pkt.DstIP = d.ip4.DstIP
+			d.ip4Count++
 
-		d.FlowSrcIP = ip4.SrcIP.String()
-		d.FlowDstIP = ip4.DstIP.String()
+			d.FlowSrcIP = d.ip4.SrcIP.String()
+			d.FlowDstIP = d.ip4.DstIP.String()
 
-		ip4New, err := d.defragger.DefragIPv4(ip4)
-		if err != nil {
-			logp.Warn("%v", err)
-			return nil, nil
-		} else if ip4New == nil {
-			d.fragCount++
-			return nil, nil
-		}
+			if d.ip4.Flags&layers.IPv4DontFragment == 0 && (d.ip4.Flags&layers.IPv4MoreFragments != 0 || d.ip4.FragOffset != 0) {
+				ip4New, err := d.defragIPv4(d.ip4)
+				if err != nil {
+					logp.Warn("%v", err)
+					return nil, nil
+				} else if ip4New == nil {
+					d.fragCount++
+					return nil, nil
+				}
+				logp.Debug("fragment", "Fragmented packet layers %v with payload %v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
+					d.foundLayerTypes, string(d.ip4.Payload), string(ip4New.Payload[8:]), ip4New.Length,
+				)
 
-		if ip4New.Length != ip4Len {
-			logp.Debug("fragment", "Fragmented packet layers:\n%v\nFragmented packet payload:\n%v\nRe-assembled packet payload:\n%v\nRe-assembled packet length:\n%v\n\n",
-				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
-			)
+				pkt.Version = ip4New.Version
+				pkt.Protocol = uint8(ip4New.Protocol)
+				pkt.SrcIP = ip4New.SrcIP
+				pkt.DstIP = ip4New.DstIP
 
-			pkt.Version = ip4New.Version
-			pkt.Protocol = uint8(ip4New.Protocol)
-			pkt.SrcIP = ip4New.SrcIP
-			pkt.DstIP = ip4New.DstIP
-
-			pb, ok := packet.(gopacket.PacketBuilder)
-			if !ok {
-				logp.Critical("Not a PacketBuilder")
-			}
-			nextDecoder := ip4New.NextLayerType()
-			nextDecoder.Decode(ip4New.Payload, pb)
-		}
-	}
-
-	if ipv6Layer := packet.Layer(layers.LayerTypeIPv6); ipv6Layer != nil {
-		ip6, ok := ipv6Layer.(*layers.IPv6)
-		if !ok {
-			return nil, nil
-		}
-
-		pkt.Version = ip6.Version
-		pkt.Protocol = uint8(ip6.NextHeader)
-		pkt.SrcIP = ip6.SrcIP
-		pkt.DstIP = ip6.DstIP
-		d.ip6Count++
-
-		d.FlowSrcIP = ip6.SrcIP.String()
-		d.FlowDstIP = ip6.DstIP.String()
-	}
-
-	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-		udp, ok := udpLayer.(*layers.UDP)
-		if !ok {
-			return nil, nil
-		}
-
-		pkt.SrcPort = uint16(udp.SrcPort)
-		pkt.DstPort = uint16(udp.DstPort)
-		pkt.Payload = udp.Payload
-		d.udpCount++
-
-		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
-		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
-
-		if config.Cfg.Mode != "SIP" {
-			d.cacheSDPIPPort(udp.Payload)
-			if (udp.Payload[0]&0xc0)>>6 == 2 {
-				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
-					if pkt.Payload != nil {
-						d.rtcpCount++
-						return pkt, nil
-					} else {
-						d.rtcpFailCount++
-						return nil, nil
-					}
-				} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
-					logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
-					pkt.Payload = nil
+				if ip4New.Protocol == layers.IPProtocolUDP {
+					parserOnlyUDP := gopacket.NewDecodingLayerParser(layers.LayerTypeUDP, &d.udp)
+					parserOnlyUDP.DecodeLayers(ip4New.Payload, &d.foundLayerTypes)
+				} else if ip4New.Protocol == layers.IPProtocolTCP {
+					parserOnlyTCP := gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
+					parserOnlyTCP.DecodeLayers(ip4New.Payload, &d.foundLayerTypes)
+				} else {
+					// Protocol not supported
 					return nil, nil
 				}
 			}
-		}
-		if config.Cfg.Mode == "SIPLOG" {
-			//d.cacheCallID(udp.Payload)
-			if udp.DstPort == 514 {
-				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
-				if pkt.Payload != nil {
-					return pkt, nil
+
+		case layers.LayerTypeIPv6:
+			pkt.Version = d.ip6.Version
+			pkt.Protocol = uint8(d.ip6.NextHeader)
+			pkt.SrcIP = d.ip6.SrcIP
+			pkt.DstIP = d.ip6.DstIP
+			d.ip6Count++
+
+			d.FlowSrcIP = d.ip6.SrcIP.String()
+			d.FlowDstIP = d.ip6.DstIP.String()
+
+		case layers.LayerTypeUDP:
+			pkt.SrcPort = uint16(d.udp.SrcPort)
+			pkt.DstPort = uint16(d.udp.DstPort)
+			pkt.Payload = d.udp.Payload
+			d.udpCount++
+
+			d.FlowSrcPort = fmt.Sprintf("%d", d.udp.SrcPort)
+			d.FlowDstPort = fmt.Sprintf("%d", d.udp.DstPort)
+
+			if config.Cfg.Mode != "SIP" {
+				d.cacheSDPIPPort(d.udp.Payload)
+				if (d.udp.Payload[0]&0xc0)>>6 == 2 {
+					if (d.udp.Payload[1] >= 200 && d.udp.Payload[1] <= 207) && d.udp.SrcPort%2 != 0 && d.udp.DstPort%2 != 0 {
+						pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(d.udp.Payload)
+						if pkt.Payload != nil {
+							d.rtcpCount++
+							return pkt, nil
+						}
+						d.rtcpFailCount++
+						return nil, nil
+					} else if d.udp.SrcPort%2 == 0 && d.udp.DstPort%2 == 0 {
+						logp.Debug("rtp", "\n%v", protos.NewRTP(d.udp.Payload))
+						pkt.Payload = nil
+						return nil, nil
+					}
 				}
 			}
-		}
-	} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-		tcp, ok := tcpLayer.(*layers.TCP)
-		if !ok {
-			return nil, nil
-		}
-
-		pkt.SrcPort = uint16(tcp.SrcPort)
-		pkt.DstPort = uint16(tcp.DstPort)
-		pkt.Payload = tcp.Payload
-		d.tcpCount++
-
-		if config.Cfg.Mode != "SIP" {
-			d.cacheSDPIPPort(tcp.Payload)
-		}
-	}
-
-	// TODO: add more layers like DHCP, NTP
-	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
-		dns, ok := dnsLayer.(*layers.DNS)
-		if !ok {
-			return nil, nil
-		}
-
-		pkt.ProtoType = 53
-		pkt.Payload = protos.ParseDNS(dns)
-		d.dnsCount++
-	}
-
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		if bytes.Contains(appLayer.Payload(), []byte("sip")) || bytes.Contains(appLayer.Payload(), []byte("SIP")) {
-			pkt.ProtoType = 1
-		}
-		if config.Cfg.Mode == "TLS" {
-			pkt.Payload = protos.NewTLS(appLayer.Payload())
-			if pkt.Payload != nil {
-				pkt.ProtoType = 100
+			if config.Cfg.Mode == "SIPLOG" {
+				//d.cacheCallID(udp.Payload)
+				if d.udp.DstPort == 514 {
+					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(d.udp.Payload)
+					if pkt.Payload != nil {
+						return pkt, nil
+					}
+				}
 			}
+			if bytes.Contains(d.udp.Payload, []byte("sip")) {
+				pkt.ProtoType = 1
+			}
+
+		case layers.LayerTypeTCP:
+			pkt.SrcPort = uint16(d.tcp.SrcPort)
+			pkt.DstPort = uint16(d.tcp.DstPort)
+			pkt.Payload = d.tcp.Payload
+			d.tcpCount++
+
+			if config.Cfg.Mode != "SIP" {
+				d.cacheSDPIPPort(d.tcp.Payload)
+			}
+			if bytes.Contains(d.tcp.Payload, []byte("sip")) {
+				pkt.ProtoType = 1
+			}
+
+		case layers.LayerTypeDNS:
+			pkt.ProtoType = 53
+			pkt.Payload = protos.ParseDNS(&d.dns)
+			d.dnsCount++
 		}
 	}
 
