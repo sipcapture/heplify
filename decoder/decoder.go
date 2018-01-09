@@ -74,7 +74,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
 	cSDP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
-	cRTCP := freecache.NewCache(40 * 1024 * 1024) // 40MB
+	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30MB
 	//debug.SetGCPercent(20)
 
 	d := &Decoder{

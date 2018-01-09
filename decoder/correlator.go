@@ -128,7 +128,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return jsonRTCP, corrID, 5
 	} else if corrID, err := d.SDPCache.Get(keySDP); err == nil {
 		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", string(keySDP), string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
-		err = d.RTCPCache.Set(keyRTCP, corrID, 64800)
+		err = d.RTCPCache.Set(keyRTCP, corrID, 43200)
 		if err != nil {
 			logp.Warn("%v", err)
 			return nil, nil, 0
