@@ -74,7 +74,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
 	cSDP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
-	cRTCP := freecache.NewCache(40 * 1024 * 1024) // 40MB
+	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30MB
 	//debug.SetGCPercent(20)
 
 	d := &Decoder{
@@ -210,17 +210,25 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
 		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
-		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
+		if config.Cfg.Mode == "SIPLOG" && udp.DstPort == 514 {
+			//d.cacheCallID(udp.Payload)
+			pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
+			if pkt.Payload != nil {
+				return pkt, nil
+			}
+			return nil, nil
+		}
+		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
 				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
-					} else {
-						d.rtcpFailCount++
-						return nil, nil
+						return pkt, nil
 					}
+					d.rtcpFailCount++
+					return nil, nil
 				} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
 					logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
 					pkt.Payload = nil
@@ -240,7 +248,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = tcp.Payload
 		d.tcpCount++
 
-		if config.Cfg.Mode == "SIPRTCP" || config.Cfg.Mode == "SIPRTP" {
+		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(tcp.Payload)
 		}
 	}
@@ -259,8 +267,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 	if config.Cfg.Mode == "TLS" {
 		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			pkt.ProtoType = 100
 			pkt.Payload = protos.NewTLS(appLayer.Payload())
+			if pkt.Payload != nil {
+				pkt.ProtoType = 100
+			}
 		}
 	}
 
