@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"bytes"
+	"encoding/json"
 	"strconv"
 
 	"github.com/negbie/heplify/logp"
@@ -171,6 +172,40 @@ func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
 		if len(callID) >= 8 && len(callID) <= 64 {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", string(callID), string(payload))
 			return payload, callID, 100
+		}
+	}
+	return nil, nil, 0
+}
+
+func (d *Decoder) correlateNG(payload []byte) ([]byte, []byte, byte) {
+	cookie, rawNG, err := unmarshalNG(payload)
+	if err != nil {
+		logp.Warn("%v", err)
+		return nil, nil, 0
+	}
+	switch rawTypes := rawNG.(type) {
+	case map[string]interface{}:
+		for rawMapKey, rawMapValue := range rawTypes {
+			if rawMapKey == "call-id" {
+				callid := rawMapValue.([]byte)
+				err = d.SIPCache.Set(cookie, callid, 10)
+				if err != nil {
+					logp.Warn("%v", err)
+					return nil, nil, 0
+				}
+			}
+
+			if rawMapKey == "SSRC" {
+				data, err := json.Marshal(&rawMapValue)
+				if err != nil {
+					logp.Warn("%v", err)
+					return nil, nil, 0
+				}
+				if corrID, err := d.SIPCache.Get(cookie); err == nil {
+					logp.Debug("ng", "Found CallID: %s and QOS stats: %s", string(corrID), string(data))
+					return data, corrID, 100
+				}
+			}
 		}
 	}
 	return nil, nil, 0
