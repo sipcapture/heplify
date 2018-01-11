@@ -210,13 +210,21 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
 		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
-		if config.Cfg.Mode == "SIPLOG" && udp.DstPort == 514 {
-			//d.cacheCallID(udp.Payload)
-			pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
-			if pkt.Payload != nil {
-				return pkt, nil
+		if config.Cfg.Mode == "SIPLOG" {
+			if udp.DstPort == 514 {
+				//d.cacheCallID(udp.Payload)
+				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
+				if pkt.Payload != nil {
+					return pkt, nil
+				}
+				return nil, nil
+			} else if udp.SrcPort == 2223 || udp.DstPort == 2223 {
+				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateNG(udp.Payload)
+				if pkt.Payload != nil {
+					return pkt, nil
+				}
+				return nil, nil
 			}
-			return nil, nil
 		}
 		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(udp.Payload)
