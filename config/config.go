@@ -27,6 +27,7 @@ type InterfacesConfig struct {
 	WriteFile    string `config:"write_file"`
 	RotationTime int    `config:"rotation_time"`
 	PortRange    string `config:"port_range"`
+	WithVlan     bool   `config:"with_vlan"`
 	Snaplen      int    `config:"snaplen"`
 	BufferSizeMb int    `config:"buffer_size_mb"`
 	ReadSpeed    bool   `config:"top_speed"`
