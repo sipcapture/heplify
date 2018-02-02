@@ -10,7 +10,7 @@ import (
 	"github.com/negbie/heplify/sniffer"
 )
 
-const version = "heplify 0.98"
+const version = "heplify 1.0"
 
 func parseFlags() {
 
@@ -35,13 +35,14 @@ func parseFlags() {
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
+	flag.BoolVar(&ifaceConfig.WithVlan, "vl", false, "Capture vlans too")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
 	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for the next 2 minutes and exit")
-	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIPDNS, SIPLOG, SIPRTP, SIPRTCP, SIP, TLS]")
+	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
@@ -73,11 +74,9 @@ func main() {
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
 
-	capture := &sniffer.SnifferSetup{}
-	defer capture.Close()
-
-	err = capture.Init(false, config.Cfg.Mode, config.Cfg.Iface)
+	capture, err := sniffer.New(config.Cfg.Mode, config.Cfg.Iface)
 	checkCritErr(err)
+	defer capture.Close()
 
 	err = capture.Run()
 	checkCritErr(err)
