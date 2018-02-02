@@ -72,7 +72,6 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 
 func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	pkt, err := mw.decoder.Process(data, ci)
-	// TODO: add some checks here
 	if err != nil {
 		logp.Critical("OnPacket %v", err)
 		panic(err)
@@ -82,9 +81,8 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	}
 }
 
-func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
+func (sniffer *SnifferSetup) setFromConfig() error {
 	var err error
-	sniffer.config = cfg
 
 	if sniffer.config.Snaplen == 0 {
 		sniffer.config.Snaplen = 65535
@@ -99,20 +97,16 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
 	case "SIPDNS":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (greater 32 and ip and dst port 53)"
-	case "SIPRTP":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
-	case "SIPRTCP":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	case "SIPLOG":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and udp and (dst port 514 or port 2223))"
-	case "TLS":
-		sniffer.filter = "tcp and port 443 and tcp[(((tcp[12:1] & 0xf0) >> 2)):1] = 0x16 and ((tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x01) or (tcp[(((tcp[12:1] & 0xf0) >> 2)+5):1] = 0x02))"
+	case "SIPRTP":
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
 	default:
 		sniffer.mode = "SIPRTCP"
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
-	if sniffer.config.WithVlan {
+	if sniffer.config.WithVlan && sniffer.config.Device != "any" {
 		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
 	}
 
@@ -172,39 +166,32 @@ func (sniffer *SnifferSetup) setFromConfig(cfg *config.InterfacesConfig) error {
 	return nil
 }
 
-func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config.InterfacesConfig) error {
+func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	var err error
+	sniffer := &SnifferSetup{}
+	sniffer.config = cfg
 	sniffer.mode = mode
 
-	if interfaces.ReadFile == "" {
-		if interfaces.Device == "any" {
-			// Windows or MacOS
-			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-				return fmt.Errorf("'-i any' is not supported on %s", runtime.GOOS)
-			}
+	if sniffer.config.ReadFile == "" {
+		if sniffer.config.Device == "any" && runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+			_, err := ListDeviceNames(false, false)
+			return nil, fmt.Errorf("%v -i any is not supported on %s\nPlease use one of the above devices", err, runtime.GOOS)
 		}
 	}
 
-	if interfaces.Device == "" && interfaces.ReadFile == "" {
-		fmt.Printf("Please use one of the following devices:\n\n")
+	if sniffer.config.Device == "" && sniffer.config.ReadFile == "" {
 		_, err := ListDeviceNames(false, false)
-		if err != nil {
-			return fmt.Errorf("getting devices list: %v", err)
-		}
-		fmt.Println("")
-		os.Exit(1)
+		return nil, fmt.Errorf("%v Please use one of the above devices", err)
 	}
 
-	if !testMode {
-		err = sniffer.setFromConfig(interfaces)
-		if err != nil {
-			return err
-		}
+	err = sniffer.setFromConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	sniffer.worker, err = NewWorker(sniffer.Datalink())
 	if err != nil {
-		return fmt.Errorf("creating decoder: %v", err)
+		return nil, err
 	}
 
 	if sniffer.config.WriteFile != "" {
@@ -215,7 +202,7 @@ func (sniffer *SnifferSetup) Init(testMode bool, mode string, interfaces *config
 	sniffer.isAlive = true
 	go sniffer.printStats()
 
-	return nil
+	return sniffer, nil
 }
 
 func (sniffer *SnifferSetup) Run() error {

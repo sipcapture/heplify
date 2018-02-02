@@ -261,7 +261,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		}
 	}
 
-	// TODO: add more layers like DHCP, NTP
 	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 		dns, ok := dnsLayer.(*layers.DNS)
 		if !ok {
@@ -271,15 +270,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.ProtoType = 53
 		pkt.Payload = protos.ParseDNS(dns)
 		d.dnsCount++
-	}
-
-	if config.Cfg.Mode == "TLS" {
-		if appLayer := packet.ApplicationLayer(); appLayer != nil {
-			pkt.Payload = protos.NewTLS(appLayer.Payload())
-			if pkt.Payload != nil {
-				pkt.ProtoType = 100
-			}
-		}
 	}
 
 	if pkt.Payload != nil {
