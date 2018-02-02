@@ -36,7 +36,7 @@ func parseFlags() {
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.BoolVar(&ifaceConfig.WithVlan, "vl", false, "Capture vlans too")
-	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 64, "Interface buffersize (MB)")
+	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 32, "Interface buffersize (MB)")
 	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")

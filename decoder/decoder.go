@@ -256,6 +256,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.Payload = tcp.Payload
 		d.tcpCount++
 
+		if config.Cfg.Mode == "SIPLOG" && tcp.DstPort == 514 {
+			pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(tcp.Payload)
+			if pkt.Payload != nil {
+				return pkt, nil
+			}
+			return nil, nil
+		}
 		if config.Cfg.Mode != "SIP" {
 			d.cacheSDPIPPort(tcp.Payload)
 		}
