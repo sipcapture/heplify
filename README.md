@@ -1,7 +1,7 @@
 <img src="https://user-images.githubusercontent.com/20154956/33374900-42c9253a-d508-11e7-8a9e-ea73a515a514.png">  
 heplify is captagents little brother, optimized for speed and simplicity. It's a single binary which you can run 
-on Linux or Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify is able to send 
-SIP, correlated RTCP, RTCPXR, DNS, LOG and very basic TLS handshakes into homer. 
+on Linux, ARM, MIPS, Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify is able to send 
+SIP, correlated RTCP, RTCPXR, DNS, Logs into homer. 
 It's able to handle fragmented and duplicate packets out of the box.  
 
 ### Requirements
@@ -16,7 +16,7 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 ```bash
   -i    Listen on interface (default "any")
   -t    Capture types are [pcap, af_packet] (default "pcap")
-  -m    Capture modes [SIPDNS, SIPLOG, SIPRTP, SIPRTCP, SIP, TLS] (default "SIPRTCP")
+  -m    Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP] (default "SIPRTCP")
   -pr   Portrange to capture SIP (default "5060-5090")
   -hs   HEP UDP server address (default "127.0.0.1:9060")
   -hi   HEP Node ID (default 2002)

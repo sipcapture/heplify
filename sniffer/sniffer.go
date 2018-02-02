@@ -84,7 +84,7 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 func (sniffer *SnifferSetup) setFromConfig() error {
 	var err error
 
-	if sniffer.config.Snaplen == 0 {
+	if sniffer.config.Snaplen <= 0 {
 		sniffer.config.Snaplen = 65535
 	}
 
@@ -98,7 +98,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 	case "SIPDNS":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (greater 32 and ip and dst port 53)"
 	case "SIPLOG":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and udp and (dst port 514 or port 2223))"
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
 	case "SIPRTP":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
 	default:
@@ -138,7 +138,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.pcapHandle)
 
 	case "af_packet":
-		if sniffer.config.BufferSizeMb == 0 {
+		if sniffer.config.BufferSizeMb <= 0 {
 			sniffer.config.BufferSizeMb = 32
 		}
 
