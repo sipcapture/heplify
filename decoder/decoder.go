@@ -17,7 +17,8 @@ import (
 
 type Decoder struct {
 	Host          string
-	Node          uint32
+	NodeID        uint32
+	NodePW        []byte
 	LayerType     gopacket.LayerType
 	defragger     *ip4defrag.IPv4Defragmenter
 	fragCount     int
@@ -41,13 +42,14 @@ type Decoder struct {
 
 type Packet struct {
 	Host          string
-	Node          uint32
+	NodeID        uint32
+	NodePW        []byte
 	Tsec          uint32
 	Tmsec         uint32
 	Vlan          uint16
-	Version       uint8
-	Protocol      uint8
-	ProtoType     uint8
+	Version       byte
+	Protocol      byte
+	ProtoType     byte
 	SrcIP         net.IP
 	DstIP         net.IP
 	SrcPort       uint16
@@ -79,7 +81,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	d := &Decoder{
 		Host:      host,
-		Node:      uint32(config.Cfg.HepNodeID),
+		NodeID:    uint32(config.Cfg.HepNodeID),
+		NodePW:    []byte(config.Cfg.HepNodePW),
 		LayerType: lt,
 		defragger: ip4defrag.NewIPv4Defragmenter(),
 		SIPCache:  cSIP,
@@ -93,10 +96,11 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
 	pkt := &Packet{
-		Host:  d.Host,
-		Node:  d.Node,
-		Tsec:  uint32(ci.Timestamp.Unix()),
-		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
+		Host:   d.Host,
+		NodeID: d.NodeID,
+		NodePW: d.NodePW,
+		Tsec:   uint32(ci.Timestamp.Unix()),
+		Tmsec:  uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
 	if len(data) > 42 {
@@ -142,7 +146,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.Version = ip4.Version
+		pkt.Version = 0x02
 		pkt.Protocol = uint8(ip4.Protocol)
 		pkt.SrcIP = ip4.SrcIP
 		pkt.DstIP = ip4.DstIP
@@ -165,7 +169,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				packet, string(packet.ApplicationLayer().Payload()), string(ip4New.Payload[8:]), ip4New.Length,
 			)
 
-			pkt.Version = ip4New.Version
+			pkt.Version = 0x02
 			pkt.Protocol = uint8(ip4New.Protocol)
 			pkt.SrcIP = ip4New.SrcIP
 			pkt.DstIP = ip4New.DstIP
@@ -185,7 +189,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.Version = ip6.Version
+		pkt.Version = 0x0a
 		pkt.Protocol = uint8(ip6.NextHeader)
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
