@@ -6,19 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/negbie/heplify/decoder"
 )
 
 var (
 	hepVer   = []byte{0x48, 0x45, 0x50, 0x33} // "HEP3"
-	hepLen   = []byte{0, 0}
-	hepLen7  = []byte{0, 7}
-	hepLen8  = []byte{0, 8}
-	hepLen10 = []byte{0, 10}
-	chunck16 = []byte{0, 0}
-	chunck32 = []byte{0, 0, 0, 0}
+	hepLen   = []byte{0x00, 0x00}
+	hepLen7  = []byte{0x00, 0x07}
+	hepLen8  = []byte{0x00, 0x08}
+	hepLen10 = []byte{0x00, 0x0a}
+	chunck16 = []byte{0x00, 0x00}
+	chunck32 = []byte{0x00, 0x00, 0x00, 0x00}
 )
 
 // HEP chuncks
@@ -66,31 +65,12 @@ type HepMsg struct {
 	Vlan              uint16
 }
 
-// hepBuffer pool to reduce GC
-var hepBuffer = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
-// GetBuffer fetches a buffer from the pool
-func GetBuffer() *bytes.Buffer {
-	return hepBuffer.Get().(*bytes.Buffer)
-}
-
-// PutBuffer returns a buffer to the pool
-func PutBuffer(buf *bytes.Buffer) {
-	buf.Reset()
-	hepBuffer.Put(buf)
-}
-
 // EncodeHEP creates the HEP Packet which
 // will be send to wire
 func EncodeHEP(h *decoder.Packet) []byte {
-	buf := GetBuffer()
+	buf := new(bytes.Buffer)
 	hepMsg := makeChuncks(h, buf)
 	binary.BigEndian.PutUint16(hepMsg[4:6], uint16(len(hepMsg)))
-	PutBuffer(buf)
 	return hepMsg
 }
 
@@ -98,117 +78,117 @@ func EncodeHEP(h *decoder.Packet) []byte {
 func makeChuncks(h *decoder.Packet, w *bytes.Buffer) []byte {
 	w.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
-	w.Write([]byte{0, 0})
+	w.Write(hepLen)
 
 	// Chunk IP protocol family (0x02=IPv4, 0x0a=IPv6)
-	w.Write([]byte{0, 0, 0, 1})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x01})
 	w.Write(hepLen7)
 	w.WriteByte(h.Version)
 
 	// Chunk IP protocol ID (0x06=TCP, 0x11=UDP)
-	w.Write([]byte{0, 0, 0, 2})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x02})
 	w.Write(hepLen7)
 	w.WriteByte(h.Protocol)
 
 	if h.Version == 0x02 {
 		// Chunk IPv4 source address
-		w.Write([]byte{0, 0, 0, 3})
+		w.Write([]byte{0x00, 0x00, 0x00, 0x03})
 		binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.SrcIP)))
 		w.Write(hepLen)
 		w.Write(h.SrcIP)
 
 		// Chunk IPv4 destination address
-		w.Write([]byte{0, 0, 0, 4})
+		w.Write([]byte{0x00, 0x00, 0x00, 0x04})
 		binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.DstIP)))
 		w.Write(hepLen)
 		w.Write(h.DstIP)
 	} else if h.Version == 0x0a {
 		// Chunk IPv6 source address
-		w.Write([]byte{0, 0, 0, 5})
+		w.Write([]byte{0x00, 0x00, 0x00, 0x05})
 		binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.SrcIP)))
 		w.Write(hepLen)
 		w.Write(h.SrcIP)
 
 		// Chunk IPv6 destination address
-		w.Write([]byte{0, 0, 0, 6})
+		w.Write([]byte{0x00, 0x00, 0x00, 0x06})
 		binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.DstIP)))
 		w.Write(hepLen)
 		w.Write(h.DstIP)
 	}
 
 	// Chunk protocol source port
-	w.Write([]byte{0, 0, 0, 7})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x07})
 	w.Write(hepLen8)
 	binary.BigEndian.PutUint16(chunck16, h.SrcPort)
 	w.Write(chunck16)
 
 	// Chunk protocol destination port
-	w.Write([]byte{0, 0, 0, 8})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x08})
 	w.Write(hepLen8)
 	binary.BigEndian.PutUint16(chunck16, h.DstPort)
 	w.Write(chunck16)
 
 	// Chunk unix timestamp, seconds
-	w.Write([]byte{0, 0, 0, 9})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x09})
 	w.Write(hepLen10)
 	binary.BigEndian.PutUint32(chunck32, h.Tsec)
 	w.Write(chunck32)
 
 	// Chunk unix timestamp, microseconds offset
-	w.Write([]byte{0, 0, 0, 10})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x0a})
 	w.Write(hepLen10)
 	binary.BigEndian.PutUint32(chunck32, h.Tmsec)
 	w.Write(chunck32)
 
 	// Chunk protocol type (DNS, LOG, RTCP, SIP)
-	w.Write([]byte{0, 0, 0, 11})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x0b})
 	w.Write(hepLen7)
 	w.WriteByte(h.ProtoType)
 
 	// Chunk capture agent ID
-	w.Write([]byte{0, 0, 0, 12})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x0c})
 	w.Write(hepLen10)
 	binary.BigEndian.PutUint32(chunck32, h.NodeID)
 	w.Write(chunck32)
 
 	// Chunk keep alive timer
-	//w.Write([]byte{0, 0, 0, 13})
+	//w.Write([]byte{0x00, 0x00, 0x00, 0x0d})
 
 	// Chunk authenticate key (plain text / TLS connection)
-	w.Write([]byte{0, 0, 0, 14})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x0e})
 	binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.NodePW)))
 	w.Write(hepLen)
 	w.Write(h.NodePW)
 
 	// Chunk captured packet payload
-	w.Write([]byte{0, 0, 0, 15})
+	w.Write([]byte{0x00, 0x00, 0x00, 0x0f})
 	binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.Payload)))
 	w.Write(hepLen)
 	w.Write(h.Payload)
 
 	// Chunk captured compressed payload (gzip/inflate)
-	//w.Write([]byte{0, 0, 0, 16})
+	//w.Write([]byte{0x00,0x00, 0x00,0x10})
 
 	if h.CorrelationID != nil {
 		// Chunk internal correlation id
-		w.Write([]byte{0, 0, 0, 17})
+		w.Write([]byte{0x00, 0x00, 0x00, 0x11})
 		binary.BigEndian.PutUint16(hepLen, 6+uint16(len(h.CorrelationID)))
 		w.Write(hepLen)
 		w.Write(h.CorrelationID)
 	}
+	/*
+		// Chunk VLAN
+		w.Write([]byte{0x00, 0x00, 0x00, 0x12})
+		w.Write(hepLen8)
+		binary.BigEndian.PutUint16(chunck16, h.Vlan)
+		w.Write(chunck16)
 
-	// Chunk VLAN
-	w.Write([]byte{0, 0, 0, 18})
-	w.Write(hepLen8)
-	binary.BigEndian.PutUint16(chunck16, h.Vlan)
-	w.Write(chunck16)
-
-	// Chunk MOS only
-	//w.Write([]byte{0, 0, 0, 32})
-	//w.Write(hepLen8)
-	//binary.BigEndian.PutUint16(chunck16, h.MOS)
-	//w.Write(chunck16)
-
+		// Chunk MOS only
+		w.Write([]byte{0x00, 0x00, 0x00, 0x20})
+		w.Write(hepLen8)
+		binary.BigEndian.PutUint16(chunck16, h.MOS)
+		w.Write(chunck16)
+	*/
 	return w.Bytes()
 }
 
