@@ -205,7 +205,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
+		if bytes.Contains(udp.Payload, []byte("sip")) {
+			pkt.ProtoType = 1
+		}
 		pkt.SrcPort = uint16(udp.SrcPort)
 		pkt.DstPort = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
@@ -254,7 +256,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
+		if bytes.Contains(tcp.Payload, []byte("sip")) {
+			pkt.ProtoType = 1
+		}
 		pkt.SrcPort = uint16(tcp.SrcPort)
 		pkt.DstPort = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
