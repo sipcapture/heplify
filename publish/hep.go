@@ -81,7 +81,7 @@ func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 }
 
 func (ho *HEPOutputer) Output(pkt *decoder.Packet) {
-	ho.hepQueue <- NewHEP(pkt)
+	ho.hepQueue <- EncodeHEP(pkt)
 }
 
 func (ho *HEPOutputer) Send(msg []byte) {

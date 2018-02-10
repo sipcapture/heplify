@@ -96,7 +96,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 	case "SIP":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
 	case "SIPDNS":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (greater 32 and ip and dst port 53)"
+		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 32 and ip and dst port 53)"
 	case "SIPLOG":
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
 	case "SIPRTP":
@@ -106,7 +106,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
-	if sniffer.config.WithVlan && sniffer.config.Device != "any" {
+	if sniffer.config.WithVlan {
 		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
 	}
 

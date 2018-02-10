@@ -17,6 +17,7 @@ type Config struct {
 	Zip         bool
 	HepServer   string
 	HepTLSProxy string
+	HepNodePW   string
 	HepNodeID   uint
 }
 
