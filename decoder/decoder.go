@@ -131,6 +131,20 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("layer", "\n%v", packet)
 
+	if greLayer := packet.Layer(layers.LayerTypeGRE); greLayer != nil {
+		gre, ok := greLayer.(*layers.GRE)
+		if !ok {
+			return nil, nil
+		}
+
+		if config.Cfg.Iface.WithErspan {
+			packet = gopacket.NewPacket(gre.Payload[8:], d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+		} else {
+			packet = gopacket.NewPacket(gre.Payload, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+		}
+		logp.Debug("layer", "\nlayer inside GRE\n%v", packet)
+	}
+
 	if dot1qLayer := packet.Layer(layers.LayerTypeDot1Q); dot1qLayer != nil {
 		dot1q, ok := dot1qLayer.(*layers.Dot1Q)
 		if !ok {
@@ -205,7 +219,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
+		if bytes.Contains(udp.Payload, []byte("sip")) {
+			pkt.ProtoType = 1
+		}
 		pkt.SrcPort = uint16(udp.SrcPort)
 		pkt.DstPort = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
@@ -254,7 +270,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		pkt.ProtoType = 1
+		if bytes.Contains(tcp.Payload, []byte("sip")) {
+			pkt.ProtoType = 1
+		}
 		pkt.SrcPort = uint16(tcp.SrcPort)
 		pkt.DstPort = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
