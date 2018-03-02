@@ -47,10 +47,8 @@ const (
 type HepMsg struct {
 	Version           byte
 	Protocol          byte
-	IP4SrcIP          net.IP
-	IP4DstIP          net.IP
-	IP6SrcIP          net.IP
-	IP6DstIP          net.IP
+	SrcIP             net.IP
+	DstIP             net.IP
 	SrcPort           uint16
 	DstPort           uint16
 	Tsec              uint32
@@ -226,13 +224,13 @@ func (h *HepMsg) parseHep3(packet []byte) error {
 		case Protocol:
 			h.Protocol = chunkBody[0]
 		case IP4SrcIP:
-			h.IP4SrcIP = chunkBody
+			h.SrcIP = chunkBody
 		case IP4DstIP:
-			h.IP4DstIP = chunkBody
+			h.DstIP = chunkBody
 		case IP6SrcIP:
-			h.IP6SrcIP = chunkBody
+			h.SrcIP = chunkBody
 		case IP6DstIP:
-			h.IP6DstIP = chunkBody
+			h.DstIP = chunkBody
 		case SrcPort:
 			h.SrcPort = binary.BigEndian.Uint16(chunkBody)
 		case DstPort:
@@ -268,10 +266,8 @@ func (h *HepMsg) String() {
 	fmt.Printf("Version: \t %d \n", h.Version)
 	fmt.Printf("Protocol: \t %d \n", h.Protocol)
 	fmt.Printf("ProtoType: \t %d \n", h.ProtoType)
-	fmt.Printf("IP4SrcIP: \t %s \n", h.IP4SrcIP.String())
-	fmt.Printf("IP4DstIP: \t %s \n", h.IP4DstIP.String())
-	fmt.Printf("IP6SrcIP: \t %s \n", h.IP6SrcIP.String())
-	fmt.Printf("IP6DstIP: \t %s \n", h.IP6DstIP.String())
+	fmt.Printf("SrcIP: \t\t %s \n", h.SrcIP.String())
+	fmt.Printf("DstIP: \t\t %s \n", h.DstIP.String())
 	fmt.Printf("SrcPort: \t %d \n", h.SrcPort)
 	fmt.Printf("DstPort: \t %d \n", h.DstPort)
 	fmt.Printf("Tsec: \t\t %d \n", h.Tsec)
