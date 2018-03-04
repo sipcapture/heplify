@@ -6,9 +6,9 @@ import (
 	"net"
 	"os"
 
+	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/negbie/freecache"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/logp"
