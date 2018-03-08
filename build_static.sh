@@ -23,4 +23,5 @@ cd /go/src/github.com/negbie/heplify
 rm -f heplify*
 go get -v ./ ./
 go build --ldflags '-linkmode external -extldflags "-static -s -w"' -v ./
+./heplify -rf example/rtp_rtcp_sip.pcap -rs -e
 cp ./heplify /mnt/out/

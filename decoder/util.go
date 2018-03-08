@@ -49,7 +49,6 @@ func (d *Decoder) flushFragments() {
 
 func (p *Packet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Host          string
 		NodeID        uint32
 		NodePW        string
 		Tsec          uint32
@@ -65,7 +64,6 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		CorrelationID string
 		Payload       string
 	}{
-		Host:          p.Host,
 		NodeID:        p.NodeID,
 		NodePW:        string(p.NodePW),
 		Tsec:          p.Tsec,

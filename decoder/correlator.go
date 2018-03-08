@@ -3,7 +3,8 @@ package decoder
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
+	"fmt"
+	"net"
 
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/protos"
@@ -15,13 +16,12 @@ import (
 // the RTP source port. These data will be used for the SDPCache as key:value pairs.
 func (d *Decoder) cacheSDPIPPort(payload []byte) {
 	if posSDPIP, posSDPPort := bytes.Index(payload, []byte("c=IN IP")), bytes.Index(payload, []byte("m=audio ")); posSDPIP > 0 && posSDPPort > 0 {
-		var SDPIP, RTCPPort string
-		var callID []byte
+		var SDPIP, RTCPPort, callID []byte
 
 		restIP := payload[posSDPIP:]
 		// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
-			SDPIP = string(restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))])
+			SDPIP = restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))]
 		} else {
 			logp.Debug("sdpwarn", "No end or fishy SDP IP in '%s'", string(restIP))
 			return
@@ -31,7 +31,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restRTCPPort := payload[posRTCPPort:]
 			// Minimum RTCP port length of "a=rtcp:1000" = 11
 			if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
-				RTCPPort = string(restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))])
+				RTCPPort = restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))]
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
 				return
@@ -40,11 +40,8 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restPort := payload[posSDPPort:]
 			// Minimum RTCP port length of "m=audio 1000" = 12
 			if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 12 {
-				SDPPort, err := strconv.Atoi(string(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]))
-				if err != nil {
-					logp.Warn("%v", err)
-				}
-				RTCPPort = strconv.Itoa(SDPPort + 1)
+				RTCPPort = restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))]
+				RTCPPort[len(RTCPPort)-1] = byte(uint32(RTCPPort[len(RTCPPort)-1]) + 1)
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return
@@ -73,8 +70,9 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			logp.Warn("No Call-ID in '%s'", string(payload))
 			return
 		}
-		logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", SDPIP+RTCPPort, string(callID))
-		err := d.SDPCache.Set([]byte(SDPIP+RTCPPort), callID, 120)
+
+		logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", append(SDPIP, RTCPPort...), string(callID))
+		err := d.SDPCache.Set([]byte(append(SDPIP, RTCPPort...)), callID, 120)
 		if err != nil {
 			logp.Warn("%v", err)
 		}
@@ -114,21 +112,24 @@ func (d *Decoder) cacheCallID(payload []byte) {
 // First it will look inside the longlive RTCPCache with the ssrc as key.
 // If it can't find a value it will look inside the shortlive SDPCache with (SDPIP+RTCPPort) as key.
 // If it finds a value inside the SDPCache it will add it to the RTCPCache with the ssrc as key.
-func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
-	keySDP := []byte(d.FlowSrcIP + d.FlowSrcPort)
+func (d *Decoder) correlateRTCP(srcIP net.IP, srcPort uint16, payload []byte) ([]byte, []byte, byte) {
+	srcIPString := srcIP.String()
+	srcPortString := fmt.Sprintf("%d", srcPort)
+	keySDP := []byte(srcIPString + srcPortString)
+
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcpwarn", "ssrc=%d, srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, %v", keyRTCP, d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, info)
+		logp.Debug("rtcpwarn", "ssrc=%d, srcIP=%s, srcPort=%s, %s", keyRTCP, srcIPString, srcPortString, info)
 		if jsonRTCP == nil {
 			return nil, nil, 0
 		}
 	}
 
 	if corrID, err := d.RTCPCache.Get(keyRTCP); err == nil && keyRTCP != nil {
-		logp.Debug("rtcp", "Found '%d:%s' in RTCPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", keyRTCP, string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+		logp.Debug("rtcp", "Found '%d:%s' in RTCPCache srcIP=%s, srcPort=%s, payload=%s", keyRTCP, string(corrID), srcIPString, srcPortString, string(jsonRTCP))
 		return jsonRTCP, corrID, 5
 	} else if corrID, err := d.SDPCache.Get(keySDP); err == nil {
-		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", string(keySDP), string(corrID), d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, payload=%s", string(keySDP), string(corrID), srcIPString, srcPortString, string(jsonRTCP))
 		err = d.RTCPCache.Set(keyRTCP, corrID, 43200)
 		if err != nil {
 			logp.Warn("%v", err)
@@ -137,7 +138,7 @@ func (d *Decoder) correlateRTCP(payload []byte) ([]byte, []byte, byte) {
 		return jsonRTCP, corrID, 5
 	}
 
-	logp.Debug("rtcpwarn", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s", d.FlowSrcIP, d.FlowSrcPort, d.FlowDstIP, d.FlowDstPort, string(jsonRTCP))
+	logp.Debug("rtcpwarn", "No correlationID for srcIP=%s, srcPort=%s, payload=%s", srcIPString, srcPortString, string(jsonRTCP))
 	return nil, nil, 0
 }
 

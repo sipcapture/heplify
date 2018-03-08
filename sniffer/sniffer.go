@@ -110,7 +110,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
 	}
 	if sniffer.config.WithErspan {
-		sniffer.filter = fmt.Sprintf("%s or proto GRE", sniffer.filter)
+		sniffer.filter = fmt.Sprintf("%s or proto 47", sniffer.filter)
 	}
 
 	logp.Info("Sniffer [type:%s, device:%s, mode:%s] OS [type:%s, arch:%s]",
