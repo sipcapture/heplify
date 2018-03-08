@@ -13,7 +13,7 @@ import (
 
 const version = "heplify 1.0"
 
-func parseFlags() {
+func init() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Use %s like: %s [option]\n", version, os.Args[0])
@@ -72,7 +72,6 @@ func checkCritErr(err error) {
 }
 
 func main() {
-	parseFlags()
 
 	/* 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))

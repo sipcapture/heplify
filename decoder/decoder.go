@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"os"
 
@@ -16,11 +15,18 @@ import (
 )
 
 type Decoder struct {
-	Host          string
-	NodeID        uint32
-	NodePW        []byte
-	LayerType     gopacket.LayerType
-	defragger     *ip4defrag.IPv4Defragmenter
+	Stats
+	Host      string
+	NodeID    uint32
+	NodePW    []byte
+	LayerType gopacket.LayerType
+	defragger *ip4defrag.IPv4Defragmenter
+	SIPCache  *freecache.Cache
+	SDPCache  *freecache.Cache
+	RTCPCache *freecache.Cache
+}
+
+type Stats struct {
 	fragCount     int
 	dupCount      int
 	dnsCount      int
@@ -31,17 +37,9 @@ type Decoder struct {
 	tcpCount      int
 	udpCount      int
 	unknownCount  int
-	FlowSrcIP     string
-	FlowDstIP     string
-	FlowSrcPort   string
-	FlowDstPort   string
-	SIPCache      *freecache.Cache
-	SDPCache      *freecache.Cache
-	RTCPCache     *freecache.Cache
 }
 
 type Packet struct {
-	Host          string
 	NodeID        uint32
 	NodePW        []byte
 	Tsec          uint32
@@ -74,10 +72,10 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		lt = layers.LayerTypeEthernet
 	}
 
-	cSIP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
-	cSDP := freecache.NewCache(20 * 1024 * 1024)  // 20MB
-	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30MB
-	//debug.SetGCPercent(20)
+	cSIP := freecache.NewCache(15 * 1024 * 1024)  // 15 MB
+	cSDP := freecache.NewCache(30 * 1024 * 1024)  // 30 MB
+	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30 MB
+	//debug.SetGCPercent(30)
 
 	d := &Decoder{
 		Host:      host,
@@ -96,7 +94,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error) {
 	pkt := &Packet{
-		Host:   d.Host,
 		NodeID: d.NodeID,
 		NodePW: d.NodePW,
 		Tsec:   uint32(ci.Timestamp.Unix()),
@@ -166,9 +163,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.DstIP = ip4.DstIP
 		d.ip4Count++
 
-		d.FlowSrcIP = ip4.SrcIP.String()
-		d.FlowDstIP = ip4.DstIP.String()
-
 		ip4New, err := d.defragger.DefragIPv4(ip4)
 		if err != nil {
 			logp.Warn("%v", err)
@@ -208,9 +202,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.SrcIP = ip6.SrcIP
 		pkt.DstIP = ip6.DstIP
 		d.ip6Count++
-
-		d.FlowSrcIP = ip6.SrcIP.String()
-		d.FlowDstIP = ip6.DstIP.String()
 	}
 
 	if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
@@ -219,16 +210,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		if bytes.Contains(udp.Payload, []byte("sip")) {
-			pkt.ProtoType = 1
-		}
 		pkt.SrcPort = uint16(udp.SrcPort)
 		pkt.DstPort = uint16(udp.DstPort)
 		pkt.Payload = udp.Payload
 		d.udpCount++
-
-		d.FlowSrcPort = fmt.Sprintf("%d", udp.SrcPort)
-		d.FlowDstPort = fmt.Sprintf("%d", udp.DstPort)
 
 		if config.Cfg.Mode == "SIPLOG" {
 			if udp.DstPort == 514 {
@@ -250,7 +235,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
 				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(udp.Payload)
+					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
 						return pkt, nil
@@ -270,9 +255,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			return nil, nil
 		}
 
-		if bytes.Contains(tcp.Payload, []byte("sip")) {
-			pkt.ProtoType = 1
-		}
 		pkt.SrcPort = uint16(tcp.SrcPort)
 		pkt.DstPort = uint16(tcp.DstPort)
 		pkt.Payload = tcp.Payload
@@ -299,6 +281,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.ProtoType = 53
 		pkt.Payload = protos.ParseDNS(dns)
 		d.dnsCount++
+	}
+
+	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		if bytes.Contains(appLayer.Payload(), []byte("CSeq")) {
+			pkt.ProtoType = 1
+		}
 	}
 
 	if pkt.Payload != nil {
