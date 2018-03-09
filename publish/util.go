@@ -45,35 +45,35 @@ const (
 
 // HepMsg represents a parsed HEP packet
 type HepMsg struct {
+	NodeID            uint32
+	NodePW            []byte
+	Tsec              uint32
+	Tmsec             uint32
+	Vlan              uint16
 	Version           byte
 	Protocol          byte
+	ProtoType         byte
 	SrcIP             net.IP
 	DstIP             net.IP
 	SrcPort           uint16
 	DstPort           uint16
-	Tsec              uint32
-	Tmsec             uint32
-	ProtoType         byte
-	NodeID            uint32
 	KeepAliveTimer    uint16
-	NodePW            []byte
+	CorrelationID     []byte
 	Payload           []byte
 	CompressedPayload []byte
-	CorrelationID     []byte
-	Vlan              uint16
 }
 
 // EncodeHEP creates the HEP Packet which
 // will be send to wire
 func EncodeHEP(h *decoder.Packet) []byte {
-	buf := new(bytes.Buffer)
-	hepMsg := makeChuncks(h, buf)
+	hepMsg := makeChuncks(h)
 	binary.BigEndian.PutUint16(hepMsg[4:6], uint16(len(hepMsg)))
 	return hepMsg
 }
 
 // makeChuncks will construct the respective HEP chunck
-func makeChuncks(h *decoder.Packet, w *bytes.Buffer) []byte {
+func makeChuncks(h *decoder.Packet) []byte {
+	w := new(bytes.Buffer)
 	w.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	w.Write(hepLen)
@@ -278,5 +278,5 @@ func (h *HepMsg) String() {
 	fmt.Printf("KeepAliveTimer:  %d \n", h.KeepAliveTimer)
 	fmt.Printf("CorrelationID:   %s \n", string(h.CorrelationID))
 	fmt.Printf("Payload: \n%s\n", string(h.Payload))
-	//fmt.Printf("CompressedPayload: \t %s \n", string(h.CompressedPayload))
+	fmt.Printf("CompressedPayload: \t %s \n", string(h.CompressedPayload))
 }
