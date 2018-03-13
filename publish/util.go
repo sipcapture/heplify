@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/negbie/heplify/decoder"
 )
@@ -71,9 +72,14 @@ func EncodeHEP(h *decoder.Packet) []byte {
 	return hepMsg
 }
 
+var w bytes.Buffer
+var m sync.Mutex
+
 // makeChuncks will construct the respective HEP chunck
 func makeChuncks(h *decoder.Packet) []byte {
-	w := new(bytes.Buffer)
+	m.Lock()
+	defer m.Unlock()
+	w.Reset()
 	w.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	w.Write(hepLen)
@@ -202,13 +208,16 @@ func DecodeHEP(packet []byte) (*HepMsg, error) {
 
 func (h *HepMsg) parse(packet []byte) error {
 	if packet[0] == 0x48 && packet[3] == 0x33 {
-		return h.parseHep3(packet)
+		return h.parseHep(packet)
 	}
 	return errors.New("Not a valid HEP3 packet")
 }
 
-func (h *HepMsg) parseHep3(packet []byte) error {
+func (h *HepMsg) parseHep(packet []byte) error {
 	length := binary.BigEndian.Uint16(packet[4:6])
+	if int(length) != len(packet) {
+		return fmt.Errorf("HEP packet length is %d but should be %d", len(packet), length)
+	}
 	currentByte := uint16(6)
 
 	for currentByte < length {
@@ -216,6 +225,9 @@ func (h *HepMsg) parseHep3(packet []byte) error {
 		//chunkVendorId := binary.BigEndian.Uint16(hepChunk[:2])
 		chunkType := binary.BigEndian.Uint16(hepChunk[2:4])
 		chunkLength := binary.BigEndian.Uint16(hepChunk[4:6])
+		if len(hepChunk) < int(chunkLength) {
+			return fmt.Errorf("HEP chunk overflow %d > %d", chunkLength, len(hepChunk))
+		}
 		chunkBody := hepChunk[6:chunkLength]
 
 		switch chunkType {
@@ -277,6 +289,6 @@ func (h *HepMsg) String() {
 	fmt.Printf("NodePW: \t %s \n", string(h.NodePW))
 	fmt.Printf("KeepAliveTimer:  %d \n", h.KeepAliveTimer)
 	fmt.Printf("CorrelationID:   %s \n", string(h.CorrelationID))
-	fmt.Printf("Payload: \n%s\n", string(h.Payload))
 	fmt.Printf("CompressedPayload: \t %s \n", string(h.CompressedPayload))
+	fmt.Printf("Payload: \n%s\n", string(h.Payload))
 }

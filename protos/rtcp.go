@@ -173,7 +173,7 @@ type RTCP_report_block_xr struct {
 	Burst_density    uint8  `json:"burst_density"`
 	Gap_density      uint8  `json:"gap_density"`
 	Burst_duration   uint16 `json:"burst_duration"`
-	Gap_Duration     uint16 `json:"gap_Duration"`
+	Gap_duration     uint16 `json:"gap_duration"`
 	Round_trip_delay uint16 `json:"round_trip_delay"`
 	End_system_delay uint16 `json:"end_system_delay"`
 }
@@ -319,7 +319,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 				pkt.ReportBlocksXr.Burst_density = data[offset+14]
 				pkt.ReportBlocksXr.Gap_density = data[offset+15]
 				pkt.ReportBlocksXr.Burst_duration = binary.BigEndian.Uint16(data[offset+16:])
-				pkt.ReportBlocksXr.Gap_Duration = binary.BigEndian.Uint16(data[offset+18:])
+				pkt.ReportBlocksXr.Gap_duration = binary.BigEndian.Uint16(data[offset+18:])
 				pkt.ReportBlocksXr.Round_trip_delay = binary.BigEndian.Uint16(data[offset+20:])
 				pkt.ReportBlocksXr.End_system_delay = binary.BigEndian.Uint16(data[offset+22:])
 			}
