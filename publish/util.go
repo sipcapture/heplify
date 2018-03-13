@@ -45,35 +45,35 @@ const (
 
 // HepMsg represents a parsed HEP packet
 type HepMsg struct {
+	NodeID            uint32
+	NodePW            []byte
+	Tsec              uint32
+	Tmsec             uint32
+	Vlan              uint16
 	Version           byte
 	Protocol          byte
+	ProtoType         byte
 	SrcIP             net.IP
 	DstIP             net.IP
 	SrcPort           uint16
 	DstPort           uint16
-	Tsec              uint32
-	Tmsec             uint32
-	ProtoType         byte
-	NodeID            uint32
 	KeepAliveTimer    uint16
-	NodePW            []byte
+	CorrelationID     []byte
 	Payload           []byte
 	CompressedPayload []byte
-	CorrelationID     []byte
-	Vlan              uint16
 }
 
 // EncodeHEP creates the HEP Packet which
 // will be send to wire
 func EncodeHEP(h *decoder.Packet) []byte {
-	buf := new(bytes.Buffer)
-	hepMsg := makeChuncks(h, buf)
+	hepMsg := makeChuncks(h)
 	binary.BigEndian.PutUint16(hepMsg[4:6], uint16(len(hepMsg)))
 	return hepMsg
 }
 
 // makeChuncks will construct the respective HEP chunck
-func makeChuncks(h *decoder.Packet, w *bytes.Buffer) []byte {
+func makeChuncks(h *decoder.Packet) []byte {
+	w := new(bytes.Buffer)
 	w.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	w.Write(hepLen)
@@ -202,13 +202,16 @@ func DecodeHEP(packet []byte) (*HepMsg, error) {
 
 func (h *HepMsg) parse(packet []byte) error {
 	if packet[0] == 0x48 && packet[3] == 0x33 {
-		return h.parseHep3(packet)
+		return h.parseHep(packet)
 	}
 	return errors.New("Not a valid HEP3 packet")
 }
 
-func (h *HepMsg) parseHep3(packet []byte) error {
+func (h *HepMsg) parseHep(packet []byte) error {
 	length := binary.BigEndian.Uint16(packet[4:6])
+	if int(length) != len(packet) {
+		return fmt.Errorf("HEP packet length is %d but should be %d", len(packet), length)
+	}
 	currentByte := uint16(6)
 
 	for currentByte < length {
@@ -216,6 +219,9 @@ func (h *HepMsg) parseHep3(packet []byte) error {
 		//chunkVendorId := binary.BigEndian.Uint16(hepChunk[:2])
 		chunkType := binary.BigEndian.Uint16(hepChunk[2:4])
 		chunkLength := binary.BigEndian.Uint16(hepChunk[4:6])
+		if len(hepChunk) < int(chunkLength) {
+			return fmt.Errorf("HEP chunk overflow %d > %d", chunkLength, len(hepChunk))
+		}
 		chunkBody := hepChunk[6:chunkLength]
 
 		switch chunkType {
@@ -277,6 +283,6 @@ func (h *HepMsg) String() {
 	fmt.Printf("NodePW: \t %s \n", string(h.NodePW))
 	fmt.Printf("KeepAliveTimer:  %d \n", h.KeepAliveTimer)
 	fmt.Printf("CorrelationID:   %s \n", string(h.CorrelationID))
+	fmt.Printf("CompressedPayload: \t %s \n", string(h.CompressedPayload))
 	fmt.Printf("Payload: \n%s\n", string(h.Payload))
-	//fmt.Printf("CompressedPayload: \t %s \n", string(h.CompressedPayload))
 }

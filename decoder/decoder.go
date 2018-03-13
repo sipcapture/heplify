@@ -122,7 +122,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				return nil, nil
 			}
 		}
-		logp.Debug("payload", "\n%v", string(data[42:]))
 	}
 
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
@@ -163,7 +162,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.DstIP = ip4.DstIP
 		d.ip4Count++
 
-		ip4New, err := d.defragger.DefragIPv4(ip4)
+		ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
 		if err != nil {
 			logp.Warn("%v", err)
 			return nil, nil
@@ -284,6 +283,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 	}
 
 	if appLayer := packet.ApplicationLayer(); appLayer != nil {
+		logp.Debug("payload", "\n%s", string(appLayer.Payload()))
 		if bytes.Contains(appLayer.Payload(), []byte("CSeq")) {
 			pkt.ProtoType = 1
 		}
