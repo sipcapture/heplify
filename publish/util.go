@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/negbie/heplify/decoder"
 )
@@ -72,14 +71,9 @@ func EncodeHEP(h *decoder.Packet) []byte {
 	return hepMsg
 }
 
-var w bytes.Buffer
-var m sync.Mutex
-
 // makeChuncks will construct the respective HEP chunck
 func makeChuncks(h *decoder.Packet) []byte {
-	m.Lock()
-	defer m.Unlock()
-	w.Reset()
+	w := new(bytes.Buffer)
 	w.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	w.Write(hepLen)
