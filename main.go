@@ -49,9 +49,9 @@ func init() {
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
-	flag.StringVar(&config.Cfg.HepTLSProxy, "hx", "", "HEP TLS proxy address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "myhep", "HepNodePW")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HepNodeID")
+	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig

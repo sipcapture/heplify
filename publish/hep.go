@@ -3,6 +3,7 @@ package publish
 import (
 	"bufio"
 	"crypto/tls"
+	"fmt"
 	"net"
 
 	"github.com/negbie/heplify/config"
@@ -68,14 +69,20 @@ func (ho *HEPOutputer) ReConnect() error {
 }
 
 func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
-	if config.Cfg.HepTLSProxy == "" {
+	if config.Cfg.Network == "udp" {
 		if ho.conn, err = net.Dial("udp", addr); err != nil {
 			return nil, err
 		}
-	} else {
+	} else if config.Cfg.Network == "tcp" {
+		if ho.conn, err = net.Dial("tcp", addr); err != nil {
+			return nil, err
+		}
+	} else if config.Cfg.Network == "tls" {
 		if ho.conn, err = tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true}); err != nil {
 			return nil, err
 		}
+	} else {
+		return nil, fmt.Errorf("Not supported network type %s", config.Cfg.Network)
 	}
 	return ho.conn, nil
 }
