@@ -286,6 +286,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		logp.Debug("payload", "\n%s", string(appLayer.Payload()))
 		if bytes.Contains(appLayer.Payload(), []byte("CSeq")) {
 			pkt.ProtoType = 1
+		} else if bytes.Contains(appLayer.Payload(), []byte("Cseq")) {
+			pkt.ProtoType = 1
 		}
 	}
 
