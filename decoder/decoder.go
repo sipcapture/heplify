@@ -122,6 +122,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 				return nil, nil
 			}
 		}
+		logp.Debug("payload", "\n%s", string(data[42:]))
 	}
 
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
@@ -282,13 +283,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.dnsCount++
 	}
 
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		logp.Debug("payload", "\n%s", string(appLayer.Payload()))
-		if bytes.Contains(appLayer.Payload(), []byte("CSeq")) {
-			pkt.ProtoType = 1
-		} else if bytes.Contains(appLayer.Payload(), []byte("Cseq")) {
-			pkt.ProtoType = 1
-		}
+	if bytes.Contains(pkt.Payload, []byte("CSeq")) {
+		pkt.ProtoType = 1
+	} else if bytes.Contains(pkt.Payload, []byte("Cseq")) {
+		pkt.ProtoType = 1
 	}
 
 	if pkt.Payload != nil {
