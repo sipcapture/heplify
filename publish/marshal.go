@@ -70,20 +70,20 @@ func EncodeHEP(h *decoder.Packet) []byte {
 	var err error
 	if config.Cfg.Protobuf {
 		hep := &HEP{
-			Version:   *proto.Uint32(uint32(h.Version)),
-			Protocol:  *proto.Uint32(uint32(h.Protocol)),
-			SrcIP:     *proto.String(h.SrcIP.String()),
-			DstIP:     *proto.String(h.DstIP.String()),
-			SrcPort:   *proto.Uint32(uint32(h.SrcPort)),
-			DstPort:   *proto.Uint32(uint32(h.DstPort)),
-			Tsec:      *proto.Uint32(h.Tsec),
-			Tmsec:     *proto.Uint32(h.Tmsec),
-			ProtoType: *proto.Uint32(uint32(h.ProtoType)),
-			NodeID:    *proto.Uint32(h.NodeID),
-			NodePW:    *proto.String(string(h.NodePW)),
-			Payload:   *proto.String(string(h.Payload)),
-			CID:       *proto.String(string(h.CID)),
-			Vlan:      *proto.Uint32(uint32(h.Vlan)),
+			Version:   uint32(h.Version),
+			Protocol:  uint32(h.Protocol),
+			SrcIP:     h.SrcIP.String(),
+			DstIP:     h.DstIP.String(),
+			SrcPort:   uint32(h.SrcPort),
+			DstPort:   uint32(h.DstPort),
+			Tsec:      h.Tsec,
+			Tmsec:     h.Tmsec,
+			ProtoType: uint32(h.ProtoType),
+			NodeID:    h.NodeID,
+			NodePW:    string(h.NodePW),
+			Payload:   string(h.Payload),
+			CID:       string(h.CID),
+			Vlan:      uint32(h.Vlan),
 		}
 		hepMsg, err = proto.Marshal(hep)
 		if err != nil {
