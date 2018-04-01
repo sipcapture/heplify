@@ -25,17 +25,25 @@ func fastHash(s []byte) (h uint64) {
 	return
 }
 
-func IP2int(ip net.IP) uint32 {
+func ipToint(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
 	}
 	return binary.BigEndian.Uint32(ip)
 }
 
-func Int2IP(nn uint32) net.IP {
+func intToIP(nn uint32) net.IP {
 	ip := make(net.IP, 4)
 	binary.BigEndian.PutUint32(ip, nn)
 	return ip
+}
+
+func isPrivIP(IP net.IP) (p bool) {
+	_, classA, _ := net.ParseCIDR("10.0.0.0/8")
+	_, classB, _ := net.ParseCIDR("172.16.0.0/12")
+	_, classC, _ := net.ParseCIDR("192.168.0.0/16")
+	p = classA.Contains(IP) || classB.Contains(IP) || classC.Contains(IP)
+	return p
 }
 
 func (d *Decoder) flushFragments() {
@@ -49,35 +57,35 @@ func (d *Decoder) flushFragments() {
 
 func (p *Packet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		NodeID        uint32
-		NodePW        string
-		Tsec          uint32
-		Tmsec         uint32
-		Vlan          uint16
-		Version       uint8
-		Protocol      uint8
-		ProtoType     uint8
-		SrcIP         net.IP
-		DstIP         net.IP
-		SrcPort       uint16
-		DstPort       uint16
-		CorrelationID string
-		Payload       string
+		Version   byte
+		Protocol  byte
+		SrcIP     net.IP
+		DstIP     net.IP
+		SrcPort   uint16
+		DstPort   uint16
+		Tsec      uint32
+		Tmsec     uint32
+		ProtoType byte
+		NodeID    uint32
+		NodePW    string
+		Payload   string
+		CID       string
+		Vlan      uint16
 	}{
-		NodeID:        p.NodeID,
-		NodePW:        string(p.NodePW),
-		Tsec:          p.Tsec,
-		Tmsec:         p.Tmsec,
-		Vlan:          p.Vlan,
-		Version:       p.Version,
-		Protocol:      p.Protocol,
-		ProtoType:     p.ProtoType,
-		SrcIP:         p.SrcIP,
-		DstIP:         p.DstIP,
-		SrcPort:       p.SrcPort,
-		DstPort:       p.DstPort,
-		CorrelationID: string(p.CorrelationID),
-		Payload:       string(p.Payload),
+		Version:   p.Version,
+		Protocol:  p.Protocol,
+		SrcIP:     p.SrcIP,
+		DstIP:     p.DstIP,
+		SrcPort:   p.SrcPort,
+		DstPort:   p.DstPort,
+		Tsec:      p.Tsec,
+		Tmsec:     p.Tmsec,
+		ProtoType: p.ProtoType,
+		NodeID:    p.NodeID,
+		NodePW:    string(p.NodePW),
+		Payload:   string(p.Payload),
+		CID:       string(p.CID),
+		Vlan:      p.Vlan,
 	})
 }
 

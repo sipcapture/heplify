@@ -52,6 +52,7 @@ func init() {
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "myhep", "HepNodePW")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HepNodeID")
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
+	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig

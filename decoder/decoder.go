@@ -40,20 +40,20 @@ type Stats struct {
 }
 
 type Packet struct {
-	NodeID        uint32
-	NodePW        []byte
-	Tsec          uint32
-	Tmsec         uint32
-	Vlan          uint16
-	Version       byte
-	Protocol      byte
-	ProtoType     byte
-	SrcIP         net.IP
-	DstIP         net.IP
-	SrcPort       uint16
-	DstPort       uint16
-	CorrelationID []byte
-	Payload       []byte
+	Version   byte
+	Protocol  byte
+	SrcIP     net.IP
+	DstIP     net.IP
+	SrcPort   uint16
+	DstPort   uint16
+	Tsec      uint32
+	Tmsec     uint32
+	ProtoType byte
+	NodeID    uint32
+	NodePW    []byte
+	Payload   []byte
+	CID       []byte
+	Vlan      uint16
 }
 
 func NewDecoder(datalink layers.LinkType) *Decoder {
@@ -218,13 +218,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if config.Cfg.Mode == "SIPLOG" {
 			if udp.DstPort == 514 {
 				//d.cacheCallID(udp.Payload)
-				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(udp.Payload)
+				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(udp.Payload)
 				if pkt.Payload != nil {
 					return pkt, nil
 				}
 				return nil, nil
 			} else if udp.SrcPort == 2223 || udp.DstPort == 2223 {
-				pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateNG(udp.Payload)
+				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateNG(udp.Payload)
 				if pkt.Payload != nil {
 					return pkt, nil
 				}
@@ -235,7 +235,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			d.cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
 				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-					pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
+					pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
 						return pkt, nil
@@ -261,7 +261,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		d.tcpCount++
 
 		if config.Cfg.Mode == "SIPLOG" && tcp.DstPort == 514 {
-			pkt.Payload, pkt.CorrelationID, pkt.ProtoType = d.correlateLOG(tcp.Payload)
+			pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(tcp.Payload)
 			if pkt.Payload != nil {
 				return pkt, nil
 			}

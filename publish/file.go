@@ -17,10 +17,11 @@ func (fo *FileOutputer) Output(pkt *decoder.Packet) {
 		   logp.Info("%s", jsonPkt)
 	*/
 	h, err := DecodeHEP(EncodeHEP(pkt))
-	if err != nil {
-		logp.Info("%s", err)
+	if err == nil {
+		logp.Info(h.String())
+	} else {
+		logp.Warn("%s", err)
 	}
-	h.String()
 }
 
 func NewFileOutputer() (*FileOutputer, error) {
