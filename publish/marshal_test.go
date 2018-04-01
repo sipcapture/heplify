@@ -29,20 +29,20 @@ func TestEncodeDecodeHEP(t *testing.T) {
 			t.Error(err)
 		}
 
-		assert.Equal(t, pktIn.NodeID, pktOut.NodeID)
-		assert.Equal(t, pktIn.NodePW, pktOut.NodePW)
-		assert.Equal(t, pktIn.Tsec, pktOut.Tsec)
-		assert.Equal(t, pktIn.Tmsec, pktOut.Tmsec)
-		assert.Equal(t, pktIn.Vlan, pktOut.Vlan)
 		assert.Equal(t, pktIn.Version, pktOut.Version)
 		assert.Equal(t, pktIn.Protocol, pktOut.Protocol)
-		assert.Equal(t, pktIn.ProtoType, pktOut.ProtoType)
 		assert.Equal(t, pktIn.SrcIP, pktOut.SrcIP)
 		assert.Equal(t, pktIn.DstIP, pktOut.DstIP)
 		assert.Equal(t, pktIn.SrcPort, pktOut.SrcPort)
 		assert.Equal(t, pktIn.DstPort, pktOut.DstPort)
-		assert.Equal(t, pktIn.CorrelationID, pktOut.CorrelationID)
+		assert.Equal(t, pktIn.Tsec, pktOut.Tsec)
+		assert.Equal(t, pktIn.Tmsec, pktOut.Tmsec)
+		assert.Equal(t, pktIn.ProtoType, pktOut.ProtoType)
+		assert.Equal(t, pktIn.NodeID, pktOut.NodeID)
+		assert.Equal(t, pktIn.NodePW, pktOut.NodePW)
 		assert.Equal(t, pktIn.Payload, pktOut.Payload)
+		assert.Equal(t, pktIn.CID, pktOut.CID)
+		assert.Equal(t, pktIn.Vlan, pktOut.Vlan)
 	}
 }
 

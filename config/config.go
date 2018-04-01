@@ -19,6 +19,7 @@ type Config struct {
 	HepNodePW string
 	HepNodeID uint
 	Network   string
+	Protobuf  bool
 }
 
 type InterfacesConfig struct {
