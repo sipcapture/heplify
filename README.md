@@ -15,6 +15,7 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 ### Usage
 ```bash
   -i    Listen on interface (default "any")
+  -nt   Network types are [udp, tcp, tls] (default "udp")
   -t    Capture types are [pcap, af_packet] (default "pcap")
   -m    Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP] (default "SIPRTCP")
   -pr   Portrange to capture SIP (default "5060-5090")
@@ -33,6 +34,9 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 ```bash
 # Capture SIP and RTCP packets on any interface and send them to 127.0.0.1:9060
 ./heplify
+
+# Capture SIP and RTCP packets on any interface and send them via TLS to 192.168.1.1:9060
+./heplify -hs 192.168.1.1:9060 -nt tls
 
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print info to stdout
 ./heplify -hs 192.168.1.1:9060 -e
