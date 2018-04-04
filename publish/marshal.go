@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	strings "strings"
+	"unsafe"
 
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/negbie/heplify/config"
@@ -80,9 +81,9 @@ func EncodeHEP(h *decoder.Packet) []byte {
 			Tmsec:     h.Tmsec,
 			ProtoType: uint32(h.ProtoType),
 			NodeID:    h.NodeID,
-			NodePW:    string(h.NodePW),
-			Payload:   string(h.Payload),
-			CID:       string(h.CID),
+			NodePW:    unsafeBytesToStr(h.NodePW),
+			Payload:   unsafeBytesToStr(h.Payload),
+			CID:       unsafeBytesToStr(h.CID),
 			Vlan:      uint32(h.Vlan),
 		}
 		hepMsg, err = proto.Marshal(hep)
@@ -310,4 +311,8 @@ func (h *HepMsg) String() string {
 		`}`,
 	}, "")
 	return s
+}
+
+func unsafeBytesToStr(z []byte) string {
+	return *(*string)(unsafe.Pointer(&z))
 }
