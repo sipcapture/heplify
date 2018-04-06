@@ -3,6 +3,7 @@ package publish
 import (
 	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
+	"github.com/valyala/bytebufferpool"
 )
 
 type FileOutputer struct {
@@ -16,7 +17,9 @@ func (fo *FileOutputer) Output(pkt *decoder.Packet) {
 	   	}
 		   logp.Info("%s", jsonPkt)
 	*/
-	h, err := DecodeHEP(EncodeHEP(pkt))
+	bb := bytebufferpool.Get()
+	defer bytebufferpool.Put(bb)
+	h, err := DecodeHEP(EncodeHEP(bb, pkt))
 	if err == nil {
 		logp.Info(h.String())
 	} else {
