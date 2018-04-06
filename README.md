@@ -13,10 +13,10 @@ Linux: Download [heplify](https://github.com/sipcapture/heplify/releases) and ex
 Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)  
 
 ### Benchmark
-BenchmarkHEPProtoMarshal-4       5000000               332 ns/op             325 B/op          1 allocs/op
-BenchmarkHEPProtoUnmarshal-4     3000000               500 ns/op             281 B/op          4 allocs/op
-BenchmarkEncodeHEP-4             5000000               219 ns/op               8 B/op          0 allocs/op
-BenchmarkDecodeHEP-4            10000000               129 ns/op             160 B/op          1 allocs/op
+BenchmarkHEPProtoMarshal-4       5000000               332 ns/op             325 B/op          1 allocs/op  
+BenchmarkHEPProtoUnmarshal-4     3000000               500 ns/op             281 B/op          4 allocs/op  
+BenchmarkEncodeHEP-4             5000000               219 ns/op               8 B/op          0 allocs/op  
+BenchmarkDecodeHEP-4            10000000               129 ns/op             160 B/op          1 allocs/op  
 
 ### Usage
 ```bash
