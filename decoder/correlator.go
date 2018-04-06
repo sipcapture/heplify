@@ -3,8 +3,8 @@ package decoder
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net"
+	"strconv"
 
 	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/protos"
@@ -22,7 +22,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 		restIP := payload[posSDPIP:]
 		// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 		if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
-			ipPort.Write(restIP[len("c=IN IP")+2 : bytes.Index(restIP, []byte("\r\n"))])
+			ipPort.Write(restIP[len("c=IN IP")+2 : posRestIP])
 		} else {
 			logp.Debug("sdpwarn", "No end or fishy SDP IP in '%s'", string(restIP))
 			return
@@ -32,7 +32,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restRTCPPort := payload[posRTCPPort:]
 			// Minimum RTCP port length of "a=rtcp:1000" = 11
 			if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
-				ipPort.Write(restRTCPPort[len("a=rtcp:"):bytes.Index(restRTCPPort, []byte("\r\n"))])
+				ipPort.Write(restRTCPPort[len("a=rtcp:"):posRestRTCPPort])
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy SDP RTCP Port in '%s'", string(restRTCPPort))
 				return
@@ -41,9 +41,9 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restPort := payload[posSDPPort:]
 			// Minimum RTCP port length of "m=audio 1000" = 12
 			if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 12 {
-				ipPort.Write(restPort[len("m=audio "):bytes.Index(restPort, []byte(" RTP"))])
-				end := len(ipPort.Bytes()) - 1
-				ipPort.Bytes()[end] = byte(uint32(ipPort.Bytes()[end]) + 1)
+				ipPort.Write(restPort[len("m=audio "):posRestPort])
+				portEnd := len(ipPort.Bytes()) - 1
+				ipPort.Bytes()[portEnd] = byte(uint32(ipPort.Bytes()[portEnd]) + 1)
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return
@@ -54,7 +54,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restCallID := payload[posCallID:]
 			// Minimum Call-ID length of "Call-ID: a" = 10
 			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
-				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
+				callID = restCallID[len("Call-ID: "):posRestCallID]
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
 				return
@@ -63,7 +63,7 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			restID := payload[posID:]
 			// Minimum Call-ID length of "i: a" = 4
 			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
-				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
+				callID = restID[len("i: "):posRestID]
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restID))
 				return
@@ -88,7 +88,7 @@ func (d *Decoder) cacheCallID(payload []byte) {
 			restCallID := payload[posCallID:]
 			// Minimum Call-ID length of "Call-ID: a" = 10
 			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
-				callID = restCallID[len("Call-ID: "):bytes.Index(restCallID, []byte("\r\n"))]
+				callID = restCallID[len("Call-ID: "):posRestCallID]
 			} else {
 				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
 				return
@@ -97,7 +97,7 @@ func (d *Decoder) cacheCallID(payload []byte) {
 			restID := payload[posID:]
 			// Minimum Call-ID length of "i: a" = 4
 			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
-				callID = restID[len("i: "):bytes.Index(restID, []byte("\r\n"))]
+				callID = restID[len("i: "):posRestID]
 			} else {
 				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restID))
 				return
@@ -116,7 +116,7 @@ func (d *Decoder) cacheCallID(payload []byte) {
 // If it finds a value inside the SDPCache it will add it to the RTCPCache with the ssrc as key.
 func (d *Decoder) correlateRTCP(srcIP net.IP, srcPort uint16, payload []byte) ([]byte, []byte, byte) {
 	srcIPString := srcIP.String()
-	srcPortString := fmt.Sprintf("%d", srcPort)
+	srcPortString := strconv.Itoa(int(srcPort))
 	keySDP := []byte(srcIPString + srcPortString)
 
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
