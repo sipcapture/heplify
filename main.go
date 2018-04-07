@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/logp"
@@ -21,6 +22,7 @@ func init() {
 	}
 
 	var (
+		err         error
 		ifaceConfig config.InterfacesConfig
 		logging     logp.Logging
 		fileRotator logp.FileRotator
@@ -46,8 +48,8 @@ func init() {
 	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for the next 2 minutes and exit")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
-	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets")
+	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "myhep", "HepNodePW")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HepNodeID")
@@ -61,6 +63,16 @@ func init() {
 
 	if config.Cfg.HepNodeID > 0xFFFFFFFE {
 		config.Cfg.HepNodeID = 0xFFFFFFFE
+	}
+	config.Cfg.Discard, err = strconv.Unquote(`"` + config.Cfg.Discard + `"`)
+	checkErr(err)
+	config.Cfg.Filter, err = strconv.Unquote(`"` + config.Cfg.Filter + `"`)
+	checkErr(err)
+}
+
+func checkErr(err error) {
+	if err != nil {
+		fmt.Printf("\nError: %v\n\n", err)
 	}
 }
 

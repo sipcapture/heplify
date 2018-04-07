@@ -17,6 +17,7 @@ type HEPOutputer struct {
 	conn     net.Conn
 	writer   *bufio.Writer
 	hepQueue chan *decoder.Packet
+	errCnt   int
 }
 
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
@@ -55,17 +56,12 @@ func (ho *HEPOutputer) ReConnect() error {
 	var err error
 	if ho.conn != nil {
 		ho.Close()
-		logp.Info("close old connection")
+		logp.Info("close old connection and try to reconnect")
 	}
-
-	logp.Info("reconnect server")
 	if ho.conn, err = ho.ConnectServer(ho.addr); err != nil {
 		return err
 	}
-
-	logp.Info("reconnect successfull")
 	ho.writer.Reset(ho.conn)
-
 	return nil
 }
 
@@ -94,22 +90,17 @@ func (ho *HEPOutputer) Output(pkt *decoder.Packet) {
 
 func (ho *HEPOutputer) Send(msg []byte) {
 	_, err := ho.writer.Write(msg)
-
+	err = ho.writer.Flush()
 	if err != nil {
-		logp.Err("write error: %v", err)
-
-		if err = ho.ReConnect(); err != nil {
-			logp.Err("reconnect error: %v", err)
-			return
+		ho.errCnt++
+		if ho.errCnt%64 == 0 {
+			ho.errCnt = 0
+			logp.Err("%v", err)
+			if err = ho.ReConnect(); err != nil {
+				logp.Err("reconnect error: %v", err)
+				return
+			}
 		}
-
-		if _, err = ho.writer.Write(msg); err != nil {
-			logp.Err("rewrite error: %v", err)
-		}
-	}
-
-	if err = ho.writer.Flush(); err != nil {
-		logp.Err("flush error: %v", err)
 	}
 }
 
