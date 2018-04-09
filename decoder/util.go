@@ -25,6 +25,10 @@ func fastHash(s []byte) (h uint64) {
 	return
 }
 
+func cloneBytes(b []byte) []byte {
+	return append([]byte{}, b...)
+}
+
 func ipToint(ip net.IP) uint32 {
 	if len(ip) == 16 {
 		return binary.BigEndian.Uint32(ip[12:16])
