@@ -7,23 +7,21 @@ import (
 	"net"
 
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
-	"github.com/valyala/bytebufferpool"
 )
 
 type HEPOutputer struct {
 	addr     string
 	conn     net.Conn
 	writer   *bufio.Writer
-	hepQueue chan *decoder.Packet
+	hepQueue chan []byte
 	errCnt   int
 }
 
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 	ho := &HEPOutputer{
 		addr:     serverAddr,
-		hepQueue: make(chan *decoder.Packet),
+		hepQueue: make(chan []byte, 20000),
 	}
 
 	if err := ho.Init(); err != nil {
@@ -84,8 +82,8 @@ func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 	return ho.conn, nil
 }
 
-func (ho *HEPOutputer) Output(pkt *decoder.Packet) {
-	ho.hepQueue <- pkt
+func (ho *HEPOutputer) Output(msg []byte) {
+	ho.hepQueue <- msg
 }
 
 func (ho *HEPOutputer) Send(msg []byte) {
@@ -107,11 +105,8 @@ func (ho *HEPOutputer) Send(msg []byte) {
 func (ho *HEPOutputer) Start() {
 	for {
 		select {
-		case pkt := <-ho.hepQueue:
-			bb := bytebufferpool.Get()
-			msg := EncodeHEP(bb, pkt)
+		case msg := <-ho.hepQueue:
 			ho.Send(msg)
-			bytebufferpool.Put(bb)
 		}
 	}
 }

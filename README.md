@@ -59,7 +59,7 @@ BenchmarkDecodeHEP-4            10000000               129 ns/op             160
 # Read example/rtp_rtcp_sip.pcap and send SIP and correlated RTCP packets to 192.168.1.1:9060
 ./heplify -rf example/rtp_rtcp_sip.pcap -hs 192.168.1.1:9060
 
-# Capture and send packets except REGISTER to 192.168.1.1:9060. Whitespace is needed as we look at the CSeq
-./heplify -hs 192.168.1.1:9060 -di " REGISTER\r\n"
+# Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060.
+./heplify -hs 192.168.1.1:9060 -dim "OPTIONS,NOTIFY"
 
 ```

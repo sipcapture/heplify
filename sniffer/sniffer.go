@@ -196,7 +196,7 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	}
 
 	if sniffer.config.WriteFile != "" {
-		sniffer.dumpChan = make(chan DumpPacket, 100000)
+		sniffer.dumpChan = make(chan DumpPacket, 20000)
 		go sniffer.dumpPcap()
 	}
 

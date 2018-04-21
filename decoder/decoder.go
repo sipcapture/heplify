@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
@@ -19,6 +20,8 @@ type Decoder struct {
 	Host      string
 	NodeID    uint32
 	NodePW    []byte
+	CSeq      []byte
+	Filter    []string
 	LayerType gopacket.LayerType
 	defragger *ip4defrag.IPv4Defragmenter
 	SIPCache  *freecache.Cache
@@ -77,6 +80,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30 MB
 	//debug.SetGCPercent(30)
 
+	cFilter := strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+
 	d := &Decoder{
 		Host:      host,
 		NodeID:    uint32(config.Cfg.HepNodeID),
@@ -86,6 +91,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		SIPCache:  cSIP,
 		SDPCache:  cSDP,
 		RTCPCache: cRTCP,
+		Filter:    cFilter,
 	}
 	go d.flushFragments()
 	go d.printStats()
@@ -123,6 +129,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 			}
 		}
 		logp.Debug("payload", "\n%s", string(data[42:]))
+	}
+
+	if config.Cfg.DiscardMethod != "" {
+		d.parseCSeq(data)
+		for _, v := range d.Filter {
+			if string(d.CSeq) == v {
+				return nil, nil
+			}
+		}
 	}
 
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
