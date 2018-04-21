@@ -42,8 +42,8 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 			// Minimum RTCP port length of "m=audio 1000" = 12
 			if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 12 {
 				ipPort.Write(restPort[len("m=audio "):posRestPort])
-				portEnd := len(ipPort.Bytes()) - 1
-				ipPort.Bytes()[portEnd] = byte(uint32(ipPort.Bytes()[portEnd]) + 1)
+				lastNum := len(ipPort.Bytes()) - 1
+				ipPort.Bytes()[lastNum] = byte(uint32(ipPort.Bytes()[lastNum]) + 1)
 			} else {
 				logp.Debug("sdpwarn", "No end or fishy SDP RTP Port in '%s'", string(restPort))
 				return

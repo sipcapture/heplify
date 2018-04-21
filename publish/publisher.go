@@ -8,7 +8,7 @@ import (
 )
 
 type Outputer interface {
-	Output(pkt *decoder.Packet)
+	Output(msg []byte)
 }
 
 type Publisher struct {
@@ -21,7 +21,7 @@ func NewPublisher(out Outputer) *Publisher {
 
 	p := &Publisher{
 		outputer: out,
-		pktQueue: make(chan *decoder.Packet, 100000),
+		pktQueue: make(chan *decoder.Packet, 20000),
 		pubCount: 0,
 	}
 	go p.Start()
@@ -33,13 +33,13 @@ func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
 	pub.pktQueue <- pkt
 }
 
-func (pub *Publisher) output(pkt *decoder.Packet) {
+func (pub *Publisher) output(msg []byte) {
 	defer func() {
 		if err := recover(); err != nil {
 			logp.Err("recover %v", err)
 		}
 	}()
-	pub.outputer.Output(pkt)
+	pub.outputer.Output(msg)
 }
 
 func (pub *Publisher) Start() {
@@ -47,7 +47,8 @@ func (pub *Publisher) Start() {
 		select {
 		case pkt := <-pub.pktQueue:
 			pub.pubCount++
-			pub.output(pkt)
+			msg := EncodeHEP(pkt)
+			pub.output(msg)
 		}
 	}
 }

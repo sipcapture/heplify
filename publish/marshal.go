@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -8,8 +9,6 @@ import (
 	"strconv"
 	strings "strings"
 	"unsafe"
-
-	"github.com/valyala/bytebufferpool"
 
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/negbie/heplify/config"
@@ -67,7 +66,7 @@ type HepMsg struct {
 
 // EncodeHEP creates the HEP Packet which
 // will be send to wire
-func EncodeHEP(b *bytebufferpool.ByteBuffer, h *decoder.Packet) []byte {
+func EncodeHEP(h *decoder.Packet) []byte {
 	var hepMsg []byte
 	var err error
 	if config.Cfg.Protobuf {
@@ -92,14 +91,15 @@ func EncodeHEP(b *bytebufferpool.ByteBuffer, h *decoder.Packet) []byte {
 			logp.Warn("%v", err)
 		}
 	} else {
-		hepMsg = makeHEPChuncks(b, h)
+		hepMsg = makeHEPChuncks(h)
 		binary.BigEndian.PutUint16(hepMsg[4:6], uint16(len(hepMsg)))
 	}
 	return hepMsg
 }
 
 // makeHEPChuncks will construct the respective HEP chunck
-func makeHEPChuncks(b *bytebufferpool.ByteBuffer, h *decoder.Packet) []byte {
+func makeHEPChuncks(h *decoder.Packet) []byte {
+	var b bytes.Buffer
 	b.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	b.Write(hepLen)

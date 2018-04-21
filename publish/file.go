@@ -1,27 +1,23 @@
 package publish
 
 import (
-	"github.com/negbie/heplify/decoder"
 	"github.com/negbie/heplify/logp"
-	"github.com/valyala/bytebufferpool"
 )
 
 type FileOutputer struct {
 }
 
-func (fo *FileOutputer) Output(pkt *decoder.Packet) {
-	/* 	jsonPkt, err := json.MarshalIndent(pkt, "", "  ")
+func (fo *FileOutputer) Output(msg []byte) {
+	/* 	jsonPkt, err := json.MarshalIndent(msg, "", "  ")
 	   	if err != nil {
 	   		logp.Err("json %v", err)
 	   		return
 	   	}
 		   logp.Info("%s", jsonPkt)
 	*/
-	bb := bytebufferpool.Get()
-	defer bytebufferpool.Put(bb)
-	h, err := DecodeHEP(EncodeHEP(bb, pkt))
+	h, err := DecodeHEP(msg)
 	if err == nil {
-		logp.Info(h.String())
+		logp.Info("%s\n", h.String())
 	} else {
 		logp.Warn("%s", err)
 	}
