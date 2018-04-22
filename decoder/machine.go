@@ -15,11 +15,11 @@ const decoder_en_main int = 1
 
 
 func (d *Decoder) parseCSeq(data []byte) {
-  d.CSeq = nil
-  cs, p, pe := 0, 0, len(data)
-  mark := 0
+	d.CSeq = nil
+	cs, p, pe := 0, 0, len(data)
+	mark := 0
 
-  
+	
 //line machine.go:24
 	{
 	cs = decoder_start
@@ -453,8 +453,8 @@ func (d *Decoder) parseCSeq(data []byte) {
 tr12:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st15
 	st15:
 		if p++; p == pe {
@@ -504,8 +504,8 @@ tr12:
 tr27:
 //line machine.rl:45
 
-		  d.CSeq=data[mark:p]
-    
+			d.CSeq=data[mark:p]
+		
 	goto st18
 	st18:
 		if p++; p == pe {
@@ -535,8 +535,8 @@ tr28:
 tr13:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st19
 	st19:
 		if p++; p == pe {
@@ -570,8 +570,8 @@ tr13:
 tr14:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st21
 	st21:
 		if p++; p == pe {
@@ -653,8 +653,8 @@ tr14:
 tr15:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st26
 	st26:
 		if p++; p == pe {
@@ -732,8 +732,8 @@ tr15:
 tr16:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st31
 	st31:
 		if p++; p == pe {
@@ -809,8 +809,8 @@ tr16:
 tr17:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st36
 	st36:
 		if p++; p == pe {
@@ -886,8 +886,8 @@ tr17:
 tr18:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st41
 	st41:
 		if p++; p == pe {
@@ -977,8 +977,8 @@ tr18:
 tr19:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st47
 	st47:
 		if p++; p == pe {
@@ -1084,8 +1084,8 @@ tr19:
 tr20:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st54
 	st54:
 		if p++; p == pe {
@@ -1191,8 +1191,8 @@ tr20:
 tr21:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st61
 	st61:
 		if p++; p == pe {
@@ -1298,8 +1298,8 @@ tr21:
 tr22:
 //line machine.rl:41
 
-      mark = p
-    
+			mark = p
+		
 	goto st68
 	st68:
 		if p++; p == pe {

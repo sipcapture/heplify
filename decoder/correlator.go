@@ -81,35 +81,6 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 	}
 }
 
-func (d *Decoder) cacheCallID(payload []byte) {
-	if posInvite, posRegister := bytes.Index(payload, []byte(" INVITE")), bytes.Index(payload, []byte(" REGISTER")); posInvite > 0 || posRegister > 0 {
-		var callID []byte
-		if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID > 0 {
-			restCallID := payload[posCallID:]
-			// Minimum Call-ID length of "Call-ID: a" = 10
-			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
-				callID = restCallID[len("Call-ID: "):posRestCallID]
-			} else {
-				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
-				return
-			}
-		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
-			restID := payload[posID:]
-			// Minimum Call-ID length of "i: a" = 4
-			if posRestID := bytes.Index(restID, []byte("\r\n")); posRestID >= 4 {
-				callID = restID[len("i: "):posRestID]
-			} else {
-				logp.Debug("sipwarn", "No end or fishy Call-ID in '%s'", string(restID))
-				return
-			}
-		}
-		err := d.SIPCache.Set(callID, nil, 2)
-		if err != nil {
-			logp.Warn("%v", err)
-		}
-	}
-}
-
 // correlateRTCP will try to correlate RTCP data with SIP messages.
 // First it will look inside the longlive RTCPCache with the ssrc as key.
 // If it can't find a value it will look inside the shortlive SDPCache with (SDPIP+RTCPPort) as key.
@@ -150,7 +121,7 @@ func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
 		restID := payload[posID:]
 		// Minimum Call-ID length of "ID=a" = 4
 		if posRestID := bytes.Index(restID, []byte(" ")); posRestID >= 4 {
-			callID = restID[len("ID="):bytes.Index(restID, []byte(" "))]
+			callID = restID[len("ID="):posRestID]
 		} else if len(restID) >= 8 && len(restID) <= 64 {
 			callID = restID[3:]
 		} else {
@@ -165,9 +136,9 @@ func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
 	} else if posID := bytes.Index(payload, []byte(": [")); posID > 0 {
 		restID := payload[posID:]
 		if posRestID := bytes.Index(restID, []byte(" port ")); posRestID >= 8 {
-			callID = restID[len(": ["):bytes.Index(restID, []byte(" port "))]
+			callID = restID[len(": ["):posRestID]
 		} else if posRestID := bytes.Index(restID, []byte("]: ")); posRestID >= 4 {
-			callID = restID[len(": ["):bytes.Index(restID, []byte("]: "))]
+			callID = restID[len(": ["):posRestID]
 		} else {
 			logp.Debug("logwarn", "No end or fishy Call-ID in '%s'", string(restID))
 			return nil, nil, 0

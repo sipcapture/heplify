@@ -232,7 +232,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Mode == "SIPLOG" {
 			if udp.DstPort == 514 {
-				//d.cacheCallID(udp.Payload)
 				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(udp.Payload)
 				if pkt.Payload != nil {
 					return pkt, nil
