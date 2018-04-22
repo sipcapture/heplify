@@ -12,12 +12,6 @@ Windows: [WinPcap](https://www.winpcap.org/install/default.htm)
 Linux: Download [heplify](https://github.com/sipcapture/heplify/releases) and execute 'chmod +x heplify'  
 Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)  
 
-### Benchmark
-BenchmarkHEPProtoMarshal-4       5000000               332 ns/op             325 B/op          1 allocs/op  
-BenchmarkHEPProtoUnmarshal-4     3000000               500 ns/op             281 B/op          4 allocs/op  
-BenchmarkEncodeHEP-4             5000000               219 ns/op               8 B/op          0 allocs/op  
-BenchmarkDecodeHEP-4            10000000               129 ns/op             160 B/op          1 allocs/op  
-
 ### Usage
 ```bash
   -i    Listen on interface (default "any")
@@ -27,8 +21,9 @@ BenchmarkDecodeHEP-4            10000000               129 ns/op             160
   -pr   Portrange to capture SIP (default "5060-5090")
   -hs   HEP UDP server address (default "127.0.0.1:9060")
   -hi   HEP Node ID (default 2002)
-  -di   Discard uninteresting packets
-  -fi   Filter interesting packets
+  -di   Discard uninteresting packets by string
+  -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+  -fi   Filter interesting packets by string
   -rf   Read pcap file
   -wf   Path to write pcap file
   -zf   Enable pcap compression
@@ -60,6 +55,6 @@ BenchmarkDecodeHEP-4            10000000               129 ns/op             160
 ./heplify -rf example/rtp_rtcp_sip.pcap -hs 192.168.1.1:9060
 
 # Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060.
-./heplify -hs 192.168.1.1:9060 -dim "OPTIONS,NOTIFY"
+./heplify -hs 192.168.1.1:9060 -dim OPTIONS,NOTIFY
 
 ```
