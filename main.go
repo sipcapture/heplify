@@ -12,7 +12,7 @@ import (
 	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.1"
+const version = "heplify 1.2"
 
 func init() {
 
