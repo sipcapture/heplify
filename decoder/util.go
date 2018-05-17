@@ -59,6 +59,7 @@ func (d *Decoder) flushFragments() {
 	}
 }
 
+// MarshalJSON implements json marshal functions for Packet
 func (p *Packet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Version   byte
