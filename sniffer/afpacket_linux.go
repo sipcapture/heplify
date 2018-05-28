@@ -88,3 +88,7 @@ func (h *afpacketHandle) Close() {
 func (h *afpacketHandle) Stats() (stats afpacket.Stats, err error) {
 	return h.TPacket.Stats()
 }
+
+func (h *afpacketHandle) SocketStats() (ass afpacket.SocketStats, asss afpacket.SocketStatsV3, err error) {
+	return h.TPacket.SocketStats()
+}
