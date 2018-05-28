@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/coocood/freecache"
@@ -60,11 +61,11 @@ type Packet struct {
 }
 
 func NewDecoder(datalink layers.LinkType) *Decoder {
+	var lt gopacket.LayerType
 	host, err := os.Hostname()
 	if err != nil {
 		host = "heplify-host"
 	}
-	var lt gopacket.LayerType
 
 	switch datalink {
 	case layers.LinkTypeEthernet:
@@ -75,12 +76,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		lt = layers.LayerTypeEthernet
 	}
 
-	cSIP := freecache.NewCache(15 * 1024 * 1024)  // 15 MB
-	cSDP := freecache.NewCache(30 * 1024 * 1024)  // 30 MB
-	cRTCP := freecache.NewCache(30 * 1024 * 1024) // 30 MB
-	//debug.SetGCPercent(30)
-
-	cFilter := strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+	debug.SetGCPercent(50)
 
 	d := &Decoder{
 		Host:      host,
@@ -88,11 +84,12 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		NodePW:    []byte(config.Cfg.HepNodePW),
 		LayerType: lt,
 		defragger: ip4defrag.NewIPv4Defragmenter(),
-		SIPCache:  cSIP,
-		SDPCache:  cSDP,
-		RTCPCache: cRTCP,
-		Filter:    cFilter,
+		SIPCache:  freecache.NewCache(20 * 1024 * 1024), // 20 MB
+		SDPCache:  freecache.NewCache(30 * 1024 * 1024), // 30 MB
+		RTCPCache: freecache.NewCache(30 * 1024 * 1024), // 30 MB
+		Filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
+
 	go d.flushFragments()
 	go d.printStats()
 	return d
@@ -180,7 +177,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
 		if err != nil {
-			logp.Warn("%v", err)
+			logp.Debug("fragment", "%v", err)
 			return nil, nil
 		} else if ip4New == nil {
 			d.fragCount++
@@ -233,7 +230,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if config.Cfg.Mode == "SIPLOG" {
 			if udp.DstPort == 514 {
 				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(udp.Payload)
-				if pkt.Payload != nil {
+				if pkt.Payload != nil && pkt.CID != nil {
 					return pkt, nil
 				}
 				return nil, nil
@@ -276,7 +273,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		if config.Cfg.Mode == "SIPLOG" && tcp.DstPort == 514 {
 			pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(tcp.Payload)
-			if pkt.Payload != nil {
+			if pkt.Payload != nil && pkt.CID != nil {
 				return pkt, nil
 			}
 			return nil, nil

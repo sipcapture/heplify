@@ -29,8 +29,6 @@ type SnifferSetup struct {
 	filter         string
 	worker         Worker
 	DataSource     gopacket.PacketDataSource
-	pcapStats      *pcap.Stats
-	afpacketStats  afpacket.Stats
 }
 
 type DumpPacket struct {
@@ -336,7 +334,6 @@ func (sniffer *SnifferSetup) IsAlive() bool {
 }
 
 func (sniffer *SnifferSetup) printStats() {
-	var err error
 	if sniffer.config.ReadFile != "" {
 		logp.Info("Read in pcap file. Stats won't be generated.")
 		return
@@ -345,25 +342,28 @@ func (sniffer *SnifferSetup) printStats() {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	ticker := time.NewTicker(1 * time.Minute)
 
+	var err error
+	var pcapStats *pcap.Stats
+	var afpacketStats afpacket.SocketStatsV3
+
 	for {
 		select {
 		case <-ticker.C:
 			switch sniffer.config.Type {
 			case "pcap":
-				sniffer.pcapStats, err = sniffer.pcapHandle.Stats()
+				pcapStats, err = sniffer.pcapHandle.Stats()
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("Packets overall received: %d, dropped by OS: %d, dropped by interface: %d",
-					sniffer.pcapStats.PacketsReceived, sniffer.pcapStats.PacketsDropped, sniffer.pcapStats.PacketsIfDropped)
+				logp.Info("Stats {received dropped-os dropped-int}: {%d %d %d}",
+					pcapStats.PacketsReceived, pcapStats.PacketsDropped, pcapStats.PacketsIfDropped)
 
 			case "af_packet":
-				sniffer.afpacketStats, err = sniffer.afpacketHandle.Stats()
+				_, afpacketStats, err = sniffer.afpacketHandle.SocketStats()
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("Packets overall received: %d, polls: %d",
-					sniffer.afpacketStats.Packets, sniffer.afpacketStats.Polls)
+				logp.Info("Stats {received dropped queue-freeze}: %d", afpacketStats)
 			}
 
 		case <-signals:
