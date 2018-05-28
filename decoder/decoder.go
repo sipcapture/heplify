@@ -177,7 +177,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
 		if err != nil {
-			logp.Warn("%v", err)
+			logp.Debug("fragment", "%v", err)
 			return nil, nil
 		} else if ip4New == nil {
 			d.fragCount++
