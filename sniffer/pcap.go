@@ -14,7 +14,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type pcapWriter interface {

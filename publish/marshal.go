@@ -13,7 +13,7 @@ import (
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 var (

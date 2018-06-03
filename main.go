@@ -7,8 +7,8 @@ import (
 	"strconv"
 
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/sniffer"
+	"github.com/negbie/logp"
 	//_ "github.com/mkevac/debugcharts"
 )
 
@@ -26,6 +26,8 @@ func init() {
 		ifaceConfig config.InterfacesConfig
 		logging     logp.Logging
 		fileRotator logp.FileRotator
+		dbg         string
+		std         bool
 	)
 
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
@@ -41,6 +43,8 @@ func init() {
 	flag.BoolVar(&ifaceConfig.WithVlan, "vlan", false, "vlan")
 	flag.BoolVar(&ifaceConfig.WithErspan, "erspan", false, "erspan")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 32, "Interface buffersize (MB)")
+	flag.StringVar(&dbg, "d", "", "Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]")
+	flag.BoolVar(&std, "e", false, "Log to stderr and disable syslog/file output")
 	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
@@ -59,6 +63,8 @@ func init() {
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
+	logp.ToStderr = &std
+	logp.DebugSelectorsStr = &dbg
 	logging.Files = &fileRotator
 	config.Cfg.Logging = &logging
 
@@ -80,7 +86,6 @@ func checkErr(err error) {
 func checkCritErr(err error) {
 	if err != nil {
 		fmt.Printf("\nCritical: %v\n\n", err)
-		logp.Critical("%v", err)
 		os.Exit(1)
 	}
 }

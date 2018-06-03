@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 const fnvBasis = 14695981039346656037

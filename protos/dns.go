@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/google/gopacket/layers"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type DNS struct {

@@ -6,8 +6,8 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/protos"
+	"github.com/negbie/logp"
 )
 
 // cacheSDPIPPort will extract the source IP, source Port from SDP body and CallID from SIP header.

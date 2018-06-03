@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/negbie/heplify/decoder"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type Outputer interface {

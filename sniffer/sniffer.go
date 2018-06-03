@@ -15,8 +15,8 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
-	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/publish"
+	"github.com/negbie/logp"
 )
 
 type SnifferSetup struct {
@@ -69,8 +69,7 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	pkt, err := mw.decoder.Process(data, ci)
 	if err != nil {
-		logp.Critical("OnPacket %v", err)
-		panic(err)
+		logp.Err("OnPacket %v", err)
 	}
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
