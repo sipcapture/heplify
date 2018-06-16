@@ -11,7 +11,7 @@ import (
 	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type afpacketHandle struct {

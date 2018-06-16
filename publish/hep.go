@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type HEPOutputer struct {

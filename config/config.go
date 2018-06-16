@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 var Cfg Config

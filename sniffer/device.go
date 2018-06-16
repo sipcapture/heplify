@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/gopacket/pcap"
 
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 var deviceAnySupported = runtime.GOOS == "linux"

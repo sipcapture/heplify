@@ -1,7 +1,7 @@
 package publish
 
 import (
-	"github.com/negbie/heplify/logp"
+	"github.com/negbie/logp"
 )
 
 type FileOutputer struct {

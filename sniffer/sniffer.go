@@ -15,8 +15,8 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
-	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/publish"
+	"github.com/negbie/logp"
 )
 
 type SnifferSetup struct {
@@ -69,8 +69,7 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	pkt, err := mw.decoder.Process(data, ci)
 	if err != nil {
-		logp.Critical("OnPacket %v", err)
-		panic(err)
+		logp.Err("OnPacket %v", err)
 	}
 	if pkt != nil {
 		mw.publisher.PublishEvent(pkt)
@@ -102,11 +101,11 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
-	if sniffer.config.WithVlan {
-		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
-	}
 	if sniffer.config.WithErspan {
 		sniffer.filter = fmt.Sprintf("%s or proto 47", sniffer.filter)
+	}
+	if sniffer.config.WithVlan {
+		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
 	}
 
 	logp.Info("Sniffer [type:%s, device:%s, mode:%s] OS [type:%s, arch:%s]",

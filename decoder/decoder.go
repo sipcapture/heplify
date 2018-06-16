@@ -12,8 +12,8 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
-	"github.com/negbie/heplify/logp"
 	"github.com/negbie/heplify/protos"
+	"github.com/negbie/logp"
 )
 
 type Decoder struct {
@@ -196,7 +196,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 			pb, ok := packet.(gopacket.PacketBuilder)
 			if !ok {
-				logp.Critical("Not a PacketBuilder")
+				logp.Err("Not a PacketBuilder")
+				return nil, nil
 			}
 			nextDecoder := ip4New.NextLayerType()
 			nextDecoder.Decode(ip4New.Payload, pb)
