@@ -12,7 +12,7 @@ import (
 	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.2"
+const version = "heplify 1.3"
 
 func init() {
 
@@ -28,6 +28,7 @@ func init() {
 		fileRotator logp.FileRotator
 		dbg         string
 		std         bool
+		sys         bool
 	)
 
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
@@ -38,32 +39,34 @@ func init() {
 	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable pcap compression")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
-	flag.IntVar(&ifaceConfig.Snaplen, "s", 16384, "Snaplength")
+	flag.IntVar(&ifaceConfig.Snaplen, "s", 8192, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.BoolVar(&ifaceConfig.WithVlan, "vlan", false, "vlan")
 	flag.BoolVar(&ifaceConfig.WithErspan, "erspan", false, "erspan")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 32, "Interface buffersize (MB)")
 	flag.StringVar(&dbg, "d", "", "Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]")
 	flag.BoolVar(&std, "e", false, "Log to stderr and disable syslog/file output")
+	flag.BoolVar(&sys, "sl", false, "Log to syslog")
 	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
 	flag.BoolVar(&config.Cfg.Bench, "bm", false, "Benchmark for the next 2 minutes and exit")
 	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP]")
-	flag.BoolVar(&config.Cfg.Dedup, "dd", true, "Deduplicate packets")
-	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by string")
+	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
+	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by any string")
 	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")
-	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by string")
-	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP UDP server address")
-	flag.StringVar(&config.Cfg.HepNodePW, "hp", "myhep", "HepNodePW")
-	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HepNodeID")
+	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
+	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP server address")
+	flag.StringVar(&config.Cfg.HepNodePW, "hp", "myhep", "HEP node PW")
+	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP node ID")
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
 	logp.ToStderr = &std
+	logging.ToSyslog = &sys
 	logp.DebugSelectorsStr = &dbg
 	logging.Files = &fileRotator
 	config.Cfg.Logging = &logging

@@ -59,6 +59,15 @@ func (d *Decoder) cacheSDPIPPort(payload []byte) {
 				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
 				return
 			}
+		} else if posCallID := bytes.Index(payload, []byte("Call-ID:")); posCallID > 0 {
+			restCallID := payload[posCallID:]
+			// Minimum Call-ID length of "Call-ID:a" = 9
+			if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 9 {
+				callID = restCallID[len("Call-ID:"):posRestCallID]
+			} else {
+				logp.Debug("sdpwarn", "No end or fishy Call-ID in '%s'", string(restCallID))
+				return
+			}
 		} else if posID := bytes.Index(payload, []byte("i: ")); posID > 0 {
 			restID := payload[posID:]
 			// Minimum Call-ID length of "i: a" = 4
