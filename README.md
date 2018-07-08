@@ -24,7 +24,8 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
   -di   Discard uninteresting packets by string
   -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
   -fi   Filter interesting packets by string
-  -rf   Read pcap file
+  -rf   Read PCAP file
+  -rs   Use original timestamps when reading PCAP file
   -wf   Path to write pcap file
   -zf   Enable pcap compression
   -e    Log to stderr and disable syslog/file output
