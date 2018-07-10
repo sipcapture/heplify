@@ -33,7 +33,7 @@ func (d debugging) Printf(format string, args ...interface{}) {
 // Constants determining how to handle fragments.
 // Reference RFC 791, page 25
 const (
-	IPv4MinimumFragmentSize    = 8     // Minimum size of a single fragment
+	IPv4MinimumFragmentSize    = 2     // Minimum size of a single fragment
 	IPv4MaximumSize            = 65535 // Maximum size of a fragment (2^16)
 	IPv4MaximumFragmentOffset  = 8183  // Maximum offset of a fragment
 	IPv4MaximumFragmentListLen = 8192  // Back out if we get more than this many fragments
@@ -153,8 +153,7 @@ func (d *IPv4Defragmenter) DiscardOlderThan(t time.Time) int {
 // flush the fragment list for a particular flow
 func (d *IPv4Defragmenter) flush(ipf ipv4) {
 	d.Lock()
-	fl := new(fragmentList)
-	d.ipFlows[ipf] = fl
+	delete(d.ipFlows, ipf)
 	d.Unlock()
 }
 
