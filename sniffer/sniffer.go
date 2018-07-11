@@ -108,8 +108,10 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
 	}
 
-	logp.Info("Sniffer [type:%s, device:%s, mode:%s] OS [type:%s, arch:%s]",
-		sniffer.config.Type, sniffer.config.Device, sniffer.mode, runtime.GOOS, runtime.GOARCH)
+	logp.Info("%#v", config.Cfg)
+	logp.Info("%#v", config.Cfg.Iface)
+	logp.Info("bpf: %s", sniffer.filter)
+	logp.Info("ostype: %s, osarch: %s", runtime.GOOS, runtime.GOARCH)
 
 	switch sniffer.config.Type {
 	case "pcap":

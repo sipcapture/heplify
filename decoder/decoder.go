@@ -177,7 +177,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 
 		ip4New, err := d.defragger.DefragIPv4WithTimestamp(ip4, ci.Timestamp)
 		if err != nil {
-			logp.Debug("fragment", "%v", err)
+			logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, pkt.SrcIP.String(), pkt.DstIP.String())
 			return nil, nil
 		} else if ip4New == nil {
 			d.fragCount++
@@ -293,6 +293,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		pkt.ProtoType = 53
 		pkt.Payload = protos.ParseDNS(dns)
 		d.dnsCount++
+	}
+
+	if err := packet.ErrorLayer(); err != nil {
+		logp.Err("decoding some part of the packet failed: %v", err)
 	}
 
 	if bytes.Contains(pkt.Payload, []byte("CSeq")) {
