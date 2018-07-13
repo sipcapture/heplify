@@ -17,7 +17,7 @@ func BenchmarkProcess(b *testing.B) {
 	//config.Cfg.Mode = "SIPLOG"
 	d := NewDecoder(layers.LinkTypeEthernet)
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
-
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		val, _ := d.Process(rawPacket, &ci)
 		_ = val

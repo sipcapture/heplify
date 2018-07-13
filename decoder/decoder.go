@@ -10,6 +10,7 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/tcpassembly"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/protos"
@@ -17,6 +18,7 @@ import (
 )
 
 type Decoder struct {
+	asm *tcpassembly.Assembler
 	Stats
 	Host      string
 	NodeID    uint32
@@ -78,7 +80,11 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	debug.SetGCPercent(50)
 
+	streamPool := tcpassembly.NewStreamPool(&streamFactory{})
+	assembler := tcpassembly.NewAssembler(streamPool)
+
 	d := &Decoder{
+		asm:       assembler,
 		Host:      host,
 		NodeID:    uint32(config.Cfg.HepNodeID),
 		NodePW:    []byte(config.Cfg.HepNodePW),
@@ -266,6 +272,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) (*Packet, error
 		if !ok {
 			return nil, nil
 		}
+
+		//d.asm.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, ci.Timestamp)
 
 		pkt.SrcPort = uint16(tcp.SrcPort)
 		pkt.DstPort = uint16(tcp.DstPort)
