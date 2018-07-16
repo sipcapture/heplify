@@ -38,7 +38,7 @@ func (ho *HEPOutputer) Init() error {
 		return err
 	}
 
-	w := bufio.NewWriter(ho.conn)
+	w := bufio.NewWriterSize(ho.conn, 8192)
 	ho.writer = w
 
 	return nil

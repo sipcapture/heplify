@@ -12,25 +12,18 @@ type Outputer interface {
 }
 
 type Publisher struct {
-	pktQueue chan *decoder.Packet
 	pubCount int
 	outputer Outputer
 }
 
 func NewPublisher(out Outputer) *Publisher {
-
 	p := &Publisher{
 		outputer: out,
-		pktQueue: make(chan *decoder.Packet, 20000),
 		pubCount: 0,
 	}
-	go p.Start()
+	go p.Start(decoder.PacketQueue)
 	go p.printStats()
 	return p
-}
-
-func (pub *Publisher) PublishEvent(pkt *decoder.Packet) {
-	pub.pktQueue <- pkt
 }
 
 func (pub *Publisher) output(msg []byte) {
@@ -42,10 +35,10 @@ func (pub *Publisher) output(msg []byte) {
 	pub.outputer.Output(msg)
 }
 
-func (pub *Publisher) Start() {
+func (pub *Publisher) Start(pq chan *decoder.Packet) {
 	for {
 		select {
-		case pkt := <-pub.pktQueue:
+		case pkt := <-pq:
 			pub.pubCount++
 			msg := EncodeHEP(pkt)
 			pub.output(msg)

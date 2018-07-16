@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -67,13 +68,7 @@ func NewWorker(lt layers.LinkType) (Worker, error) {
 }
 
 func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
-	pkt, err := mw.decoder.Process(data, ci)
-	if err != nil {
-		logp.Err("OnPacket %v", err)
-	}
-	if pkt != nil {
-		mw.publisher.PublishEvent(pkt)
-	}
+	mw.decoder.Process(data, ci)
 }
 
 func (sniffer *SnifferSetup) setFromConfig() error {
@@ -89,16 +84,16 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	switch sniffer.mode {
 	case "SIP":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
+		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
 	case "SIPDNS":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 32 and ip and dst port 53)"
+		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 32 and ip and dst port 53)"
 	case "SIPLOG":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
+		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
 	case "SIPRTP":
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
+		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
 	default:
 		sniffer.mode = "SIPRTCP"
-		sniffer.filter = "(greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
+		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
 	if sniffer.config.WithErspan {
@@ -260,6 +255,17 @@ func (sniffer *SnifferSetup) Run() error {
 			// Empty packet, probably timeout from afpacket
 			logp.Debug("sniffer", "Empty data packet")
 			continue
+		}
+
+		if config.Cfg.Filter != "" {
+			if !bytes.Contains(data, []byte(config.Cfg.Filter)) {
+				continue
+			}
+		}
+		if config.Cfg.Discard != "" {
+			if bytes.Contains(data, []byte(config.Cfg.Discard)) {
+				continue
+			}
 		}
 
 		if sniffer.config.ReadFile != "" {
