@@ -130,7 +130,7 @@ func (d *Decoder) correlateLOG(payload []byte) ([]byte, []byte, byte) {
 	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
 		restID := payload[posID:]
 		// Minimum Call-ID length of "ID=a" = 4
-		if posRestID := bytes.Index(restID, []byte(" ")); posRestID >= 4 {
+		if posRestID := bytes.IndexRune(restID, ' '); posRestID >= 4 {
 			callID = restID[len("ID="):posRestID]
 		} else if len(restID) > 4 && len(restID) < 80 {
 			callID = restID[3:]

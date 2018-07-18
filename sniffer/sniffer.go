@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,7 +28,9 @@ type SnifferSetup struct {
 	isAlive        bool
 	dumpChan       chan DumpPacket
 	mode           string
-	filter         string
+	bpf            string
+	filter         []string
+	discard        []string
 	worker         Worker
 	DataSource     gopacket.PacketDataSource
 }
@@ -84,28 +87,41 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	switch sniffer.mode {
 	case "SIP":
-		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
+		sniffer.bpf = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0)"
 	case "SIPDNS":
-		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 32 and ip and dst port 53)"
+		sniffer.bpf = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 32 and ip and dst port 53)"
 	case "SIPLOG":
-		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
+		sniffer.bpf = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc) or (greater 128 and (dst port 514 or port 2223))"
 	case "SIPRTP":
-		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
+		sniffer.bpf = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)"
 	default:
 		sniffer.mode = "SIPRTCP"
-		sniffer.filter = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
+		sniffer.bpf = "tcp and greater 42 and portrange " + sniffer.config.PortRange + " or (udp and greater 256 and portrange " + sniffer.config.PortRange + " or ip[6:2] & 0x1fff != 0) or (ip and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)"
 	}
 
 	if sniffer.config.WithErspan {
-		sniffer.filter = fmt.Sprintf("%s or proto 47", sniffer.filter)
+		sniffer.bpf = fmt.Sprintf("%s or proto 47", sniffer.bpf)
 	}
 	if sniffer.config.WithVlan {
-		sniffer.filter = fmt.Sprintf("%s or (vlan and (%s))", sniffer.filter, sniffer.filter)
+		sniffer.bpf = fmt.Sprintf("%s or (vlan and (%s))", sniffer.bpf, sniffer.bpf)
+	}
+
+	if config.Cfg.Filter != "" {
+		sniffer.filter = strings.Split(config.Cfg.Filter, ",")
+	}
+	if config.Cfg.Discard != "" {
+		sniffer.discard = strings.Split(config.Cfg.Discard, ",")
 	}
 
 	logp.Info("%#v", config.Cfg)
 	logp.Info("%#v", config.Cfg.Iface)
-	logp.Info("bpf: %s", sniffer.filter)
+	logp.Info("bpf: %s", sniffer.bpf)
+	if len(sniffer.discard) > 0 {
+		logp.Info("discard: %#v", sniffer.discard)
+	}
+	if len(sniffer.filter) > 0 {
+		logp.Info("filter: %#v", sniffer.filter)
+	}
 	logp.Info("ostype: %s, osarch: %s", runtime.GOOS, runtime.GOARCH)
 
 	switch sniffer.config.Type {
@@ -115,18 +131,18 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			if err != nil {
 				return fmt.Errorf("couldn't open file %v! %v", sniffer.config.ReadFile, err)
 			}
-			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+			err = sniffer.pcapHandle.SetBPFFilter(sniffer.bpf)
 			if err != nil {
-				return fmt.Errorf("SetBPFFilter '%s' for ReadFile pcap: %v", sniffer.filter, err)
+				return fmt.Errorf("SetBPFFilter '%s' for ReadFile pcap: %v", sniffer.bpf, err)
 			}
 		} else {
 			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
 			if err != nil {
 				return fmt.Errorf("setting pcap live mode: %v", err)
 			}
-			err = sniffer.pcapHandle.SetBPFFilter(sniffer.filter)
+			err = sniffer.pcapHandle.SetBPFFilter(sniffer.bpf)
 			if err != nil {
-				return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.filter, err)
+				return fmt.Errorf("SetBPFFilter '%s' for pcap: %v", sniffer.bpf, err)
 			}
 		}
 
@@ -147,9 +163,9 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
 
-		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.filter, sniffer.config.Snaplen)
+		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.bpf, sniffer.config.Snaplen)
 		if err != nil {
-			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.filter, err)
+			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.bpf, err)
 		}
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.afpacketHandle)
@@ -211,6 +227,7 @@ func (sniffer *SnifferSetup) Run() error {
 		benchmark()
 	}
 
+LOOP:
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
 			fmt.Println("Press enter to read next packet")
@@ -257,14 +274,18 @@ func (sniffer *SnifferSetup) Run() error {
 			continue
 		}
 
-		if config.Cfg.Filter != "" {
-			if !bytes.Contains(data, []byte(config.Cfg.Filter)) {
-				continue
+		if len(sniffer.filter) > 0 {
+			for i := range sniffer.filter {
+				if !bytes.Contains(data, []byte(sniffer.filter[i])) {
+					continue LOOP
+				}
 			}
 		}
-		if config.Cfg.Discard != "" {
-			if bytes.Contains(data, []byte(config.Cfg.Discard)) {
-				continue
+		if len(sniffer.discard) > 0 {
+			for i := range sniffer.discard {
+				if bytes.Contains(data, []byte(sniffer.discard[i])) {
+					continue LOOP
+				}
 			}
 		}
 
