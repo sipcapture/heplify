@@ -54,7 +54,8 @@ func (d *Decoder) flushFragments() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
-			d.defragger.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
+			d.defrag4.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
+			d.defrag6.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
 		}()
 	}
 }

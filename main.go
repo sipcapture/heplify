@@ -12,7 +12,7 @@ import (
 	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.3"
+const version = "heplify 1.4"
 
 func init() {
 
@@ -38,7 +38,7 @@ func init() {
 	flag.IntVar(&ifaceConfig.RotationTime, "rt", 60, "Pcap rotation time in minutes")
 	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable pcap compression")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
-	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Maximum pcap read speed. Doesn't use packet timestamps")
+	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Use packet timestamps with maximum pcap read speed")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 8192, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.BoolVar(&ifaceConfig.WithVlan, "vlan", false, "vlan")
