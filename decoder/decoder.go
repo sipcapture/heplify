@@ -336,15 +336,17 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 	}
 
-	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
-		dns, ok := dnsLayer.(*layers.DNS)
-		if !ok {
-			return
-		}
+	if config.Cfg.Mode == "SIPDNS" {
+		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+			dns, ok := dnsLayer.(*layers.DNS)
+			if !ok {
+				return
+			}
 
-		pkt.ProtoType = 53
-		pkt.Payload = protos.ParseDNS(dns)
-		d.dnsCount++
+			pkt.ProtoType = 53
+			pkt.Payload = protos.ParseDNS(dns)
+			d.dnsCount++
+		}
 	}
 
 	if bytes.Contains(pkt.Payload, []byte("CSeq")) {
