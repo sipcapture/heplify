@@ -66,6 +66,12 @@ func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 }
 
 func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.AssemblerContext) {
+	var ts time.Time
+	if ac != nil {
+		ts = ac.GetCaptureInfo().Timestamp
+	} else {
+		ts = time.Now()
+	}
 	dir, start, end, skip := sg.Info()
 	length, saved := sg.Lengths()
 	// update stats
@@ -77,13 +83,6 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		return
 	}
 
-	var ident string
-	if dir == reassembly.TCPDirClientToServer {
-		ident = fmt.Sprintf("%v %v(%s): ", t.net, t.transport, dir)
-	} else {
-		ident = fmt.Sprintf("%v %v(%s): ", t.net.Reverse(), t.transport.Reverse(), dir)
-	}
-
 	if skip == -1 {
 		// this is allowed
 	} else if skip != 0 {
@@ -91,21 +90,34 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		return
 	}
 	if len(t.transport.Src().Raw()) < 2 || len(t.transport.Dst().Raw()) < 2 {
+		logp.Err("port length must be 2 byte long")
 		return
 	}
 
 	pkt := &Packet{}
 	pkt.Version = 0x02
 	pkt.Protocol = 0x06
-	pkt.SrcIP = t.net.Src().Raw()
-	pkt.DstIP = t.net.Dst().Raw()
+
+	var ident string
+	if dir == reassembly.TCPDirClientToServer {
+		ident = fmt.Sprintf("%v %v(%s): ", t.net, t.transport, dir)
+		pkt.SrcIP = t.net.Src().Raw()
+		pkt.DstIP = t.net.Dst().Raw()
+		pkt.SrcPort = binary.BigEndian.Uint16(t.transport.Src().Raw())
+		pkt.DstPort = binary.BigEndian.Uint16(t.transport.Dst().Raw())
+	} else {
+		ident = fmt.Sprintf("%v %v(%s): ", t.net.Reverse(), t.transport.Reverse(), dir)
+		pkt.SrcIP = t.net.Reverse().Src().Raw()
+		pkt.DstIP = t.net.Reverse().Dst().Raw()
+		pkt.SrcPort = binary.BigEndian.Uint16(t.transport.Reverse().Src().Raw())
+		pkt.DstPort = binary.BigEndian.Uint16(t.transport.Reverse().Dst().Raw())
+	}
+
 	if len(pkt.SrcIP) > 4 || len(pkt.DstIP) > 4 {
 		pkt.Version = 0x0a
 	}
-	pkt.SrcPort = binary.BigEndian.Uint16(t.transport.Src().Raw())
-	pkt.DstPort = binary.BigEndian.Uint16(t.transport.Dst().Raw())
-	pkt.Tsec = uint32(time.Now().Unix())
-	pkt.Tmsec = uint32(time.Now().Nanosecond() / 1000)
+	pkt.Tsec = uint32(ts.Unix())
+	pkt.Tmsec = uint32(ts.Nanosecond() / 1000)
 	pkt.NodeID = uint32(config.Cfg.HepNodeID)
 	pkt.NodePW = []byte(config.Cfg.HepNodePW)
 	pkt.Payload = sg.Fetch(length)
@@ -113,20 +125,25 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	logp.Debug("reassembly", "%s: SG reassembled packet with %d bytes (start:%v,end:%v,skip:%d,saved:%d,nb:%d,%d,overlap:%d,%d)\n%s",
 		ident, length, start, end, skip, saved, sgStats.Packets, sgStats.Chunks, sgStats.OverlapBytes, sgStats.OverlapPackets, pkt.Payload)
 
-	if config.Cfg.Mode == "SIPLOG" && t.isLog {
-		pkt.Payload, pkt.CID, pkt.ProtoType = correlateLOG(pkt.Payload)
-		if pkt.Payload != nil && pkt.CID != nil {
-			PacketQueue <- pkt
+	if length >= 16 && length <= 8192 {
+		if config.Cfg.Mode == "SIPLOG" && t.isLog {
+			pkt.Payload, pkt.CID, pkt.ProtoType = correlateLOG(pkt.Payload)
+			if pkt.Payload != nil && pkt.CID != nil {
+				PacketQueue <- pkt
+			}
+			return
+		} else if config.Cfg.Mode != "SIP" {
+			cacheSDPIPPort(pkt.Payload)
 		}
-		return
-	} else if config.Cfg.Mode != "SIP" {
-		cacheSDPIPPort(pkt.Payload)
-	}
-	if length > 16 && length < 8192 {
+
 		if bytes.Contains(pkt.Payload, []byte("CSeq")) {
 			pkt.ProtoType = 1
 		}
 		PacketQueue <- pkt
+	} else {
+		if length != 0 {
+			logp.Warn("received TCP packet with unusual length %d", length)
+		}
 	}
 }
 
