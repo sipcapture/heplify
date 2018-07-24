@@ -2,10 +2,12 @@ package sniffer
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -29,6 +31,7 @@ type SnifferSetup struct {
 	dumpChan       chan DumpPacket
 	mode           string
 	bpf            string
+	file           string
 	filter         []string
 	discard        []string
 	worker         Worker
@@ -126,10 +129,15 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	switch sniffer.config.Type {
 	case "pcap":
-		if sniffer.config.ReadFile != "" {
-			sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
+		if sniffer.file != "" {
+			if strings.HasSuffix(strings.ToLower(sniffer.file), ".gz") {
+				if sniffer.file, err = ungzip(sniffer.file); err != nil {
+					return err
+				}
+			}
+			sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.file)
 			if err != nil {
-				return fmt.Errorf("couldn't open file %v! %v", sniffer.config.ReadFile, err)
+				return fmt.Errorf("couldn't open file %v! %v", sniffer.file, err)
 			}
 			err = sniffer.pcapHandle.SetBPFFilter(sniffer.bpf)
 			if err != nil {
@@ -182,15 +190,16 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	sniffer := &SnifferSetup{}
 	sniffer.config = cfg
 	sniffer.mode = mode
+	sniffer.file = sniffer.config.ReadFile
 
-	if sniffer.config.ReadFile == "" {
+	if sniffer.file == "" {
 		if sniffer.config.Device == "any" && runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 			_, err := ListDeviceNames(false, false)
 			return nil, fmt.Errorf("%v -i any is not supported on %s\nPlease use one of the above devices", err, runtime.GOOS)
 		}
 	}
 
-	if sniffer.config.Device == "" && sniffer.config.ReadFile == "" {
+	if sniffer.config.Device == "" && sniffer.file == "" {
 		_, err := ListDeviceNames(false, false)
 		return nil, fmt.Errorf("%v Please use one of the above devices", err)
 	}
@@ -289,7 +298,7 @@ LOOP:
 			}
 		}
 
-		if sniffer.config.ReadFile != "" {
+		if sniffer.file != "" {
 			if lastPktTime != nil && !sniffer.config.ReadSpeed {
 				sleep := ci.Timestamp.Sub(*lastPktTime)
 				if sleep > 0 {
@@ -328,12 +337,12 @@ func (sniffer *SnifferSetup) Reopen() error {
 	var err error
 	time.Sleep(250 * time.Millisecond)
 
-	if sniffer.config.Type != "pcap" || sniffer.config.ReadFile == "" {
+	if sniffer.config.Type != "pcap" || sniffer.file == "" {
 		return fmt.Errorf("Reopen is only possible for files and in pcap mode")
 	}
 
 	sniffer.Close()
-	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.config.ReadFile)
+	sniffer.pcapHandle, err = pcap.OpenOffline(sniffer.file)
 	if err != nil {
 		return err
 	}
@@ -362,7 +371,7 @@ func (sniffer *SnifferSetup) IsAlive() bool {
 }
 
 func (sniffer *SnifferSetup) printStats() {
-	if sniffer.config.ReadFile != "" {
+	if sniffer.file != "" {
 		logp.Info("Read in pcap file. Stats won't be generated.")
 		return
 	}
@@ -400,4 +409,28 @@ func (sniffer *SnifferSetup) printStats() {
 			os.Exit(0)
 		}
 	}
+}
+
+func ungzip(inputFile string) (string, error) {
+	r, err := os.Open(inputFile)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	outputFile, err := gzip.NewReader(r)
+	if err != nil {
+		return "", err
+	}
+	defer outputFile.Close()
+
+	pathName := filepath.Join(filepath.Dir(inputFile), outputFile.Name)
+	w, err := os.Create(pathName)
+	if err != nil {
+		return "", err
+	}
+	defer w.Close()
+
+	_, err = io.Copy(w, outputFile)
+	return pathName, err
 }
