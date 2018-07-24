@@ -18,18 +18,17 @@ import (
 )
 
 type Decoder struct {
-	asm *reassembly.Assembler
-	Stats
-	NodeID    uint32
-	NodePW    []byte
-	CSeq      []byte
-	Filter    []string
-	LayerType gopacket.LayerType
+	asm       *reassembly.Assembler
 	defrag4   *ip4defrag.IPv4Defragmenter
 	defrag6   *ip6defrag.IPv6Defragmenter
+	layerType gopacket.LayerType
+	nodeID    uint32
+	nodePW    []byte
+	filter    []string
+	stats
 }
 
-type Stats struct {
+type stats struct {
 	fragCount     int
 	dupCount      int
 	dnsCount      int
@@ -91,12 +90,12 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 	d := &Decoder{
 		asm:       assembler,
-		NodeID:    uint32(config.Cfg.HepNodeID),
-		NodePW:    []byte(config.Cfg.HepNodePW),
-		LayerType: lt,
+		nodeID:    uint32(config.Cfg.HepNodeID),
+		nodePW:    []byte(config.Cfg.HepNodePW),
+		layerType: lt,
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
 		defrag6:   ip6defrag.NewIPv6Defragmenter(),
-		Filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
+		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
 
 	go d.flushFragments()
@@ -106,8 +105,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	pkt := &Packet{
-		NodeID: d.NodeID,
-		NodePW: d.NodePW,
+		NodeID: d.nodeID,
+		NodePW: d.nodePW,
 		Tsec:   uint32(ci.Timestamp.Unix()),
 		Tmsec:  uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
@@ -127,15 +126,17 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	}
 
 	if config.Cfg.DiscardMethod != "" {
-		d.parseCSeq(data)
-		for _, v := range d.Filter {
-			if string(d.CSeq) == v {
-				return
+		c := parseCSeq(data)
+		if c != nil {
+			for _, v := range d.filter {
+				if string(c) == v {
+					return
+				}
 			}
 		}
 	}
 
-	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+	packet := gopacket.NewPacket(data, d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("layer", "\n%v", packet)
 	logp.Debug("payload", "\n%s", packet.Data())
 
@@ -146,9 +147,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 
 		if config.Cfg.Iface.WithErspan {
-			packet = gopacket.NewPacket(gre.Payload[8:], d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+			packet = gopacket.NewPacket(gre.Payload[8:], d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 		} else {
-			packet = gopacket.NewPacket(gre.Payload, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+			packet = gopacket.NewPacket(gre.Payload, d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 		}
 		logp.Debug("layer", "\nlayer inside GRE\n%v", packet)
 	}
@@ -258,7 +259,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			return
 		}
 		if len(udp.Payload) < 16 {
-			logp.Err("received too small UDP packet with len %d", len(udp.Payload))
+			logp.Warn("received too small UDP packet with len %d", len(udp.Payload))
 			return
 		}
 
@@ -308,7 +309,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 		d.tcpCount++
 		c := Context{
-			CaptureInfo: packet.Metadata().CaptureInfo,
+			CaptureInfo: *ci,
 		}
 		d.asm.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &c)
 		return

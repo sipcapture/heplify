@@ -5,8 +5,7 @@ package decoder
 	write data;
 }%%
 
-func (d *Decoder) parseCSeq(data []byte) {
-	d.CSeq = nil
+func parseCSeq(data []byte) (c []byte) {
 	cs, p, pe := 0, 0, len(data)
 	mark := 0
 
@@ -43,15 +42,14 @@ func (d *Decoder) parseCSeq(data []byte) {
 		}
 
 		action parseMethod{
-			d.CSeq=data[mark:p]
+			c=data[mark:p]
 		}
-
-		action eob {}
 	
 		CSeq = any* "CSeq"i HCOLON DIGIT+ LWS Method >mark %parseMethod;
-		main := CSeq :>CRLF @eob;
+		main := CSeq :>CRLF @{ return c } ;
 
 		write init;
 		write exec;
 	}%%
+	return c
 }

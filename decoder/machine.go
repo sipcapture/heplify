@@ -14,18 +14,17 @@ const decoder_en_main int = 1
 //line machine.rl:6
 
 
-func (d *Decoder) parseCSeq(data []byte) {
-	d.CSeq = nil
+func parseCSeq(data []byte) (c []byte) {
 	cs, p, pe := 0, 0, len(data)
 	mark := 0
 
 	
-//line machine.go:24
+//line machine.go:23
 	{
 	cs = decoder_start
 	}
 
-//line machine.go:29
+//line machine.go:28
 	{
 	if p == pe {
 		goto _test_eof
@@ -451,7 +450,7 @@ func (d *Decoder) parseCSeq(data []byte) {
 		}
 		goto st1
 tr12:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -461,7 +460,7 @@ tr12:
 			goto _test_eof15
 		}
 	st_case_15:
-//line machine.go:465
+//line machine.go:464
 		switch data[p] {
 		case 67:
 			goto st16
@@ -502,9 +501,9 @@ tr12:
 		}
 		goto st1
 tr27:
-//line machine.rl:45
+//line machine.rl:44
 
-			d.CSeq=data[mark:p]
+			c=data[mark:p]
 		
 	goto st18
 	st18:
@@ -512,7 +511,7 @@ tr27:
 			goto _test_eof18
 		}
 	st_case_18:
-//line machine.go:516
+//line machine.go:515
 		if data[p] == 10 {
 			goto tr28
 		}
@@ -523,17 +522,17 @@ st_case_0:
 		goto _out
 tr28:
 //line machine.rl:49
-
+ return c 
 	goto st71
 	st71:
 		if p++; p == pe {
 			goto _test_eof71
 		}
 	st_case_71:
-//line machine.go:534
+//line machine.go:533
 		goto st0
 tr13:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -543,7 +542,7 @@ tr13:
 			goto _test_eof19
 		}
 	st_case_19:
-//line machine.go:547
+//line machine.go:546
 		switch data[p] {
 		case 67:
 			goto st2
@@ -568,7 +567,7 @@ tr13:
 		}
 		goto st1
 tr14:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -578,7 +577,7 @@ tr14:
 			goto _test_eof21
 		}
 	st_case_21:
-//line machine.go:582
+//line machine.go:581
 		switch data[p] {
 		case 65:
 			goto st22
@@ -651,7 +650,7 @@ tr14:
 		}
 		goto st1
 tr15:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -661,7 +660,7 @@ tr15:
 			goto _test_eof26
 		}
 	st_case_26:
-//line machine.go:665
+//line machine.go:664
 		switch data[p] {
 		case 67:
 			goto st2
@@ -730,7 +729,7 @@ tr15:
 		}
 		goto st1
 tr16:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -740,7 +739,7 @@ tr16:
 			goto _test_eof31
 		}
 	st_case_31:
-//line machine.go:744
+//line machine.go:743
 		switch data[p] {
 		case 67:
 			goto st2
@@ -807,7 +806,7 @@ tr16:
 		}
 		goto st1
 tr17:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -817,7 +816,7 @@ tr17:
 			goto _test_eof36
 		}
 	st_case_36:
-//line machine.go:821
+//line machine.go:820
 		switch data[p] {
 		case 67:
 			goto st2
@@ -884,7 +883,7 @@ tr17:
 		}
 		goto st1
 tr18:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -894,7 +893,7 @@ tr18:
 			goto _test_eof41
 		}
 	st_case_41:
-//line machine.go:898
+//line machine.go:897
 		switch data[p] {
 		case 67:
 			goto st2
@@ -975,7 +974,7 @@ tr18:
 		}
 		goto st1
 tr19:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -985,7 +984,7 @@ tr19:
 			goto _test_eof47
 		}
 	st_case_47:
-//line machine.go:989
+//line machine.go:988
 		switch data[p] {
 		case 67:
 			goto st2
@@ -1082,7 +1081,7 @@ tr19:
 		}
 		goto st1
 tr20:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -1092,7 +1091,7 @@ tr20:
 			goto _test_eof54
 		}
 	st_case_54:
-//line machine.go:1096
+//line machine.go:1095
 		switch data[p] {
 		case 67:
 			goto st2
@@ -1189,7 +1188,7 @@ tr20:
 		}
 		goto st1
 tr21:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -1199,7 +1198,7 @@ tr21:
 			goto _test_eof61
 		}
 	st_case_61:
-//line machine.go:1203
+//line machine.go:1202
 		switch data[p] {
 		case 67:
 			goto st2
@@ -1296,7 +1295,7 @@ tr21:
 		}
 		goto st1
 tr22:
-//line machine.rl:41
+//line machine.rl:40
 
 			mark = p
 		
@@ -1306,7 +1305,7 @@ tr22:
 			goto _test_eof68
 		}
 	st_case_68:
-//line machine.go:1310
+//line machine.go:1309
 		switch data[p] {
 		case 67:
 			goto st2
@@ -1421,6 +1420,7 @@ tr22:
 	_out: {}
 	}
 
-//line machine.rl:56
+//line machine.rl:53
 
+	return c
 }
