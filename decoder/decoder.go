@@ -27,9 +27,6 @@ type Decoder struct {
 	LayerType gopacket.LayerType
 	defrag4   *ip4defrag.IPv4Defragmenter
 	defrag6   *ip6defrag.IPv6Defragmenter
-	SIPCache  *freecache.Cache
-	SDPCache  *freecache.Cache
-	RTCPCache *freecache.Cache
 }
 
 type Stats struct {
@@ -71,6 +68,9 @@ func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
 }
 
 var PacketQueue = make(chan *Packet, 20000)
+var SIPCache = freecache.NewCache(20 * 1024 * 1024)  // 20 MB
+var SDPCache = freecache.NewCache(30 * 1024 * 1024)  // 30 MB
+var RTCPCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
 
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	var lt gopacket.LayerType
@@ -96,9 +96,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		LayerType: lt,
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
 		defrag6:   ip6defrag.NewIPv6Defragmenter(),
-		SIPCache:  freecache.NewCache(20 * 1024 * 1024), // 20 MB
-		SDPCache:  freecache.NewCache(30 * 1024 * 1024), // 30 MB
-		RTCPCache: freecache.NewCache(30 * 1024 * 1024), // 30 MB
 		Filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
 
@@ -115,19 +112,18 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		Tmsec:  uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
-	if len(data) > 384 {
-		if config.Cfg.Dedup {
-			_, err := d.SIPCache.Get(data[42:])
+	if config.Cfg.Dedup {
+		if len(data) > 384 {
+			_, err := SIPCache.Get(data[42:])
 			if err == nil {
 				d.dupCount++
 				return
 			}
-			err = d.SIPCache.Set(data[42:], nil, 1)
+			err = SIPCache.Set(data[42:], nil, 1)
 			if err != nil {
 				logp.Warn("%v", err)
 			}
 		}
-		logp.Debug("payload", "\n%s", string(data[42:]))
 	}
 
 	if config.Cfg.DiscardMethod != "" {
@@ -141,6 +137,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 
 	packet := gopacket.NewPacket(data, d.LayerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 	logp.Debug("layer", "\n%v", packet)
+	logp.Debug("payload", "\n%s", packet.Data())
 
 	if greLayer := packet.Layer(layers.LayerTypeGRE); greLayer != nil {
 		gre, ok := greLayer.(*layers.GRE)
@@ -272,13 +269,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 
 		if config.Cfg.Mode == "SIPLOG" {
 			if udp.DstPort == 514 {
-				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(udp.Payload)
+				pkt.Payload, pkt.CID, pkt.ProtoType = correlateLOG(udp.Payload)
 				if pkt.Payload != nil && pkt.CID != nil {
 					PacketQueue <- pkt
 				}
 				return
 			} else if udp.SrcPort == 2223 || udp.DstPort == 2223 {
-				pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateNG(udp.Payload)
+				pkt.Payload, pkt.CID, pkt.ProtoType = correlateNG(udp.Payload)
 				if pkt.Payload != nil {
 					PacketQueue <- pkt
 				}
@@ -286,10 +283,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			}
 		}
 		if config.Cfg.Mode != "SIP" {
-			d.cacheSDPIPPort(udp.Payload)
+			cacheSDPIPPort(udp.Payload)
 			if (udp.Payload[0]&0xc0)>>6 == 2 {
 				if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-					pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
+					pkt.Payload, pkt.CID, pkt.ProtoType = correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
 					if pkt.Payload != nil {
 						d.rtcpCount++
 						PacketQueue <- pkt
@@ -309,31 +306,12 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		if !ok {
 			return
 		}
-		// TODO: make a flag for this
-		/* 		c := Context{
-		   			CaptureInfo: packet.Metadata().CaptureInfo,
-		   		}
-		   		err := tcp.SetNetworkLayerForChecksum(packet.NetworkLayer())
-		   		if err != nil {
-		   			logp.Err("failed to set network layer for checksum: %s\n", err)
-		   		}
-		   		d.asm.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &c) */
-
-		pkt.SrcPort = uint16(tcp.SrcPort)
-		pkt.DstPort = uint16(tcp.DstPort)
-		pkt.Payload = tcp.Payload
 		d.tcpCount++
-
-		if config.Cfg.Mode == "SIPLOG" && tcp.DstPort == 514 {
-			pkt.Payload, pkt.CID, pkt.ProtoType = d.correlateLOG(tcp.Payload)
-			if pkt.Payload != nil && pkt.CID != nil {
-				PacketQueue <- pkt
-			}
-			return
+		c := Context{
+			CaptureInfo: packet.Metadata().CaptureInfo,
 		}
-		if config.Cfg.Mode != "SIP" {
-			d.cacheSDPIPPort(tcp.Payload)
-		}
+		d.asm.AssembleWithContext(packet.NetworkLayer().NetworkFlow(), tcp, &c)
+		return
 	}
 
 	if config.Cfg.Mode == "SIPDNS" {

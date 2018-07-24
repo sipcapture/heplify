@@ -21,17 +21,19 @@ type tcpStream struct {
 	fsmerr         bool
 	optchecker     reassembly.TCPOptionCheck
 	net, transport gopacket.Flow
+	isLog          bool
 	ident          string
 }
 
 func (factory *tcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.TCP, ac reassembly.AssemblerContext) reassembly.Stream {
-	logp.Info("new stream %s %s\n", net, transport)
+	logp.Debug("reassembly", "new stream %s %s\n", net, transport)
 	fsmOptions := reassembly.TCPSimpleFSMOptions{
 		SupportMissingEstablishment: true,
 	}
 	stream := &tcpStream{
 		net:        net,
 		transport:  transport,
+		isLog:      tcp.SrcPort == 514 || tcp.DstPort == 514,
 		tcpstate:   reassembly.NewTCPSimpleFSM(fsmOptions),
 		optchecker: reassembly.NewTCPOptionCheck(),
 		ident:      fmt.Sprintf("%s:%s", net, transport),
@@ -60,20 +62,7 @@ func (t *tcpStream) Accept(tcp *layers.TCP, ci gopacket.CaptureInfo, dir reassem
 			return false
 		}
 	}
-	// Checksum
-	accept := true
-	// TODO: make a flag for this
-	if true {
-		c, err := tcp.ComputeChecksum()
-		if err != nil {
-			logp.Err("%s: error computing checksum: %s\n", t.ident, err)
-			accept = false
-		} else if c != 0x0 {
-			logp.Err("%s: invalid checksum: 0x%x\n", t.ident, c)
-			accept = false
-		}
-	}
-	return accept
+	return true
 }
 
 func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.AssemblerContext) {
@@ -95,35 +84,56 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 		ident = fmt.Sprintf("%v %v(%s): ", t.net.Reverse(), t.transport.Reverse(), dir)
 	}
 
-	logp.Info("%s: SG reassembled packet with %d bytes (start:%v,end:%v,skip:%d,saved:%d,nb:%d,%d,overlap:%d,%d)\n", ident, length, start, end, skip, saved, sgStats.Packets, sgStats.Chunks, sgStats.OverlapBytes, sgStats.OverlapPackets)
-
 	if skip == -1 {
 		// this is allowed
 	} else if skip != 0 {
 		// Missing bytes in stream: do not even try to parse it
 		return
 	}
-
-	data := sg.Fetch(length)
-	pkt := &Packet{
-		SrcIP:     t.net.Src().Raw(),
-		DstIP:     t.net.Dst().Raw(),
-		SrcPort:   binary.BigEndian.Uint16(t.transport.Src().Raw()),
-		DstPort:   binary.BigEndian.Uint16(t.transport.Dst().Raw()),
-		Tsec:      uint32(time.Now().Unix()),
-		Tmsec:     uint32(time.Now().Nanosecond() / 1000),
-		ProtoType: 1,
-		NodeID:    uint32(config.Cfg.HepNodeID),
-		NodePW:    []byte(config.Cfg.HepNodePW),
-		Payload:   data,
+	if len(t.transport.Src().Raw()) < 2 || len(t.transport.Dst().Raw()) < 2 {
+		return
 	}
-	logp.Info("%v %v", string(data), pkt)
+
+	pkt := &Packet{}
+	pkt.Version = 0x02
+	pkt.Protocol = 0x06
+	pkt.SrcIP = t.net.Src().Raw()
+	pkt.DstIP = t.net.Dst().Raw()
+	if len(pkt.SrcIP) > 4 || len(pkt.DstIP) > 4 {
+		pkt.Version = 0x0a
+	}
+	pkt.SrcPort = binary.BigEndian.Uint16(t.transport.Src().Raw())
+	pkt.DstPort = binary.BigEndian.Uint16(t.transport.Dst().Raw())
+	pkt.Tsec = uint32(time.Now().Unix())
+	pkt.Tmsec = uint32(time.Now().Nanosecond() / 1000)
+	pkt.NodeID = uint32(config.Cfg.HepNodeID)
+	pkt.NodePW = []byte(config.Cfg.HepNodePW)
+	pkt.Payload = sg.Fetch(length)
+
+	logp.Debug("reassembly", "%s: SG reassembled packet with %d bytes (start:%v,end:%v,skip:%d,saved:%d,nb:%d,%d,overlap:%d,%d)\n%s",
+		ident, length, start, end, skip, saved, sgStats.Packets, sgStats.Chunks, sgStats.OverlapBytes, sgStats.OverlapPackets, pkt.Payload)
+
+	if config.Cfg.Mode == "SIPLOG" && t.isLog {
+		pkt.Payload, pkt.CID, pkt.ProtoType = correlateLOG(pkt.Payload)
+		if pkt.Payload != nil && pkt.CID != nil {
+			PacketQueue <- pkt
+		}
+		return
+	} else if config.Cfg.Mode != "SIP" {
+		cacheSDPIPPort(pkt.Payload)
+	}
+	if length > 16 && length < 8192 {
+		if bytes.Contains(pkt.Payload, []byte("CSeq")) {
+			pkt.ProtoType = 1
+		}
+		PacketQueue <- pkt
+	}
 }
 
 func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
-	logp.Info("%s: Connection closed\n", t.ident)
+	logp.Debug("reassembly", "%s: Connection closed\n", t.ident)
 	// do not remove the connection to allow last ACK
-	return false
+	return true
 }
 
 /* func (t *tcpStream) run() {

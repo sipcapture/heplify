@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/gopacket/reassembly"
 	"github.com/negbie/logp"
 )
 
@@ -51,12 +52,18 @@ func isPrivIP(IP net.IP) (p bool) {
 }
 
 func (d *Decoder) flushFragments() {
+	aTick := time.Tick(1 * time.Second)
+	dTick := time.Tick(1 * time.Minute)
 	for {
-		<-time.After(1 * time.Minute)
-		go func() {
+		select {
+		case <-aTick:
+			d.asm.FlushWithOptions(reassembly.FlushOptions{
+				T: time.Now().Add(-1 * time.Minute), TC: time.Now().Add(-1 * time.Hour),
+			})
+		case <-dTick:
 			d.defrag4.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
 			d.defrag6.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
-		}()
+		}
 	}
 }
 
@@ -103,33 +110,35 @@ func (d *Decoder) printPacketStats() {
 
 func (d *Decoder) printSIPCacheStats() {
 	logp.Info("SIPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		d.SIPCache.EntryCount(), d.SIPCache.LookupCount(), d.SIPCache.HitCount(), d.SIPCache.ExpiredCount(), d.SIPCache.OverwriteCount())
-	d.SIPCache.ResetStatistics()
+		SIPCache.EntryCount(), SIPCache.LookupCount(), SIPCache.HitCount(), SIPCache.ExpiredCount(), SIPCache.OverwriteCount())
+	SIPCache.ResetStatistics()
 }
 
 func (d *Decoder) printSDPCacheStats() {
 	logp.Info("SDPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		d.SDPCache.EntryCount(), d.SDPCache.LookupCount(), d.SDPCache.HitCount(), d.SDPCache.ExpiredCount(), d.SDPCache.OverwriteCount())
-	d.SDPCache.ResetStatistics()
+		SDPCache.EntryCount(), SDPCache.LookupCount(), SDPCache.HitCount(), SDPCache.ExpiredCount(), SDPCache.OverwriteCount())
+	SDPCache.ResetStatistics()
 }
 
 func (d *Decoder) printRTCPCacheStats() {
 	logp.Info("RTCPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		d.RTCPCache.EntryCount(), d.RTCPCache.LookupCount(), d.RTCPCache.HitCount(), d.RTCPCache.ExpiredCount(), d.RTCPCache.OverwriteCount())
-	d.RTCPCache.ResetStatistics()
+		RTCPCache.EntryCount(), RTCPCache.LookupCount(), RTCPCache.HitCount(), RTCPCache.ExpiredCount(), RTCPCache.OverwriteCount())
+	RTCPCache.ResetStatistics()
 }
 
 func (d *Decoder) printStats() {
+	sTick := time.Tick(1 * time.Minute)
 	for {
-		<-time.After(60 * time.Second)
-		go func() {
+		select {
+		case <-sTick:
 			d.printPacketStats()
 			if runtime.GOARCH == "amd64" {
 				d.printSIPCacheStats()
 				d.printSDPCacheStats()
 				d.printRTCPCacheStats()
 			}
-		}()
+
+		}
 	}
 }
 
