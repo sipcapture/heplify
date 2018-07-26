@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/gopacket/reassembly"
 	"github.com/negbie/logp"
 )
 
@@ -52,14 +51,9 @@ func isPrivIP(IP net.IP) (p bool) {
 }
 
 func (d *Decoder) flushFragments() {
-	aTick := time.Tick(1 * time.Second)
 	dTick := time.Tick(1 * time.Minute)
 	for {
 		select {
-		case <-aTick:
-			d.asm.FlushWithOptions(reassembly.FlushOptions{
-				T: time.Now().Add(-1 * time.Minute), TC: time.Now().Add(-1 * time.Hour),
-			})
 		case <-dTick:
 			d.defrag4.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
 			d.defrag6.DiscardOlderThan(time.Now().Add(-1 * time.Minute))

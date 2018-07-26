@@ -10,6 +10,8 @@ import (
 	"github.com/negbie/logp"
 )
 
+var ipPort bytes.Buffer
+
 // cacheSDPIPPort will extract the source IP, source Port from SDP body and CallID from SIP header.
 // It will do this only for SIP messages which have the strings "c=IN IP4 " and "m=audio " in the SDP body.
 // If there is one rtcp attribute in the SDP body it will use it as RTCP port. Otherwise it will add 1 to
@@ -17,7 +19,7 @@ import (
 func cacheSDPIPPort(payload []byte) {
 	if posSDPIP := bytes.Index(payload, []byte("c=IN IP")); posSDPIP > 0 {
 		if posSDPPort := bytes.Index(payload, []byte("m=audio ")); posSDPPort > 0 {
-			var ipPort bytes.Buffer
+			ipPort.Reset()
 			restIP := payload[posSDPIP:]
 			// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 			if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {

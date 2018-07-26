@@ -132,14 +132,13 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 				PacketQueue <- pkt
 			}
 			return
-		} else if config.Cfg.Mode != "SIP" {
-			cacheSDPIPPort(pkt.Payload)
 		}
 
 		if bytes.Contains(pkt.Payload, []byte("CSeq")) {
 			pkt.ProtoType = 1
+			PacketQueue <- pkt
+			cacheSDPIPPort(pkt.Payload)
 		}
-		PacketQueue <- pkt
 	} else {
 		if length != 0 {
 			logp.Warn("received TCP packet with unusual length %d", length)
