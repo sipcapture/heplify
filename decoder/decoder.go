@@ -144,12 +144,12 @@ func (d *Decoder) defragIP6(i6 layers.IPv6, i6frag layers.IPv6Fragment, t time.T
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	if config.Cfg.Dedup {
 		if len(data) > 384 {
-			_, err := SIPCache.Get(data[42:])
+			_, err := SIPCache.Get(data[34:])
 			if err == nil {
 				d.dupCount++
 				return
 			}
-			err = SIPCache.Set(data[42:], nil, 1)
+			err = SIPCache.Set(data[34:], nil, 1)
 			if err != nil {
 				logp.Warn("%v", err)
 			}
@@ -272,10 +272,12 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 
 	for _, layerType := range *foundLayerTypes {
 		switch layerType {
+		case layers.LayerTypeDot1Q:
+			pkt.Vlan = d1q.VLANIdentifier
+
 		case layers.LayerTypeUDP:
-			logp.Debug("payload", "\n%s", udp.Payload)
 			if len(udp.Payload) < 16 {
-				logp.Warn("received too small UDP packet with len %d", len(udp.Payload))
+				logp.Warn("received too small %d byte UDP packet with payload %s", len(udp.Payload), udp.Payload)
 				return
 			}
 
@@ -283,6 +285,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(udp.DstPort)
 			pkt.Payload = udp.Payload
 			d.udpCount++
+			logp.Debug("payload", "UDP:\n%s", pkt)
 
 			if config.Cfg.Mode == "SIPLOG" {
 				if udp.DstPort == 514 {
@@ -312,7 +315,9 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						d.rtcpFailCount++
 						return
 					} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
-						logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
+						if config.Cfg.Mode == "SIPRTP" {
+							logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
+						}
 						pkt.Payload = nil
 						return
 					}
@@ -320,11 +325,11 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			}
 
 		case layers.LayerTypeTCP:
-			logp.Debug("payload", "\n%s", tcp.Payload)
 			pkt.SrcPort = uint16(tcp.SrcPort)
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
 			d.tcpCount++
+			logp.Debug("payload", "TCP:\n%s", pkt)
 
 			if config.Cfg.Reassembly {
 				d.asm.AssembleWithContext(flow, tcp, &Context{CaptureInfo: *ci})
