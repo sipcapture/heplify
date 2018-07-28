@@ -21,6 +21,7 @@ type Config struct {
 	HepNodeID     uint
 	Network       string
 	Protobuf      bool
+	Reassembly    bool
 }
 
 type InterfacesConfig struct {
