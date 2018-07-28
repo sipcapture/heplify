@@ -62,7 +62,7 @@ func init() {
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP node ID")
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
-	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcp assembly will be enabled")
+	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig

@@ -10,7 +10,7 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/reassembly"
+	"github.com/google/gopacket/tcpassembly"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/ip4defrag"
 	"github.com/negbie/heplify/ip6defrag"
@@ -19,7 +19,7 @@ import (
 )
 
 type Decoder struct {
-	asm       *reassembly.Assembler
+	asm       *tcpassembly.Assembler
 	defrag4   *ip4defrag.IPv4Defragmenter
 	defrag6   *ip6defrag.IPv6Defragmenter
 	parser    *gopacket.DecodingLayerParser
@@ -109,9 +109,11 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	// TODO: make a flag for this
 	debug.SetGCPercent(50)
 
-	streamFactory := &tcpStreamFactory{}
-	streamPool := reassembly.NewStreamPool(streamFactory)
-	assembler := reassembly.NewAssembler(streamPool)
+	streamFactory := &sipStreamFactory{}
+	streamPool := tcpassembly.NewStreamPool(streamFactory)
+	assembler := tcpassembly.NewAssembler(streamPool)
+	assembler.MaxBufferedPagesPerConnection = 1
+	assembler.MaxBufferedPagesTotal = 1
 
 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
@@ -332,14 +334,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			logp.Debug("payload", "TCP:\n%s", pkt)
 
 			if config.Cfg.Reassembly {
-				d.asm.AssembleWithContext(flow, tcp, &Context{CaptureInfo: *ci})
-				flushOptions := reassembly.FlushOptions{
-					T:  ci.Timestamp.Add(-2 * time.Second),
-					TC: ci.Timestamp.Add(-1 * time.Second),
-				}
-				if d.tcpCount%128 == 0 {
-					d.asm.FlushWithOptions(flushOptions)
-				}
+				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)
 				return
 			}
 
