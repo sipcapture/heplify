@@ -50,13 +50,14 @@ func isPrivIP(IP net.IP) (p bool) {
 	return p
 }
 
-func (d *Decoder) flushFragments() {
-	dTick := time.Tick(1 * time.Minute)
+func (d *Decoder) flushFragments(dt time.Duration) {
+	dTick := time.Tick(dt)
 	for {
 		select {
 		case <-dTick:
-			d.defrag4.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
-			d.defrag6.DiscardOlderThan(time.Now().Add(-1 * time.Minute))
+			d.defrag4.DiscardOlderThan(time.Now().Add(-dt))
+			d.defrag6.DiscardOlderThan(time.Now().Add(-dt))
+			d.asm.FlushOlderThan(time.Now().Add(-dt))
 		}
 	}
 }
@@ -120,8 +121,8 @@ func (d *Decoder) printRTCPCacheStats() {
 	RTCPCache.ResetStatistics()
 }
 
-func (d *Decoder) printStats() {
-	sTick := time.Tick(1 * time.Minute)
+func (d *Decoder) printStats(dt time.Duration) {
+	sTick := time.Tick(dt)
 	for {
 		select {
 		case <-sTick:

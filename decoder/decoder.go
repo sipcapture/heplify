@@ -130,8 +130,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
 
-	go d.flushFragments()
-	go d.printStats()
+	go d.flushFragments(30 * time.Second)
+	go d.printStats(1 * time.Minute)
 	return d
 }
 
