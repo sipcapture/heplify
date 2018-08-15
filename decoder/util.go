@@ -57,6 +57,15 @@ func (d *Decoder) flushFragments(dt time.Duration) {
 		case <-dTick:
 			d.defrag4.DiscardOlderThan(time.Now().Add(-dt))
 			d.defrag6.DiscardOlderThan(time.Now().Add(-dt))
+		}
+	}
+}
+
+func (d *Decoder) flushTCPAssembler(dt time.Duration) {
+	tTick := time.Tick(dt)
+	for {
+		select {
+		case <-tTick:
 			d.asm.FlushOlderThan(time.Now().Add(-dt))
 		}
 	}

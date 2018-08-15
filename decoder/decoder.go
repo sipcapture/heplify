@@ -109,18 +109,11 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	// TODO: make a flag for this
 	debug.SetGCPercent(50)
 
-	streamFactory := &sipStreamFactory{}
-	streamPool := tcpassembly.NewStreamPool(streamFactory)
-	assembler := tcpassembly.NewAssembler(streamPool)
-	assembler.MaxBufferedPagesPerConnection = 1
-	assembler.MaxBufferedPagesTotal = 1
-
 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
 	)
 
 	d := &Decoder{
-		asm:       assembler,
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
 		defrag6:   ip6defrag.NewIPv6Defragmenter(),
 		parser:    decoder,
@@ -130,7 +123,14 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
 
-	go d.flushFragments(30 * time.Second)
+	if config.Cfg.Reassembly {
+		d.asm = tcpassembly.NewAssembler(tcpassembly.NewStreamPool(new(sipStreamFactory)))
+		d.asm.MaxBufferedPagesPerConnection = 1
+		d.asm.MaxBufferedPagesTotal = 1
+		go d.flushTCPAssembler(500 * time.Millisecond)
+	}
+
+	go d.flushFragments(1 * time.Minute)
 	go d.printStats(1 * time.Minute)
 	return d
 }
@@ -337,6 +337,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)
 				return
 			}
+			cacheSDPIPPort(pkt.Payload)
 
 		case layers.LayerTypeDNS:
 			if config.Cfg.Mode == "SIPDNS" {

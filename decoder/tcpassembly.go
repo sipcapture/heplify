@@ -98,5 +98,5 @@ var sLine = [][]byte{
 	[]byte("MESSAGE "),
 	[]byte("REFER "),
 	[]byte("PUBLISH "),
-	[]byte("SIP/"),
+	[]byte("SIP/2.0 "),
 }
