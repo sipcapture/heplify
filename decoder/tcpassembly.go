@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/google/gopacket"
@@ -41,7 +42,7 @@ func (s *sipStream) run() {
 			logp.Err("got %v while reading temporary buffer", err)
 		} else if n > 0 {
 			data = append(data, tmp[0:n]...)
-			if isSIP(data) || bytes.HasSuffix(data, []byte("\r\n\r\n")) {
+			if isSIP(data) {
 				ts := time.Now()
 				pkt := &Packet{}
 				pkt.Version = 0x02
@@ -75,15 +76,54 @@ func (s *sipStream) run() {
 }
 
 func isSIP(data []byte) bool {
-	for k := range sLine {
-		if bytes.HasPrefix(data, sLine[k]) && bytes.HasSuffix(data, []byte("\r\n")) {
+	end := []byte("\r\n")
+	bodyLen := getSIPHeaderValInt("Content-Length:", data)
+	if bodyLen < 1 {
+		end = []byte("\r\n\r\n")
+	} else {
+		headerLen := bytes.Index(data, []byte("\r\n\r\n")) + 4
+		if headerLen == -1 || headerLen+bodyLen != len(data) {
+			return false
+		}
+	}
+
+	for k := range firstSIPLine {
+		if bytes.HasPrefix(data, firstSIPLine[k]) && bytes.HasSuffix(data, end) {
 			return true
 		}
 	}
 	return false
 }
 
-var sLine = [][]byte{
+func isSDP(data []byte) bool {
+	for k := range firstSDPLine {
+		if bytes.HasPrefix(data, firstSDPLine[k]) && bytes.HasSuffix(data, []byte("\r\n")) {
+			return true
+		}
+	}
+	return false
+}
+
+func getSIPHeaderValInt(header string, data []byte) (valInt int) {
+	l := len(header)
+	if startPos := bytes.Index(data, []byte(header)); startPos > -1 {
+		restData := data[startPos:]
+		if endPos := bytes.Index(restData, []byte("\r\n")); endPos > l {
+			val := string(restData[l:endPos])
+			i := 0
+			for i < len(val) && (val[i] == ' ' || val[i] == '\t') {
+				i++
+			}
+			val = val[i:]
+			if valInt, err := strconv.Atoi(val); err == nil {
+				return valInt
+			}
+		}
+	}
+	return -1
+}
+
+var firstSIPLine = [][]byte{
 	[]byte("INVITE "),
 	[]byte("REGISTER "),
 	[]byte("ACK "),
@@ -99,4 +139,22 @@ var sLine = [][]byte{
 	[]byte("REFER "),
 	[]byte("PUBLISH "),
 	[]byte("SIP/2.0 "),
+}
+
+var firstSDPLine = [][]byte{
+	[]byte("a="),
+	[]byte("b="),
+	[]byte("c="),
+	[]byte("e="),
+	[]byte("i="),
+	[]byte("k="),
+	[]byte("m="),
+	[]byte("o="),
+	[]byte("p="),
+	[]byte("r="),
+	[]byte("s="),
+	[]byte("t="),
+	[]byte("u="),
+	[]byte("v="),
+	[]byte("z="),
 }
