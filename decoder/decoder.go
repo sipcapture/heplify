@@ -5,6 +5,7 @@ import (
 	"net"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/coocood/freecache"
@@ -31,16 +32,16 @@ type Decoder struct {
 }
 
 type stats struct {
-	fragCount     int
-	dupCount      int
-	dnsCount      int
-	ip4Count      int
-	ip6Count      int
-	rtcpCount     int
-	rtcpFailCount int
-	tcpCount      int
-	udpCount      int
-	unknownCount  int
+	fragCount     uint64
+	dupCount      uint64
+	dnsCount      uint64
+	ip4Count      uint64
+	ip6Count      uint64
+	rtcpCount     uint64
+	rtcpFailCount uint64
+	tcpCount      uint64
+	udpCount      uint64
+	unknownCount  uint64
 }
 
 type Packet struct {
@@ -145,10 +146,10 @@ func (d *Decoder) defragIP6(i6 layers.IPv6, i6frag layers.IPv6Fragment, t time.T
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	if config.Cfg.Dedup {
-		if len(data) > 384 {
+		if len(data) > 128 {
 			_, err := SIPCache.Get(data[34:])
 			if err == nil {
-				d.dupCount++
+				atomic.AddUint64(&d.dupCount, 1)
 				return
 			}
 			err = SIPCache.Set(data[34:], nil, 1)
@@ -194,14 +195,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 
 		case layers.LayerTypeIPv4:
 			ip4Len := ip4.Length
-			d.ip4Count++
+			atomic.AddUint64(&d.ip4Count, 1)
 
 			ip4New, err := d.defragIP4(ip4, ci.Timestamp)
 			if err != nil {
 				logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, ip4.SrcIP, ip4.DstIP)
 				return
 			} else if ip4New == nil {
-				d.fragCount++
+				atomic.AddUint64(&d.fragCount, 1)
 				return
 			}
 
@@ -225,7 +226,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 
 		case layers.LayerTypeIPv6:
 			ip6Len := ip6.Length
-			d.ip6Count++
+			atomic.AddUint64(&d.ip6Count, 1)
 
 			if ip6.NextHeader != layers.IPProtocolIPv6Fragment {
 				d.processTransport(&decodedLayers, &udp, &tcp, ip6.NetworkFlow(), ci, 0x0a, uint8(ip6.NextHeader), ip6.SrcIP, ip6.DstIP)
@@ -237,7 +238,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 						logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, ip6.SrcIP, ip6.DstIP)
 						return
 					} else if ip6New == nil {
-						d.fragCount++
+						atomic.AddUint64(&d.fragCount, 1)
 						return
 					}
 
@@ -279,14 +280,14 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 
 		case layers.LayerTypeUDP:
 			if len(udp.Payload) < 16 {
-				logp.Warn("received too small %d byte UDP packet with payload %s", len(udp.Payload), udp.Payload)
+				logp.Warn("received too small %d byte UDP packet with payload %v", len(udp.Payload), udp.Payload)
 				return
 			}
 
 			pkt.SrcPort = uint16(udp.SrcPort)
 			pkt.DstPort = uint16(udp.DstPort)
 			pkt.Payload = udp.Payload
-			d.udpCount++
+			atomic.AddUint64(&d.udpCount, 1)
 			logp.Debug("payload", "UDP:\n%s", pkt)
 
 			if config.Cfg.Mode == "SIPLOG" {
@@ -310,11 +311,11 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 						pkt.Payload, pkt.CID, pkt.ProtoType = correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
 						if pkt.Payload != nil {
-							d.rtcpCount++
+							atomic.AddUint64(&d.rtcpCount, 1)
 							PacketQueue <- pkt
 							return
 						}
-						d.rtcpFailCount++
+						atomic.AddUint64(&d.rtcpFailCount, 1)
 						return
 					} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
 						if config.Cfg.Mode == "SIPRTP" {
@@ -330,7 +331,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.SrcPort = uint16(tcp.SrcPort)
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
-			d.tcpCount++
+			atomic.AddUint64(&d.tcpCount, 1)
 			logp.Debug("payload", "TCP:\n%s", pkt)
 
 			if config.Cfg.Reassembly {
@@ -343,7 +344,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			if config.Cfg.Mode == "SIPDNS" {
 				pkt.ProtoType = 53
 				pkt.Payload = protos.ParseDNS(&dns)
-				d.dnsCount++
+				atomic.AddUint64(&d.dnsCount, 1)
 				PacketQueue <- pkt
 				return
 			}
@@ -359,6 +360,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	if pkt.Payload != nil {
 		PacketQueue <- pkt
 	} else {
-		d.unknownCount++
+		atomic.AddUint64(&d.unknownCount, 1)
 	}
 }

@@ -91,15 +91,17 @@ func EncodeHEP(h *decoder.Packet) []byte {
 			logp.Warn("%v", err)
 		}
 	} else {
-		hepMsg = makeHEPChuncks(h)
+		hepMsg = append([]byte{}, makeHEPChuncks(h)...)
 		binary.BigEndian.PutUint16(hepMsg[4:6], uint16(len(hepMsg)))
 	}
 	return hepMsg
 }
 
+var b bytes.Buffer
+
 // makeHEPChuncks will construct the respective HEP chunck
 func makeHEPChuncks(h *decoder.Packet) []byte {
-	var b bytes.Buffer
+	b.Reset()
 	b.Write(hepVer)
 	// hepMsg length placeholder. Will be written later
 	b.Write(hepLen)
