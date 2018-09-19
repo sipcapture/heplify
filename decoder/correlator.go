@@ -52,19 +52,10 @@ func cacheSDPIPPort(payload []byte) {
 			}
 
 			var callID []byte
-			if posCallID := bytes.Index(payload, []byte("Call-ID: ")); posCallID > 0 {
+			if posCallID := bytes.Index(payload, []byte("Call-I")); posCallID > 0 {
 				restCallID := payload[posCallID:]
 				// Minimum Call-ID length of "Call-ID: a" = 10
 				if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 10 {
-					callID = restCallID[len("Call-ID: "):posRestCallID]
-				} else {
-					logp.Debug("sdp", "No end or fishy Call-ID in '%s'", restCallID)
-					return
-				}
-			} else if posCallID := bytes.Index(payload, []byte("Call-ID:")); posCallID > 0 {
-				restCallID := payload[posCallID:]
-				// Minimum Call-ID length of "Call-ID:a" = 9
-				if posRestCallID := bytes.Index(restCallID, []byte("\r\n")); posRestCallID >= 9 {
 					callID = restCallID[len("Call-ID:"):posRestCallID]
 				} else {
 					logp.Debug("sdp", "No end or fishy Call-ID in '%s'", restCallID)
@@ -85,7 +76,7 @@ func cacheSDPIPPort(payload []byte) {
 			}
 
 			//logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", ipPort.String(), string(callID))
-			err := SDPCache.Set(ipPort.Bytes(), callID, 120)
+			err := SDPCache.Set(ipPort.Bytes(), bytes.TrimSpace(callID), 120)
 			if err != nil {
 				logp.Warn("%v", err)
 			}

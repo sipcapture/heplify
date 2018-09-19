@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/negbie/logp"
@@ -108,8 +109,27 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 
 func (d *Decoder) printPacketStats() {
 	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
-		d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount)
-	d.ip4Count, d.ip6Count, d.udpCount, d.tcpCount, d.rtcpCount, d.rtcpFailCount, d.dnsCount, d.dupCount, d.fragCount, d.unknownCount = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+		atomic.LoadUint64(&d.ip4Count),
+		atomic.LoadUint64(&d.ip6Count),
+		atomic.LoadUint64(&d.udpCount),
+		atomic.LoadUint64(&d.tcpCount),
+		atomic.LoadUint64(&d.rtcpCount),
+		atomic.LoadUint64(&d.rtcpFailCount),
+		atomic.LoadUint64(&d.dnsCount),
+		atomic.LoadUint64(&d.dupCount),
+		atomic.LoadUint64(&d.fragCount),
+		atomic.LoadUint64(&d.unknownCount),
+	)
+	atomic.StoreUint64(&d.ip4Count, 0)
+	atomic.StoreUint64(&d.ip6Count, 0)
+	atomic.StoreUint64(&d.udpCount, 0)
+	atomic.StoreUint64(&d.tcpCount, 0)
+	atomic.StoreUint64(&d.rtcpCount, 0)
+	atomic.StoreUint64(&d.rtcpFailCount, 0)
+	atomic.StoreUint64(&d.dnsCount, 0)
+	atomic.StoreUint64(&d.dupCount, 0)
+	atomic.StoreUint64(&d.fragCount, 0)
+	atomic.StoreUint64(&d.unknownCount, 0)
 }
 
 func (d *Decoder) printSIPCacheStats() {

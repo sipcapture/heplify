@@ -63,11 +63,9 @@ func (s *sipStream) run() {
 				pkt.NodeID = uint32(config.Cfg.HepNodeID)
 				pkt.NodePW = []byte(config.Cfg.HepNodePW)
 				pkt.Payload = data
-				if bytes.Contains(pkt.Payload, []byte("CSeq")) {
-					pkt.ProtoType = 1
-					PacketQueue <- pkt
-					cacheSDPIPPort(pkt.Payload)
-				}
+				pkt.ProtoType = 1
+				PacketQueue <- pkt
+				cacheSDPIPPort(pkt.Payload)
 				logp.Debug("tcpassembly", "%s", pkt)
 				data = nil
 			}

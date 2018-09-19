@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/negbie/heplify/decoder"
@@ -12,7 +13,7 @@ type Outputer interface {
 }
 
 type Publisher struct {
-	pubCount int
+	pubCount uint64
 	outputer Outputer
 }
 
@@ -39,7 +40,7 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 	for {
 		select {
 		case pkt := <-pq:
-			pub.pubCount++
+			atomic.AddUint64(&pub.pubCount, 1)
 			msg := EncodeHEP(pkt)
 			pub.output(msg)
 		}
@@ -50,8 +51,8 @@ func (pub *Publisher) printStats() {
 	for {
 		<-time.After(1 * time.Minute)
 		go func() {
-			logp.Info("Packets since last minute sent: %d", pub.pubCount)
-			pub.pubCount = 0
+			logp.Info("Packets since last minute sent: %d", atomic.LoadUint64(&pub.pubCount))
+			atomic.StoreUint64(&pub.pubCount, 0)
 		}()
 	}
 }

@@ -16,43 +16,45 @@ var rawPacket = []byte{0x0, 0xa, 0xa0, 0x0, 0xbe, 0xa8, 0x0, 0x26, 0x52, 0xe, 0x
 func TestEncodeDecodeHEP(t *testing.T) {
 	d := decoder.NewDecoder(layers.LinkTypeEthernet)
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
+	d.Process(rawPacket, &ci)
 
-	pktIn, err := d.Process(rawPacket, &ci)
-	if err != nil {
-		t.Error(err)
-	}
-	for i := 0; i < 10000; i++ {
-		hep := EncodeHEP(pktIn)
-		pktOut, err := DecodeHEP(hep)
-		if err != nil {
-			t.Error(err)
+	for pktIn := range decoder.PacketQueue {
+		for i := 0; i < 10000; i++ {
+			hep := EncodeHEP(pktIn)
+			pktOut, err := DecodeHEP(hep)
+			if err != nil {
+				t.Error(err)
+			}
+
+			assert.Equal(t, pktIn.Version, pktOut.Version)
+			assert.Equal(t, pktIn.Protocol, pktOut.Protocol)
+			assert.Equal(t, pktIn.SrcIP, pktOut.SrcIP)
+			assert.Equal(t, pktIn.DstIP, pktOut.DstIP)
+			assert.Equal(t, pktIn.SrcPort, pktOut.SrcPort)
+			assert.Equal(t, pktIn.DstPort, pktOut.DstPort)
+			assert.Equal(t, pktIn.Tsec, pktOut.Tsec)
+			assert.Equal(t, pktIn.Tmsec, pktOut.Tmsec)
+			assert.Equal(t, pktIn.ProtoType, pktOut.ProtoType)
+			assert.Equal(t, pktIn.NodeID, pktOut.NodeID)
+			assert.Equal(t, pktIn.NodePW, pktOut.NodePW)
+			assert.Equal(t, pktIn.Payload, pktOut.Payload)
+			assert.Equal(t, pktIn.CID, pktOut.CID)
+			assert.Equal(t, pktIn.Vlan, pktOut.Vlan)
 		}
-
-		assert.Equal(t, pktIn.Version, pktOut.Version)
-		assert.Equal(t, pktIn.Protocol, pktOut.Protocol)
-		assert.Equal(t, pktIn.SrcIP, pktOut.SrcIP)
-		assert.Equal(t, pktIn.DstIP, pktOut.DstIP)
-		assert.Equal(t, pktIn.SrcPort, pktOut.SrcPort)
-		assert.Equal(t, pktIn.DstPort, pktOut.DstPort)
-		assert.Equal(t, pktIn.Tsec, pktOut.Tsec)
-		assert.Equal(t, pktIn.Tmsec, pktOut.Tmsec)
-		assert.Equal(t, pktIn.ProtoType, pktOut.ProtoType)
-		assert.Equal(t, pktIn.NodeID, pktOut.NodeID)
-		assert.Equal(t, pktIn.NodePW, pktOut.NodePW)
-		assert.Equal(t, pktIn.Payload, pktOut.Payload)
-		assert.Equal(t, pktIn.CID, pktOut.CID)
-		assert.Equal(t, pktIn.Vlan, pktOut.Vlan)
+		break
 	}
 }
 
 func BenchmarkEncodeHEP(b *testing.B) {
 	d := decoder.NewDecoder(layers.LinkTypeEthernet)
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
-	dp, _ := d.Process(rawPacket, &ci)
-
-	for i := 0; i < b.N; i++ {
-		val := EncodeHEP(dp)
-		_ = val
+	d.Process(rawPacket, &ci)
+	for pktIn := range decoder.PacketQueue {
+		for i := 0; i < b.N; i++ {
+			val := EncodeHEP(pktIn)
+			_ = val
+		}
+		break
 	}
 }
 
