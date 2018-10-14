@@ -32,6 +32,7 @@ type Decoder struct {
 }
 
 type stats struct {
+	_             uint32
 	fragCount     uint64
 	dupCount      uint64
 	dnsCount      uint64
