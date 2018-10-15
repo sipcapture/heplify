@@ -293,14 +293,16 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 
 			if config.Cfg.Mode == "SIPLOG" {
 				if udp.DstPort == 514 {
-					pkt.Payload, pkt.CID, pkt.ProtoType = correlateLOG(udp.Payload)
+					pkt.Payload, pkt.CID = correlateLOG(udp.Payload)
 					if pkt.Payload != nil && pkt.CID != nil {
+						pkt.ProtoType = 100
 						PacketQueue <- pkt
 					}
 					return
 				} else if udp.SrcPort == 2223 || udp.DstPort == 2223 {
-					pkt.Payload, pkt.CID, pkt.ProtoType = correlateNG(udp.Payload)
+					pkt.Payload, pkt.CID = correlateNG(udp.Payload)
 					if pkt.Payload != nil {
+						pkt.ProtoType = 100
 						PacketQueue <- pkt
 					}
 					return
@@ -310,8 +312,9 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				cacheSDPIPPort(udp.Payload)
 				if (udp.Payload[0]&0xc0)>>6 == 2 {
 					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-						pkt.Payload, pkt.CID, pkt.ProtoType = correlateRTCP(pkt.SrcIP, pkt.SrcPort, udp.Payload)
+						pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
 						if pkt.Payload != nil {
+							pkt.ProtoType = 5
 							atomic.AddUint64(&d.rtcpCount, 1)
 							PacketQueue <- pkt
 							return
