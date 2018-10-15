@@ -1,4 +1,4 @@
-package sniffer
+package dump
 
 import (
 	"compress/gzip"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcapgo"
+	"github.com/google/gopacket/layers"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/logp"
 )
@@ -24,13 +24,18 @@ type pcapWriter interface {
 
 type defaultPcapWriter struct {
 	io.WriteCloser
-	*pcapgo.Writer
+	*Writer
 }
 
 type gzipPcapWriter struct {
 	w io.WriteCloser
 	z *gzip.Writer
-	*pcapgo.Writer
+	*Writer
+}
+
+type Packet struct {
+	Ci   gopacket.CaptureInfo
+	Data []byte
 }
 
 func (wrapper *gzipPcapWriter) Close() error {
@@ -46,7 +51,7 @@ func (wrapper *gzipPcapWriter) Close() error {
 	return nil
 }
 
-func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error) {
+func createPcap(baseFilename string, lt layers.LinkType) (pcapWriter, error) {
 	if config.Cfg.Zip {
 		baseFilename = baseFilename + ".gz"
 	}
@@ -57,19 +62,19 @@ func (sniffer *SnifferSetup) createPcap(baseFilename string) (pcapWriter, error)
 	}
 	if config.Cfg.Zip {
 		o := gzip.NewWriter(f)
-		w := pcapgo.NewWriter(o)
-		w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
+		w := NewWriter(o)
+		w.WriteFileHeader(uint32(config.Cfg.Iface.Snaplen), lt)
 		return &gzipPcapWriter{f, o, w}, nil
 	}
 
-	w := pcapgo.NewWriter(f)
+	w := NewWriter(f)
 	// It's a new file, so we need to create a new writer
-	w.WriteFileHeader(uint32(sniffer.config.Snaplen), sniffer.Datalink())
+	w.WriteFileHeader(uint32(config.Cfg.Iface.Snaplen), lt)
 	return &defaultPcapWriter{f, w}, nil
 
 }
 
-func (sniffer *SnifferSetup) movePcap(tempName, outputPath string) error {
+func movePcap(tempName, outputPath string) error {
 	dateString := time.Now().Format("2006/01/02/02.01.2006T15-04-05") + "_node" + strconv.Itoa(int(config.Cfg.HepNodeID)) + ".pcap"
 	if config.Cfg.Zip {
 		dateString = dateString + ".gz"
@@ -92,26 +97,26 @@ func (sniffer *SnifferSetup) movePcap(tempName, outputPath string) error {
 	return nil
 }
 
-func (sniffer *SnifferSetup) dumpPcap() {
-	outPath := sniffer.config.WriteFile
-	tmpName := fmt.Sprintf("%s_interface.pcap.tmp", sniffer.config.Device)
+func Save(dc chan *Packet, lt layers.LinkType) {
+	outPath := config.Cfg.Iface.WriteFile
+	tmpName := fmt.Sprintf("%s_interface.pcap.tmp", config.Cfg.Iface.Device)
 
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	ticker := time.NewTicker(time.Duration(sniffer.config.RotationTime) * time.Minute)
+	ticker := time.NewTicker(time.Duration(config.Cfg.Iface.RotationTime) * time.Minute)
 
 	// Move and rename any leftover pcap files from a previous run
-	sniffer.movePcap(tmpName, outPath)
+	movePcap(tmpName, outPath)
 
-	w, err := sniffer.createPcap(tmpName)
+	w, err := createPcap(tmpName, lt)
 	if err != nil {
 		logp.Err("Error opening pcap: %v", err)
 	}
 
 	for {
 		select {
-		case packet := <-sniffer.dumpChan:
-			err := w.WritePacket(packet.ci, packet.data)
+		case packet := <-dc:
+			err := w.WritePacket(packet.Ci, packet.Data)
 			if err != nil {
 				w.Close()
 				logp.Err("Error writing output pcap: %v", err)
@@ -122,11 +127,11 @@ func (sniffer *SnifferSetup) dumpPcap() {
 			if err != nil {
 				logp.Err("Error closing pcap: %v", err)
 			}
-			err = sniffer.movePcap(tmpName, outPath)
+			err = movePcap(tmpName, outPath)
 			if err != nil {
 				logp.Err("Error renaming pcap: %v", err)
 			}
-			w, err = sniffer.createPcap(tmpName)
+			w, err = createPcap(tmpName, lt)
 			if err != nil {
 				logp.Err("Error opening pcap: %v", err)
 			}
@@ -137,7 +142,7 @@ func (sniffer *SnifferSetup) dumpPcap() {
 			if err != nil {
 				logp.Err("Error Closing: %v", err)
 			}
-			err = sniffer.movePcap(tmpName, outPath)
+			err = movePcap(tmpName, outPath)
 			if err != nil {
 				logp.Err("Error renaming pcap: %v", err)
 			}
