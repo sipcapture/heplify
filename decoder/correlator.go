@@ -88,37 +88,57 @@ func cacheSDPIPPort(payload []byte) {
 // First it will look inside the longlive RTCPCache with the ssrc as key.
 // If it can't find a value it will look inside the shortlive SDPCache with (SDPIP+RTCPPort) as key.
 // If it finds a value inside the SDPCache it will add it to the RTCPCache with the ssrc as key.
-func correlateRTCP(srcIP net.IP, srcPort uint16, payload []byte) ([]byte, []byte, byte) {
-	srcIPString := srcIP.String()
-	srcPortString := strconv.Itoa(int(srcPort))
-	keySDP := []byte(srcIPString + srcPortString)
+func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) ([]byte, []byte) {
 
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcp", "ssrc=%d, srcIP=%s, srcPort=%s, %s", keyRTCP, srcIPString, srcPortString, info)
+		logp.Debug("rtcp", "ssrc=%x, srcIP=%s, srcPort=%d, dstIP=%s, dstPort=%d, %s",
+			keyRTCP, srcIP, srcPort, dstIP, dstPort, info)
 		if jsonRTCP == nil {
-			return nil, nil, 0
+			return nil, nil
 		}
 	}
 
 	if corrID, err := RTCPCache.Get(keyRTCP); err == nil && keyRTCP != nil {
-		logp.Debug("rtcp", "Found '%d:%s' in RTCPCache srcIP=%s, srcPort=%s, payload=%s", keyRTCP, corrID, srcIPString, srcPortString, jsonRTCP)
-		return jsonRTCP, corrID, 5
-	} else if corrID, err := SDPCache.Get(keySDP); err == nil {
-		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, payload=%s", keySDP, corrID, srcIPString, srcPortString, jsonRTCP)
+		logp.Debug("rtcp", "Found '%x:%s' in RTCPCache srcIP=%s, srcPort=%d, dstIP=%s, dstPort=%d, payload=%s",
+			keyRTCP, corrID, srcIP, srcPort, dstIP, dstPort, jsonRTCP)
+		return jsonRTCP, corrID
+	}
+
+	srcIPString := srcIP.String()
+	srcPortString := strconv.Itoa(int(srcPort))
+	srcKey := []byte(srcIPString + srcPortString)
+	if corrID, err := SDPCache.Get(srcKey); err == nil {
+		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, payload=%s",
+			srcKey, corrID, srcIPString, srcPortString, jsonRTCP)
 		err = RTCPCache.Set(keyRTCP, corrID, 21600)
 		if err != nil {
 			logp.Warn("%v", err)
-			return nil, nil, 0
+			return nil, nil
 		}
-		return jsonRTCP, corrID, 5
+		return jsonRTCP, corrID
 	}
 
-	logp.Debug("rtcp", "No correlationID for srcIP=%s, srcPort=%s, payload=%s", srcIPString, srcPortString, jsonRTCP)
-	return nil, nil, 0
+	dstIPString := dstIP.String()
+	dstPortString := strconv.Itoa(int(dstPort))
+	dstKey := []byte(dstIPString + dstPortString)
+	if corrID, err := SDPCache.Get(dstKey); err == nil {
+		logp.Debug("rtcp", "Found '%s:%s' in SDPCache dstIP=%s, dstPort=%s, payload=%s",
+			dstKey, corrID, dstIPString, dstPortString, jsonRTCP)
+		err = RTCPCache.Set(keyRTCP, corrID, 21600)
+		if err != nil {
+			logp.Warn("%v", err)
+			return nil, nil
+		}
+		return jsonRTCP, corrID
+	}
+
+	logp.Debug("rtcp", "No correlationID for srcIP=%s, srcPort=%s, dstIP=%s, dstPort=%s, payload=%s",
+		srcIPString, srcPortString, dstIPString, dstPortString, jsonRTCP)
+	return nil, nil
 }
 
-func correlateLOG(payload []byte) ([]byte, []byte, byte) {
+func correlateLOG(payload []byte) ([]byte, []byte) {
 	var callID []byte
 	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
 		restID := payload[posID:]
@@ -129,11 +149,11 @@ func correlateLOG(payload []byte) ([]byte, []byte, byte) {
 			callID = restID[3:]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
-			return nil, nil, 0
+			return nil, nil
 		}
 		if callID != nil {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return payload, callID, 100
+			return payload, callID
 
 		}
 	} else if posID := bytes.Index(payload, []byte(": [")); posID > 0 {
@@ -144,21 +164,21 @@ func correlateLOG(payload []byte) ([]byte, []byte, byte) {
 			callID = restID[len(": ["):posRestID]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
-			return nil, nil, 0
+			return nil, nil
 		}
 		if len(callID) > 4 && len(callID) < 80 {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return payload, callID, 100
+			return payload, callID
 		}
 	}
-	return nil, nil, 0
+	return nil, nil
 }
 
-func correlateNG(payload []byte) ([]byte, []byte, byte) {
+func correlateNG(payload []byte) ([]byte, []byte) {
 	cookie, rawNG, err := unmarshalNG(payload)
 	if err != nil {
 		logp.Warn("%v", err)
-		return nil, nil, 0
+		return nil, nil
 	}
 	switch rawTypes := rawNG.(type) {
 	case map[string]interface{}:
@@ -168,7 +188,7 @@ func correlateNG(payload []byte) ([]byte, []byte, byte) {
 				err = SIPCache.Set(cookie, callid, 10)
 				if err != nil {
 					logp.Warn("%v", err)
-					return nil, nil, 0
+					return nil, nil
 				}
 			}
 
@@ -176,14 +196,14 @@ func correlateNG(payload []byte) ([]byte, []byte, byte) {
 				data, err := json.Marshal(&rawMapValue)
 				if err != nil {
 					logp.Warn("%v", err)
-					return nil, nil, 0
+					return nil, nil
 				}
 				if corrID, err := SIPCache.Get(cookie); err == nil {
 					logp.Debug("ng", "Found CallID: %s and QOS stats: %s", string(corrID), string(data))
-					return data, corrID, 100
+					return data, corrID
 				}
 			}
 		}
 	}
-	return nil, nil, 0
+	return nil, nil
 }
