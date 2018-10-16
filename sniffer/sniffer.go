@@ -19,6 +19,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/negbie/heplify/config"
 	"github.com/negbie/heplify/decoder"
+	"github.com/negbie/heplify/dump"
 	"github.com/negbie/heplify/publish"
 	"github.com/negbie/logp"
 )
@@ -28,7 +29,7 @@ type SnifferSetup struct {
 	afpacketHandle *afpacketHandle
 	config         *config.InterfacesConfig
 	isAlive        bool
-	dumpChan       chan DumpPacket
+	dumpChan       chan *dump.Packet
 	mode           string
 	bpf            string
 	file           string
@@ -36,11 +37,6 @@ type SnifferSetup struct {
 	discard        []string
 	worker         Worker
 	DataSource     gopacket.PacketDataSource
-}
-
-type DumpPacket struct {
-	ci   gopacket.CaptureInfo
-	data []byte
 }
 
 type MainWorker struct {
@@ -215,8 +211,8 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	}
 
 	if sniffer.config.WriteFile != "" {
-		sniffer.dumpChan = make(chan DumpPacket, 20000)
-		go sniffer.dumpPcap()
+		sniffer.dumpChan = make(chan *dump.Packet, 20000)
+		go dump.Save(sniffer.dumpChan, sniffer.Datalink())
 	}
 
 	sniffer.isAlive = true
@@ -314,7 +310,7 @@ LOOP:
 				ci.Timestamp = time.Now()
 			}
 		} else if sniffer.config.WriteFile != "" {
-			sniffer.dumpChan <- DumpPacket{ci, data}
+			sniffer.dumpChan <- &dump.Packet{ci, data}
 		}
 
 		sniffer.worker.OnPacket(data, &ci)
