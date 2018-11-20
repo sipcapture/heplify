@@ -198,8 +198,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 	offset := 0
 
 	for dataLen > 0 {
-		if dataLen < 4 || dataLen > 576 {
-			infoMsg = fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
+		if dataLen < 4 || dataLen > 576 || offset >= len(data) {
+			infoMsg = fmt.Sprintf("Fishy RTCP dataLen=%d, offset=%d in packet:\n%v", dataLen, offset, hex.Dump(data))
 			break
 		}
 
