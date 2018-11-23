@@ -2,7 +2,7 @@ package protos
 
 import (
 	"github.com/google/gopacket"
-	"github.com/negbie/heplify/ownlayers"
+	"github.com/sipcapture/heplify/ownlayers"
 	//"github.com/negbie/sippar"
 	//"github.com/negbie/siprocket"
 )

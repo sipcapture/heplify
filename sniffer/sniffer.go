@@ -17,10 +17,10 @@ import (
 	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/decoder"
-	"github.com/negbie/heplify/dump"
-	"github.com/negbie/heplify/publish"
+	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/decoder"
+	"github.com/sipcapture/heplify/dump"
+	"github.com/sipcapture/heplify/publish"
 	"github.com/negbie/logp"
 )
 

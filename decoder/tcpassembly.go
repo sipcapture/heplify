@@ -10,7 +10,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
-	"github.com/negbie/heplify/config"
+	"github.com/sipcapture/heplify/config"
 	"github.com/negbie/logp"
 )
 
