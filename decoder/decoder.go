@@ -12,10 +12,10 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
-	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/ip4defrag"
-	"github.com/negbie/heplify/ip6defrag"
-	"github.com/negbie/heplify/protos"
+	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/ip4defrag"
+	"github.com/sipcapture/heplify/ip6defrag"
+	"github.com/sipcapture/heplify/protos"
 	"github.com/negbie/logp"
 )
 

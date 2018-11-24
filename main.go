@@ -6,8 +6,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/sniffer"
+	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/sniffer"
 	"github.com/negbie/logp"
 	//_ "github.com/mkevac/debugcharts"
 )

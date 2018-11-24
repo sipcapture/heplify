@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/negbie/heplify/config"
+	"github.com/sipcapture/heplify/config"
 	"github.com/negbie/logp"
 )
 
