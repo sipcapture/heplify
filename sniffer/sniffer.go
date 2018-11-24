@@ -310,7 +310,7 @@ LOOP:
 				ci.Timestamp = time.Now()
 			}
 		} else if sniffer.config.WriteFile != "" {
-			sniffer.dumpChan <- &dump.Packet{ci, data}
+			sniffer.dumpChan <- &dump.Packet{Ci: ci, Data: data}
 		}
 
 		sniffer.worker.OnPacket(data, &ci)

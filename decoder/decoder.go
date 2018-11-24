@@ -12,11 +12,12 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
+	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/decoder/internal"
 	"github.com/sipcapture/heplify/ip4defrag"
 	"github.com/sipcapture/heplify/ip6defrag"
 	"github.com/sipcapture/heplify/protos"
-	"github.com/negbie/logp"
 )
 
 type Decoder struct {
@@ -161,7 +162,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	}
 
 	if config.Cfg.DiscardMethod != "" {
-		c := parseCSeq(data)
+		c := internal.ParseCSeq(data)
 		if c != nil {
 			for _, v := range d.filter {
 				if string(c) == v {
