@@ -1,0 +1,21 @@
+language: go
+sudo: true
+
+go:
+  - "1.11.x"
+  - "tip"
+
+env:
+  - GO111MODULE=on
+
+before_script:
+  - sudo apt-get install -y libpcap-dev
+
+matrix:
+  allow_failures:
+    - go: tip
+
+script:
+  - make test
+  - make
+  - find example/pcap -name "*.pcap" \( -exec echo -e "\n Running {} \n" \; -exec ./heplify -rf {} -rs -e -hs "" \; -o -quit \)
