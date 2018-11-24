@@ -122,12 +122,14 @@ func getSIPHeaderValInt(header string, data []byte) (valInt int) {
 }
 
 var firstSIPLine = [][]byte{
+	[]byte("SIP/2.0 "),
 	[]byte("INVITE "),
 	[]byte("REGISTER "),
 	[]byte("ACK "),
 	[]byte("BYE "),
 	[]byte("CANCEL "),
 	[]byte("OPTIONS "),
+	[]byte("PUBLISH "),
 	[]byte("INFO "),
 	[]byte("PRACK "),
 	[]byte("SUBSCRIBE "),
@@ -135,8 +137,6 @@ var firstSIPLine = [][]byte{
 	[]byte("UPDATE "),
 	[]byte("MESSAGE "),
 	[]byte("REFER "),
-	[]byte("PUBLISH "),
-	[]byte("SIP/2.0 "),
 }
 
 var firstSDPLine = [][]byte{
