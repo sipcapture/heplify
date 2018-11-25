@@ -195,9 +195,13 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			}
 
 		case layers.LayerTypeIPv4:
-			ip4Len := ip4.Length
 			atomic.AddUint64(&d.ip4Count, 1)
+			if ip4.Flags&layers.IPv4DontFragment != 0 || (ip4.Flags&layers.IPv4MoreFragments == 0 && ip4.FragOffset == 0) {
+				d.processTransport(&decodedLayers, &udp, &tcp, ip4.NetworkFlow(), ci, 0x02, uint8(ip4.Protocol), ip4.SrcIP, ip4.DstIP)
+				break
+			}
 
+			ip4Len := ip4.Length
 			ip4New, err := d.defragIP4(ip4, ci.Timestamp)
 			if err != nil {
 				logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, ip4.SrcIP, ip4.DstIP)
@@ -309,7 +313,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				}
 			}
 			if config.Cfg.Mode != "SIP" {
-				cacheSDPIPPort(udp.Payload)
 				if (udp.Payload[0]&0xc0)>>6 == 2 {
 					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
 						pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
@@ -329,6 +332,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						return
 					}
 				}
+				cacheSDPIPPort(udp.Payload)
 			}
 
 		case layers.LayerTypeTCP:
