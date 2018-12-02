@@ -14,7 +14,7 @@ type afpacketHandle struct {
 }
 
 func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
-	timeout time.Duration) (*afpacketHandle, error) {
+	timeout time.Duration, vlan bool) (*afpacketHandle, error) {
 	return nil, fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
 }
 
@@ -26,7 +26,7 @@ func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.Capt
 	return data, ci, fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
 }
 
-func (h *afpacketHandle) SetBPFFilter(expr string) (_ error) {
+func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
 	return fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
 }
 
