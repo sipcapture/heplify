@@ -22,6 +22,10 @@ func (h *afpacketHandle) ReadPacketData() (data []byte, ci gopacket.CaptureInfo,
 	return data, ci, fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
 }
 
+func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
+	return data, ci, fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
+}
+
 func (h *afpacketHandle) SetBPFFilter(expr string) (_ error) {
 	return fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
 }
@@ -31,4 +35,12 @@ func (h *afpacketHandle) LinkType() layers.LinkType {
 }
 
 func (h *afpacketHandle) Close() {
+}
+
+func (h *afpacketHandle) Stats() (uint, uint, error) {
+	return 0, 0, fmt.Errorf("Afpacket MMAP sniffing is only available on Linux")
+}
+
+func (h *afpacketHandle) IsErrTimeout(err error) bool {
+	return false
 }

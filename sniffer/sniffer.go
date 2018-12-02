@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/negbie/heplify/config"
@@ -140,7 +139,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 				return fmt.Errorf("SetBPFFilter '%s' for ReadFile pcap: %v", sniffer.bpf, err)
 			}
 		} else {
-			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, pcap.BlockForever)
+			sniffer.pcapHandle, err = pcap.OpenLive(sniffer.config.Device, int32(sniffer.config.Snaplen), true, 1*time.Second)
 			if err != nil {
 				return fmt.Errorf("setting pcap live mode: %v", err)
 			}
@@ -162,7 +161,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			return fmt.Errorf("setting af_packet computesize: %v", err)
 		}
 
-		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, pcap.BlockForever)
+		sniffer.afpacketHandle, err = newAfpacketHandle(sniffer.config.Device, szFrame, szBlock, numBlocks, 1*time.Second, sniffer.config.WithVlan)
 		if err != nil {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
@@ -190,13 +189,13 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 
 	if sniffer.file == "" {
 		if sniffer.config.Device == "any" && runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-			_, err := ListDeviceNames(false, false)
+			_, err := ListDeviceNames(true, false)
 			return nil, fmt.Errorf("%v -i any is not supported on %s\nPlease use one of the above devices", err, runtime.GOOS)
 		}
 	}
 
 	if sniffer.config.Device == "" && sniffer.file == "" {
-		_, err := ListDeviceNames(false, false)
+		_, err := ListDeviceNames(true, false)
 		return nil, fmt.Errorf("%v Please use one of the above devices", err)
 	}
 
@@ -241,8 +240,7 @@ LOOP:
 
 		data, ci, err := sniffer.DataSource.ReadPacketData()
 
-		if err == pcap.NextErrorTimeoutExpired || err == syscall.EINTR {
-			logp.Debug("sniffer", "Interrupted")
+		if err == pcap.NextErrorTimeoutExpired || sniffer.afpacketHandle.IsErrTimeout(err) || err == syscall.EINTR {
 			continue
 		}
 
@@ -274,8 +272,6 @@ LOOP:
 		}
 
 		if len(data) == 0 {
-			// Empty packet, probably timeout from afpacket
-			logp.Debug("sniffer", "Empty data packet")
 			continue
 		}
 
@@ -375,16 +371,12 @@ func (sniffer *SnifferSetup) printStats() {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	ticker := time.NewTicker(1 * time.Minute)
 
-	var err error
-	var pcapStats *pcap.Stats
-	var afpacketStats afpacket.SocketStatsV3
-
 	for {
 		select {
 		case <-ticker.C:
 			switch sniffer.config.Type {
 			case "pcap":
-				pcapStats, err = sniffer.pcapHandle.Stats()
+				pcapStats, err := sniffer.pcapHandle.Stats()
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
@@ -392,11 +384,11 @@ func (sniffer *SnifferSetup) printStats() {
 					pcapStats.PacketsReceived, pcapStats.PacketsDropped, pcapStats.PacketsIfDropped)
 
 			case "af_packet":
-				_, afpacketStats, err = sniffer.afpacketHandle.SocketStats()
+				p, d, err := sniffer.afpacketHandle.Stats()
 				if err != nil {
 					logp.Warn("Stats err: %v", err)
 				}
-				logp.Info("Stats {received dropped queue-freeze}: %d", afpacketStats)
+				logp.Info("Stats {received dropped}: {%d %d}", p, d)
 			}
 
 		case <-signals:
