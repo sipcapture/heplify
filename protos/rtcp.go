@@ -2,7 +2,6 @@ package protos
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 )
@@ -191,7 +190,7 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 	dataLen := len(data)
 	if dataLen < 28 {
-		return nil, nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n%v", dataLen, hex.Dump(data))
+		return nil, nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n% X", dataLen, data)
 	}
 	var err error
 	pkt := &RTCP_Packet{}
@@ -199,7 +198,7 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 
 	for dataLen > 0 {
 		if dataLen < 4 || dataLen > 576 || offset >= len(data) {
-			infoMsg = fmt.Sprintf("Fishy RTCP dataLen=%d, offset=%d in packet:\n%v", dataLen, offset, hex.Dump(data))
+			infoMsg = fmt.Sprintf("Fishy RTCP dataLen=%d, offset=%d in packet:\n% X", dataLen, offset, data)
 			break
 		}
 
@@ -211,8 +210,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 		offset += 4
 
 		if RTCPVersion != 2 || RTCPPadding > 1 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > dataLen {
-			infoMsg = fmt.Sprintf("Fishy RTCP_Header RTCPVersion=%d, RTCPPadding=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, packetLen=%d, dataLen=%d, offset=%d in packet:\n%v",
-				RTCPVersion, RTCPPadding, RTCPReportCount, RTCPType, RTCPLength, len(data), dataLen, offset, hex.Dump(data))
+			infoMsg = fmt.Sprintf("Fishy RTCP_Header RTCPVersion=%d, RTCPPadding=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, packetLen=%d, dataLen=%d, offset=%d in packet:\n% X",
+				RTCPVersion, RTCPPadding, RTCPReportCount, RTCPType, RTCPLength, len(data), dataLen, offset, data)
 			break
 		}
 
@@ -222,8 +221,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 		switch RTCPType {
 		case TYPE_RTCP_SR:
 			if RTCPLength < 24 || offset+24 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_SR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+				infoMsg = fmt.Sprintf("Fishy RTCP_SR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
 				break
 			}
 
@@ -257,8 +256,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 
 		case TYPE_RTCP_RR:
 			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_RR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+				infoMsg = fmt.Sprintf("Fishy RTCP_RR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
 				break
 			}
 
@@ -286,8 +285,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 
 		case TYPE_RTCP_SDES:
 			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_SDES RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+				infoMsg = fmt.Sprintf("Fishy RTCP_SDES RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
 				break
 			}
 
@@ -303,8 +302,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 			offset += RTCPLength
 		case TYPE_RTCP_XR:
 			if RTCPLength < 8 || offset+8 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_XR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n%v",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, hex.Dump(data))
+				infoMsg = fmt.Sprintf("Fishy RTCP_XR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
 				break
 			}
 

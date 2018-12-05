@@ -32,7 +32,9 @@ func cacheSDPIPPort(payload []byte) {
 			if posRTCPPort := bytes.Index(payload, []byte("a=rtcp:")); posRTCPPort > 0 {
 				restRTCPPort := payload[posRTCPPort:]
 				// Minimum RTCP port length of "a=rtcp:1000" = 11
-				if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 {
+				if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 && posRestRTCPPort < 14 {
+					ipPort.Write(restRTCPPort[len("a=rtcp:"):posRestRTCPPort])
+				} else if posRestRTCPPort := bytes.IndexRune(restRTCPPort, ' '); posRestRTCPPort >= 11 {
 					ipPort.Write(restRTCPPort[len("a=rtcp:"):posRestRTCPPort])
 				} else {
 					logp.Debug("sdp", "No end or fishy SDP RTCP Port in '%s'", restRTCPPort)

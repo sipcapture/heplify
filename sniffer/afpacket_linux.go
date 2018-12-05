@@ -11,15 +11,14 @@ import (
 	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/negbie/logp"
 )
 
 type afpacketHandle struct {
 	TPacket *afpacket.TPacket
 }
 
-func newAfpacketHandle(device string, snaplen int, block_size int, num_blocks int,
-	timeout time.Duration) (*afpacketHandle, error) {
+func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
+	timeout time.Duration, vlan bool) (*afpacketHandle, error) {
 
 	h := &afpacketHandle{}
 	var err error
@@ -27,18 +26,20 @@ func newAfpacketHandle(device string, snaplen int, block_size int, num_blocks in
 	if device == "any" {
 		h.TPacket, err = afpacket.NewTPacket(
 			afpacket.OptFrameSize(snaplen),
-			afpacket.OptBlockSize(block_size),
-			afpacket.OptNumBlocks(num_blocks),
+			afpacket.OptBlockSize(blockSize),
+			afpacket.OptNumBlocks(numBlocks),
 			afpacket.OptPollTimeout(timeout),
+			afpacket.OptAddVLANHeader(vlan),
 			afpacket.SocketRaw,
 			afpacket.TPacketVersion3)
 	} else {
 		h.TPacket, err = afpacket.NewTPacket(
 			afpacket.OptInterface(device),
 			afpacket.OptFrameSize(snaplen),
-			afpacket.OptBlockSize(block_size),
-			afpacket.OptNumBlocks(num_blocks),
+			afpacket.OptBlockSize(blockSize),
+			afpacket.OptNumBlocks(numBlocks),
 			afpacket.OptPollTimeout(timeout),
+			afpacket.OptAddVLANHeader(vlan),
 			afpacket.SocketRaw,
 			afpacket.TPacketVersion3)
 	}
@@ -53,28 +54,17 @@ func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.Capt
 	return h.TPacket.ZeroCopyReadPacketData()
 }
 
-// TODO: check this function more deeply. Seems it could be done better.
-func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) (err error) {
-	pcapBPF, err := pcap.CompileBPFFilter(layers.LinkTypeEthernet, snaplen, filter)
+func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
+	// use pcap bpf compiler to get raw bpf instruction
+	pcapBPF, err := pcap.CompileBPFFilter(h.LinkType(), snaplen, filter)
 	if err != nil {
-		logp.Err("CompileBPFFilter failed: %v\n", err)
 		return err
 	}
-	bpfIns := []bpf.RawInstruction{}
-	for _, ins := range pcapBPF {
-		bpfIns2 := bpf.RawInstruction{
-			Op: ins.Code,
-			Jt: ins.Jt,
-			Jf: ins.Jf,
-			K:  ins.K,
-		}
-		bpfIns = append(bpfIns, bpfIns2)
+	rawBPF := make([]bpf.RawInstruction, len(pcapBPF))
+	for i, ri := range pcapBPF {
+		rawBPF[i] = bpf.RawInstruction{Op: ri.Code, Jt: ri.Jt, Jf: ri.Jf, K: ri.K}
 	}
-	if h.TPacket.SetBPF(bpfIns); err != nil {
-		logp.Err("SetBPF failed: %v\n", err)
-		return err
-	}
-	return h.TPacket.SetBPF(bpfIns)
+	return h.TPacket.SetBPF(rawBPF)
 }
 
 func (h *afpacketHandle) LinkType() layers.LinkType {
@@ -85,10 +75,14 @@ func (h *afpacketHandle) Close() {
 	h.TPacket.Close()
 }
 
-func (h *afpacketHandle) Stats() (stats afpacket.Stats, err error) {
-	return h.TPacket.Stats()
+func (h *afpacketHandle) Stats() (uint, uint, error) {
+	_, v3, err := h.TPacket.SocketStats()
+	return v3.Packets(), v3.Drops(), err
 }
 
-func (h *afpacketHandle) SocketStats() (ass afpacket.SocketStats, asss afpacket.SocketStatsV3, err error) {
-	return h.TPacket.SocketStats()
+func (h *afpacketHandle) IsErrTimeout(err error) bool {
+	if err == afpacket.ErrTimeout {
+		return true
+	}
+	return false
 }
