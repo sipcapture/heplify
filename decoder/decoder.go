@@ -297,9 +297,8 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 
 			if config.Cfg.Mode == "SIPLOG" {
 				if udp.DstPort == 514 {
-					pkt.Payload, pkt.CID = correlateLOG(udp.Payload)
-					if pkt.Payload != nil && pkt.CID != nil {
-						pkt.ProtoType = 100
+					pkt.ProtoType, pkt.CID = correlateLOG(udp.Payload)
+					if pkt.ProtoType > 0 && pkt.CID != nil {
 						PacketQueue <- pkt
 					}
 					return
