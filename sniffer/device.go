@@ -46,7 +46,7 @@ func ListDeviceNames(withDescription bool, withIP bool) ([]string, error) {
 						ips += " "
 					}
 
-					ips += fmt.Sprintf("%s", address.IP.String())
+					ips += address.IP.String()
 				}
 			}
 			r += fmt.Sprintf(" (%s)", ips)
@@ -66,12 +66,12 @@ func resolveDeviceName(name string) (string, error) {
 	if index, err := strconv.Atoi(name); err == nil { // Device is numeric id
 		devices, err := ListDeviceNames(false, false)
 		if err != nil {
-			return "", fmt.Errorf("Error getting devices list: %v", err)
+			return "", fmt.Errorf("error getting devices list: %v", err)
 		}
 
 		name, err = deviceNameFromIndex(index, devices)
 		if err != nil {
-			return "", fmt.Errorf("Couldn't understand device index %d: %v", index, err)
+			return "", fmt.Errorf("couldn't understand device index %d: %v", index, err)
 		}
 
 		logp.Info("Resolved device index %d to device: %s", index, name)
@@ -82,7 +82,7 @@ func resolveDeviceName(name string) (string, error) {
 
 func deviceNameFromIndex(index int, devices []string) (string, error) {
 	if index >= len(devices) {
-		return "", fmt.Errorf("Looking for device index %d, but there are only %d devices",
+		return "", fmt.Errorf("looking for device index %d, but there are only %d devices",
 			index, len(devices))
 	}
 

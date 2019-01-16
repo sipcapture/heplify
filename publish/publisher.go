@@ -37,13 +37,10 @@ func (pub *Publisher) output(msg []byte) {
 }
 
 func (pub *Publisher) Start(pq chan *decoder.Packet) {
-	for {
-		select {
-		case pkt := <-pq:
-			atomic.AddUint64(&pub.pubCount, 1)
-			msg := EncodeHEP(pkt)
-			pub.output(msg)
-		}
+	for pkt := range pq {
+		atomic.AddUint64(&pub.pubCount, 1)
+		msg := EncodeHEP(pkt)
+		pub.output(msg)
 	}
 }
 

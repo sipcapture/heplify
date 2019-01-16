@@ -78,12 +78,12 @@ func (r *RTP) LayerPayload() []byte {
 //DecodeFromBytes decodes the given bytes into this layer.
 func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	if len(data) < 12 {
-		return errors.New("RTP header should have at least 12 octets")
+		return errors.New("the RTP header should have at least 12 octets")
 	}
 
 	r.Version = data[0] & 0xC0 >> 6
 	if r.Version != 2 {
-		return errors.New("RTP version != 2")
+		return errors.New("the RTP version != 2")
 	}
 
 	r.Padding = data[0] & 0x20
@@ -97,12 +97,12 @@ func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	offset := 12
 
 	if r.Padding > 1 || r.Extension > 1 || r.Marker > 1 {
-		return errors.New("No valid RTP packet")
+		return errors.New("no valid RTP packet")
 	}
 
 	if r.CC > 0 {
 		if len(data[offset:]) < int(r.CC*4) {
-			return errors.New("Not enough octets left in RTP header to get CC")
+			return errors.New("not enough octets left in RTP header to get CC")
 		}
 		r.Csrc = make([]uint32, r.CC)
 		for i := 0; i < int(r.CC); i++ {
@@ -113,7 +113,7 @@ func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 
 	if r.Extension == 1 {
 		if len(data[offset:]) < 4 {
-			return errors.New("Not enough octets left in RTP header to get ExtensionHeaderID and ExtensionHeaderLength")
+			return errors.New("not enough octets left in RTP header to get ExtensionHeaderID and ExtensionHeaderLength")
 		}
 		r.ExtensionHeaderID = binary.BigEndian.Uint16(data[offset:])
 		offset += 2
@@ -123,7 +123,7 @@ func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 
 	if r.ExtensionHeaderLength > 0 {
 		if len(data[offset:]) < 4*int(r.ExtensionHeaderLength) {
-			return errors.New("Not enough octets left in RTP header to get the Extensions")
+			return errors.New("not enough octets left in RTP header to get the Extensions")
 		}
 		r.ExtensionHeader = make([]byte, 4*int(r.ExtensionHeaderLength))
 		r.ExtensionHeader = data[offset : offset+4*int(r.ExtensionHeaderLength)]
@@ -131,13 +131,13 @@ func (r *RTP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	}
 
 	if len(data[offset:]) == 0 {
-		return errors.New("No content in RTP packet")
+		return errors.New("no content in RTP packet")
 	}
 
 	if r.Padding == 1 {
 		padLen := int(data[len(data)-1])
 		if padLen <= 0 || padLen > len(data[offset:]) {
-			return errors.New("Invalid padding length")
+			return errors.New("invalid padding length")
 		}
 
 		r.Payload = data[offset : len(data)-padLen]

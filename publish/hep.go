@@ -77,7 +77,7 @@ func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
 			return nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("Not supported network type %s", config.Cfg.Network)
+		return nil, fmt.Errorf("not supported network type %s", config.Cfg.Network)
 	}
 	return ho.conn, nil
 }
@@ -103,10 +103,7 @@ func (ho *HEPOutputer) Send(msg []byte) {
 }
 
 func (ho *HEPOutputer) Start() {
-	for {
-		select {
-		case msg := <-ho.hepQueue:
-			ho.Send(msg)
-		}
+	for msg := range ho.hepQueue {
+		ho.Send(msg)
 	}
 }
