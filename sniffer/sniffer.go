@@ -257,7 +257,7 @@ LOOP:
 			logp.Debug("sniffer", "Reopening the file")
 			err = sniffer.Reopen()
 			if err != nil {
-				retError = fmt.Errorf("Error reopening file: %s", err)
+				retError = fmt.Errorf("error reopening file: %s", err)
 				sniffer.isAlive = false
 				continue
 			}
@@ -266,7 +266,7 @@ LOOP:
 		}
 
 		if err != nil {
-			retError = fmt.Errorf("Sniffing error: %s", err)
+			retError = fmt.Errorf("sniffing error: %s", err)
 			sniffer.isAlive = false
 			continue
 		}

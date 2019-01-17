@@ -52,23 +52,17 @@ func isPrivIP(IP net.IP) (p bool) {
 }
 
 func (d *Decoder) flushFragments(dt time.Duration) {
-	dTick := time.Tick(dt)
-	for {
-		select {
-		case <-dTick:
-			d.defrag4.DiscardOlderThan(time.Now().Add(-dt))
-			d.defrag6.DiscardOlderThan(time.Now().Add(-dt))
-		}
+	ticker := time.NewTicker(dt)
+	for range ticker.C {
+		d.defrag4.DiscardOlderThan(time.Now().Add(-dt))
+		d.defrag6.DiscardOlderThan(time.Now().Add(-dt))
 	}
 }
 
 func (d *Decoder) flushTCPAssembler(dt time.Duration) {
-	tTick := time.Tick(dt)
-	for {
-		select {
-		case <-tTick:
-			d.asm.FlushOlderThan(time.Now().Add(-dt))
-		}
+	ticker := time.NewTicker(dt)
+	for range ticker.C {
+		d.asm.FlushOlderThan(time.Now().Add(-dt))
 	}
 }
 
@@ -151,18 +145,15 @@ func (d *Decoder) printRTCPCacheStats() {
 }
 
 func (d *Decoder) printStats(dt time.Duration) {
-	sTick := time.Tick(dt)
-	for {
-		select {
-		case <-sTick:
-			d.printPacketStats()
-			if runtime.GOARCH == "amd64" {
-				d.printSIPCacheStats()
-				d.printSDPCacheStats()
-				d.printRTCPCacheStats()
-			}
-
+	ticker := time.NewTicker(dt)
+	for range ticker.C {
+		d.printPacketStats()
+		if runtime.GOARCH == "amd64" {
+			d.printSIPCacheStats()
+			d.printSDPCacheStats()
+			d.printRTCPCacheStats()
 		}
+
 	}
 }
 

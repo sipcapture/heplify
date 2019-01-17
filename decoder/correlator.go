@@ -140,7 +140,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	return nil, nil
 }
 
-func correlateLOG(payload []byte) ([]byte, []byte) {
+func correlateLOG(payload []byte) (byte, []byte) {
 	var callID []byte
 	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
 		restID := payload[posID:]
@@ -151,11 +151,11 @@ func correlateLOG(payload []byte) ([]byte, []byte) {
 			callID = restID[3:]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
-			return nil, nil
+			return 0, nil
 		}
 		if callID != nil {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return payload, callID
+			return 100, callID
 
 		}
 	} else if posID := bytes.Index(payload, []byte(": [")); posID > 0 {
@@ -166,14 +166,18 @@ func correlateLOG(payload []byte) ([]byte, []byte) {
 			callID = restID[len(": ["):posRestID]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
-			return nil, nil
+			return 0, nil
 		}
 		if len(callID) > 4 && len(callID) < 80 {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return payload, callID
+			return 100, callID
 		}
+	} else if wp := bytes.Index(payload, []byte("WARN")); wp > -1 {
+		return 112, []byte("warning")
+	} else if ep := bytes.Index(payload, []byte("ERR")); ep > -1 {
+		return 112, []byte("error")
 	}
-	return nil, nil
+	return 0, nil
 }
 
 func correlateNG(payload []byte) ([]byte, []byte) {
