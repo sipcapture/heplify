@@ -3,7 +3,6 @@ package decoder
 import (
 	"bytes"
 	"net"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -108,9 +107,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		lt = layers.LayerTypeEthernet
 	}
 
-	// TODO: make a flag for this
-	debug.SetGCPercent(50)
-
 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
 	)
@@ -172,7 +168,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	}
 
 	d.parser.DecodeLayers(data, &decodedLayers)
-	logp.Debug("layer", "\n%v", decodedLayers)
+	//logp.Debug("layer", "\n%v", decodedLayers)
 	foundGRELayer := false
 
 	for i := 0; i < len(decodedLayers); i++ {
