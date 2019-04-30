@@ -18,28 +18,28 @@ func TestEncodeDecodeHEP(t *testing.T) {
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
 	d.Process(rawPacket, &ci)
 
-	for pktIn := range decoder.PacketQueue {
+	for in := range decoder.PacketQueue {
 		for i := 0; i < 10000; i++ {
-			hep := EncodeHEP(pktIn)
-			pktOut, err := DecodeHEP(hep)
+			hep, _ := EncodeHEP(in)
+			out, err := DecodeHEP(hep)
 			if err != nil {
 				t.Error(err)
 			}
 
-			assert.Equal(t, pktIn.Version, pktOut.Version)
-			assert.Equal(t, pktIn.Protocol, pktOut.Protocol)
-			assert.Equal(t, pktIn.SrcIP, pktOut.SrcIP)
-			assert.Equal(t, pktIn.DstIP, pktOut.DstIP)
-			assert.Equal(t, pktIn.SrcPort, pktOut.SrcPort)
-			assert.Equal(t, pktIn.DstPort, pktOut.DstPort)
-			assert.Equal(t, pktIn.Tsec, pktOut.Tsec)
-			assert.Equal(t, pktIn.Tmsec, pktOut.Tmsec)
-			assert.Equal(t, pktIn.ProtoType, pktOut.ProtoType)
-			assert.Equal(t, pktIn.NodeID, pktOut.NodeID)
-			assert.Equal(t, pktIn.NodePW, pktOut.NodePW)
-			assert.Equal(t, pktIn.Payload, pktOut.Payload)
-			assert.Equal(t, pktIn.CID, pktOut.CID)
-			assert.Equal(t, pktIn.Vlan, pktOut.Vlan)
+			assert.Equal(t, in.Version, out.Version)
+			assert.Equal(t, in.Protocol, out.Protocol)
+			assert.Equal(t, in.SrcIP, out.SrcIP)
+			assert.Equal(t, in.DstIP, out.DstIP)
+			assert.Equal(t, in.SrcPort, out.SrcPort)
+			assert.Equal(t, in.DstPort, out.DstPort)
+			assert.Equal(t, in.Tsec, out.Tsec)
+			assert.Equal(t, in.Tmsec, out.Tmsec)
+			assert.Equal(t, in.ProtoType, out.ProtoType)
+			assert.Equal(t, in.NodeID, out.NodeID)
+			assert.Equal(t, in.NodePW, out.NodePW)
+			assert.Equal(t, in.Payload, out.Payload)
+			assert.Equal(t, in.CID, out.CID)
+			assert.Equal(t, in.Vlan, out.Vlan)
 		}
 		break
 	}
@@ -49,9 +49,10 @@ func BenchmarkEncodeHEP(b *testing.B) {
 	d := decoder.NewDecoder(layers.LinkTypeEthernet)
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
 	d.Process(rawPacket, &ci)
+	b.ResetTimer()
 	for pktIn := range decoder.PacketQueue {
 		for i := 0; i < b.N; i++ {
-			val := EncodeHEP(pktIn)
+			val, _ := EncodeHEP(pktIn)
 			_ = val
 		}
 		break
