@@ -24,8 +24,6 @@ type Decoder struct {
 	defrag6   *ip6defrag.IPv6Defragmenter
 	parser    *gopacket.DecodingLayerParser
 	layerType gopacket.LayerType
-	nodeID    uint32
-	nodePW    []byte
 	filter    []string
 	stats
 }
@@ -54,8 +52,6 @@ type Packet struct {
 	Tsec      uint32
 	Tmsec     uint32
 	ProtoType byte
-	NodeID    uint32
-	NodePW    []byte
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
@@ -115,8 +111,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
 		defrag6:   ip6defrag.NewIPv6Defragmenter(),
 		parser:    decoder,
-		nodeID:    uint32(config.Cfg.HepNodeID),
-		nodePW:    []byte(config.Cfg.HepNodePW),
 		layerType: lt,
 		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
@@ -268,8 +262,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		Protocol: IPProtocol,
 		SrcIP:    sIP,
 		DstIP:    dIP,
-		NodeID:   d.nodeID,
-		NodePW:   d.nodePW,
 		Tsec:     uint32(ci.Timestamp.Unix()),
 		Tmsec:    uint32(ci.Timestamp.Nanosecond() / 1000),
 	}

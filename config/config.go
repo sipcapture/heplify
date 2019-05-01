@@ -19,6 +19,7 @@ type Config struct {
 	HepServer     string
 	HepNodePW     string
 	HepNodeID     uint
+	HepHostname   string
 	Network       string
 	Protobuf      bool
 	Reassembly    bool
