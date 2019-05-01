@@ -9,7 +9,6 @@ var Cfg Config
 type Config struct {
 	Iface         *InterfacesConfig
 	Logging       *logp.Logging
-	Bench         bool
 	Mode          string
 	Dedup         bool
 	Filter        string

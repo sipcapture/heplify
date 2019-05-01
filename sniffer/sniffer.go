@@ -227,10 +227,6 @@ func (sniffer *SnifferSetup) Run() error {
 		retError    error
 	)
 
-	if config.Cfg.Bench {
-		benchmark()
-	}
-
 LOOP:
 	for sniffer.isAlive {
 		if sniffer.config.OneAtATime {
