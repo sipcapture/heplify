@@ -6,13 +6,13 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/sniffer"
-	"github.com/negbie/logp"
 	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.48"
+const version = "heplify 1.49"
 
 func init() {
 
@@ -59,7 +59,7 @@ func init() {
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP server address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "", "HEP node PW")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP node ID")
-	flag.StringVar(&config.Cfg.HepHostname, "hn", "", "HEP hostname")
+	flag.StringVar(&config.Cfg.HepNodeName, "hn", "", "HEP node Name")
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
