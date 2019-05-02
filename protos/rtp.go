@@ -2,7 +2,7 @@ package protos
 
 import (
 	"github.com/google/gopacket"
-	"github.com/negbie/heplify/ownlayers"
+	"github.com/sipcapture/heplify/ownlayers"
 )
 
 func NewRTP(raw []byte) string {

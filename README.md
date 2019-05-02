@@ -4,15 +4,38 @@ on Linux, ARM, MIPS, Windows to capture IPv4 or IPv6 packets and send them to Ho
 SIP, correlated RTCP, RTCPXR, DNS, Logs into homer. 
 It's able to handle fragmented and duplicate packets out of the box.  
 
-### Requirements
-Linux: None if you use the binary from the releases  
-Windows: [WinPcap](https://www.winpcap.org/install/default.htm)  
+## Requirements
 
-### Installation
-Linux: Download [heplify](https://github.com/sipcapture/heplify/releases) and execute 'chmod +x heplify'  
-Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)  
+### Linux
 
-### Usage
+None if you use the binary from the releases  
+
+### Windows
+
+[WinPcap](https://www.winpcap.org/install/default.htm)  
+
+## Installation
+
+### Linux
+
+Download [heplify](https://github.com/sipcapture/heplify/releases) and execute 'chmod +x heplify'  
+
+### Windows
+
+Download [heplify.exe](https://github.com/sipcapture/heplify/releases)  
+
+### Development build
+
+If you have Go 1.11+ installed, build the latest heplify binary by running `make`.
+
+You can also build a docker image:
+
+```bash
+docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfile .
+```
+
+## Usage
+
 ```bash
   -i    Listen on interface (default "any")
   -nt   Network types are [udp, tcp, tls] (default "udp")
@@ -24,14 +47,16 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
   -di   Discard uninteresting packets by string
   -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
   -fi   Filter interesting packets by string
-  -rf   Read pcap file
+  -rf   Read PCAP file
+  -rs   Use original timestamps when reading PCAP file
   -wf   Path to write pcap file
   -zf   Enable pcap compression
   -e    Log to stderr and disable syslog/file output
   -d    Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]
 ```
 
-### Examples
+## Examples
+
 ```bash
 # Capture SIP and RTCP packets on any interface and send them to 127.0.0.1:9060
 ./heplify
@@ -58,3 +83,13 @@ Windows: Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 ./heplify -hs 192.168.1.1:9060 -dim OPTIONS,NOTIFY
 
 ```
+
+----
+
+### Made by Humans
+
+This Open-Source project is made possible by actual Humans without corporate sponsors, angels or patreons.
+
+If you use this software in production, please consider supporting its development with contributions or [donations](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+
+[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest) 

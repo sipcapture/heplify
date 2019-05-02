@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/negbie/heplify/decoder"
+	"github.com/sipcapture/heplify/decoder"
 	"github.com/stretchr/testify/assert"
 )
 
