@@ -17,7 +17,7 @@ var rawPacket = []byte{0x0, 0xa, 0xa0, 0x0, 0xbe, 0xa8, 0x0, 0x26, 0x52, 0xe, 0x
 func TestEncodeDecodeHEP(t *testing.T) {
 	config.Cfg.HepNodeID = 1234
 	config.Cfg.HepNodePW = "secret"
-	config.Cfg.HepHostname = "heplify"
+	config.Cfg.HepNodeName = "heplify"
 	d := decoder.NewDecoder(layers.LinkTypeEthernet)
 	ci := gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 715, Length: 715, InterfaceIndex: 4}
 	d.Process(rawPacket, &ci)
@@ -44,7 +44,7 @@ func TestEncodeDecodeHEP(t *testing.T) {
 			assert.Equal(t, in.Vlan, out.Vlan)
 			assert.Equal(t, uint32(1234), out.NodeID)
 			assert.Equal(t, "secret", out.NodePW)
-			assert.Equal(t, "heplify", out.Hostname)
+			assert.Equal(t, "heplify", out.NodeName)
 		}
 		break
 	}
