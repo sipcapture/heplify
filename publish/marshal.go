@@ -9,8 +9,8 @@ import (
 	"unsafe"
 
 	proto "github.com/gogo/protobuf/proto"
-	"github.com/negbie/heplify/config"
-	"github.com/negbie/heplify/decoder"
+	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/decoder"
 )
 
 // HEP chuncks
@@ -31,7 +31,7 @@ const (
 	Payload   = 15 // Chunk 0x000f Captured packet payload
 	CID       = 17 // Chunk 0x0011 Correlation ID
 	Vlan      = 18 // Chunk 0x0012 VLAN
-	Hostname  = 19 // Chunk 0x0013 Hostname
+	NodeName  = 19 // Chunk 0x0013 NodeName
 )
 
 // HepMsg represents a parsed HEP packet
@@ -50,7 +50,7 @@ type HepMsg struct {
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
-	Hostname  string
+	NodeName  string
 }
 
 // EncodeHEP creates the HEP Packet which
@@ -72,7 +72,7 @@ func EncodeHEP(h *decoder.Packet) (hepMsg []byte, err error) {
 			Payload:   h.Payload,
 			CID:       h.CID,
 			Vlan:      h.Vlan,
-			Hostname:  config.Cfg.HepHostname,
+			NodeName:  config.Cfg.HepNodeName,
 		}
 		hepMsg, err = hep.Marshal()
 	} else {
@@ -202,11 +202,11 @@ func (h *HepMsg) MarshalTo(dAtA []byte) (int, error) {
 	binary.BigEndian.PutUint16(dAtA[i:], h.Vlan)
 	i += 2
 
-	if h.Hostname != "" {
+	if h.NodeName != "" {
 		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x13})
-		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.Hostname)))
+		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.NodeName)))
 		i += 2
-		i += copy(dAtA[i:], h.Hostname)
+		i += copy(dAtA[i:], h.NodeName)
 	}
 
 	return i, nil
@@ -238,8 +238,8 @@ func (h *HepMsg) Size() (n int) {
 		n += 4 + 2 + len(h.CID) // len(vendor) + len(chunk) + len(CID)
 	}
 	n += 4 + 2 + 2 // len(vendor) + len(chunk) + len(Vlan)
-	if h.Hostname != "" {
-		n += 4 + 2 + len(h.Hostname) // len(vendor) + len(chunk) + len(Hostname)
+	if h.NodeName != "" {
+		n += 4 + 2 + len(h.NodeName) // len(vendor) + len(chunk) + len(NodeName)
 	}
 	return n
 }
@@ -326,8 +326,8 @@ func (h *HepMsg) parseHEP(packet []byte) error {
 			h.CID = chunkBody
 		case Vlan:
 			h.Vlan = binary.BigEndian.Uint16(chunkBody)
-		case Hostname:
-			h.Hostname = string(chunkBody)
+		case NodeName:
+			h.NodeName = string(chunkBody)
 		default:
 		}
 		currentByte += chunkLength

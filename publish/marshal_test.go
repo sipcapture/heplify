@@ -4,10 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/negbie/heplify/config"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder"
 	"github.com/stretchr/testify/assert"
 )
