@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+
+	"github.com/bet365/jingo"
 )
 
 /* RTCP header
@@ -187,12 +189,16 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 	return bytes, err
 }
 
-func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
+var enc = jingo.NewStructEncoder(RTCP_Packet{})
+
+func ParseRTCP(data []byte) ([]byte, []byte, string) {
 	dataLen := len(data)
 	if dataLen < 28 {
 		return nil, nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n% X", dataLen, data)
 	}
-	var err error
+
+	var ssrcBytes []byte
+	var infoMsg string
 	pkt := &RTCP_Packet{}
 	offset := 0
 
@@ -327,10 +333,10 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, rtcpPkt []byte, infoMsg string) {
 		dataLen -= RTCPLength + 4
 	}
 
-	rtcpPkt, err = pkt.MarshalJSON()
-	if err != nil {
-		return nil, nil, fmt.Sprintf("RTCP MarshalJSON %v", err)
-	}
-
-	return
+	b := jingo.NewBufferFromPool()
+	enc.Marshal(pkt, b)
+	rtcpPkt := make([]byte, len(b.Bytes))
+	copy(rtcpPkt, b.Bytes)
+	b.ReturnToPool()
+	return ssrcBytes, rtcpPkt, infoMsg
 }

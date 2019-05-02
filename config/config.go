@@ -9,7 +9,6 @@ var Cfg Config
 type Config struct {
 	Iface         *InterfacesConfig
 	Logging       *logp.Logging
-	Bench         bool
 	Mode          string
 	Dedup         bool
 	Filter        string
@@ -19,6 +18,7 @@ type Config struct {
 	HepServer     string
 	HepNodePW     string
 	HepNodeID     uint
+	HepHostname   string
 	Network       string
 	Protobuf      bool
 	Reassembly    bool

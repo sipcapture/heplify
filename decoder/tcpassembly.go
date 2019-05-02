@@ -10,7 +10,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
-	"github.com/sipcapture/heplify/config"
 	"github.com/negbie/logp"
 )
 
@@ -60,8 +59,6 @@ func (s *sipStream) run() {
 				}
 				pkt.Tsec = uint32(ts.Unix())
 				pkt.Tmsec = uint32(ts.Nanosecond() / 1000)
-				pkt.NodeID = uint32(config.Cfg.HepNodeID)
-				pkt.NodePW = []byte(config.Cfg.HepNodePW)
 				pkt.Payload = data
 				pkt.ProtoType = 1
 				PacketQueue <- pkt

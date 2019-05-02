@@ -78,8 +78,6 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		Tsec      uint32
 		Tmsec     uint32
 		ProtoType byte
-		NodeID    uint32
-		NodePW    string
 		Payload   string
 		CID       string
 		Vlan      uint16
@@ -93,8 +91,6 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 		Tsec:      p.Tsec,
 		Tmsec:     p.Tmsec,
 		ProtoType: p.ProtoType,
-		NodeID:    p.NodeID,
-		NodePW:    string(p.NodePW),
 		Payload:   string(p.Payload),
 		CID:       string(p.CID),
 		Vlan:      p.Vlan,

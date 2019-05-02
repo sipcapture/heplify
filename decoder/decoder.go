@@ -3,7 +3,6 @@ package decoder
 import (
 	"bytes"
 	"net"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -26,8 +25,6 @@ type Decoder struct {
 	defrag6   *ip6defrag.IPv6Defragmenter
 	parser    *gopacket.DecodingLayerParser
 	layerType gopacket.LayerType
-	nodeID    uint32
-	nodePW    []byte
 	filter    []string
 	stats
 }
@@ -56,8 +53,6 @@ type Packet struct {
 	Tsec      uint32
 	Tmsec     uint32
 	ProtoType byte
-	NodeID    uint32
-	NodePW    []byte
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
@@ -109,9 +104,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		lt = layers.LayerTypeEthernet
 	}
 
-	// TODO: make a flag for this
-	debug.SetGCPercent(50)
-
 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
 	)
@@ -120,8 +112,6 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
 		defrag6:   ip6defrag.NewIPv6Defragmenter(),
 		parser:    decoder,
-		nodeID:    uint32(config.Cfg.HepNodeID),
-		nodePW:    []byte(config.Cfg.HepNodePW),
 		layerType: lt,
 		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
 	}
@@ -173,7 +163,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	}
 
 	d.parser.DecodeLayers(data, &decodedLayers)
-	logp.Debug("layer", "\n%v", decodedLayers)
+	//logp.Debug("layer", "\n%v", decodedLayers)
 	foundGRELayer := false
 
 	for i := 0; i < len(decodedLayers); i++ {
@@ -273,8 +263,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		Protocol: IPProtocol,
 		SrcIP:    sIP,
 		DstIP:    dIP,
-		NodeID:   d.nodeID,
-		NodePW:   d.nodePW,
 		Tsec:     uint32(ci.Timestamp.Unix()),
 		Tmsec:    uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
