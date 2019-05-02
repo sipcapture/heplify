@@ -64,6 +64,9 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 # Capture SIP and RTCP packets on any interface and send them via TLS to 192.168.1.1:9060
 ./heplify -hs 192.168.1.1:9060 -nt tls
 
+# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Use a HEPNodeName
+./heplify -hs 192.168.1.1:9060 -hn someNodeName
+
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print info to stdout
 ./heplify -hs 192.168.1.1:9060 -e
 
