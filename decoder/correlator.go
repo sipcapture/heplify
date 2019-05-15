@@ -6,36 +6,44 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/sipcapture/heplify/protos"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/protos"
 )
 
-var ipPort bytes.Buffer
+var (
+	ipPort    bytes.Buffer
+	cLine     = []byte("c=IN IP")
+	mLine     = []byte("m=audio ")
+	aLine     = []byte("a=rtcp:")
+	sdpCache  = fastcache.New(30 * 1024 * 1024)
+	rtcpCache = fastcache.New(30 * 1024 * 1024)
+)
 
 // cacheSDPIPPort will extract the source IP, source Port from SDP body and CallID from SIP header.
 // It will do this only for SIP messages which have the strings "c=IN IP4 " and "m=audio " in the SDP body.
 // If there is one rtcp attribute in the SDP body it will use it as RTCP port. Otherwise it will add 1 to
 // the RTP source port. These data will be used for the SDPCache as key:value pairs.
 func cacheSDPIPPort(payload []byte) {
-	if posSDPIP := bytes.Index(payload, []byte("c=IN IP")); posSDPIP > 0 {
-		if posSDPPort := bytes.Index(payload, []byte("m=audio ")); posSDPPort > 0 {
+	if posSDPIP := bytes.Index(payload, cLine); posSDPIP > 0 {
+		if posSDPPort := bytes.Index(payload, mLine); posSDPPort > 0 {
 			ipPort.Reset()
 			restIP := payload[posSDPIP:]
 			// Minimum IPv4 length of "c=IN IP4 1.1.1.1" = 16
 			if posRestIP := bytes.Index(restIP, []byte("\r\n")); posRestIP >= 16 {
-				ipPort.Write(restIP[len("c=IN IP")+2 : posRestIP])
+				ipPort.Write(restIP[len(cLine)+2 : posRestIP])
 			} else {
 				logp.Debug("sdp", "No end or fishy SDP IP in '%s'", restIP)
 				return
 			}
 
-			if posRTCPPort := bytes.Index(payload, []byte("a=rtcp:")); posRTCPPort > 0 {
+			if posRTCPPort := bytes.Index(payload, aLine); posRTCPPort > 0 {
 				restRTCPPort := payload[posRTCPPort:]
 				// Minimum RTCP port length of "a=rtcp:1000" = 11
 				if posRestRTCPPort := bytes.Index(restRTCPPort, []byte("\r\n")); posRestRTCPPort >= 11 && posRestRTCPPort < 14 {
-					ipPort.Write(restRTCPPort[len("a=rtcp:"):posRestRTCPPort])
+					ipPort.Write(restRTCPPort[len(aLine):posRestRTCPPort])
 				} else if posRestRTCPPort := bytes.IndexRune(restRTCPPort, ' '); posRestRTCPPort >= 11 {
-					ipPort.Write(restRTCPPort[len("a=rtcp:"):posRestRTCPPort])
+					ipPort.Write(restRTCPPort[len(aLine):posRestRTCPPort])
 				} else {
 					logp.Debug("sdp", "No end or fishy SDP RTCP Port in '%s'", restRTCPPort)
 					return
@@ -44,7 +52,7 @@ func cacheSDPIPPort(payload []byte) {
 				restPort := payload[posSDPPort:]
 				// Minimum RTCP port length of "m=audio 1000" = 12
 				if posRestPort := bytes.Index(restPort, []byte(" RTP")); posRestPort >= 12 {
-					ipPort.Write(restPort[len("m=audio "):posRestPort])
+					ipPort.Write(restPort[len(mLine):posRestPort])
 					lastNum := len(ipPort.Bytes()) - 1
 					ipPort.Bytes()[lastNum] = byte(uint32(ipPort.Bytes()[lastNum]) + 1)
 				} else {
@@ -78,10 +86,7 @@ func cacheSDPIPPort(payload []byte) {
 			}
 
 			//logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", ipPort.String(), string(callID))
-			err := SDPCache.Set(ipPort.Bytes(), bytes.TrimSpace(callID), 120)
-			if err != nil {
-				logp.Warn("%v", err)
-			}
+			sdpCache.Set(ipPort.Bytes(), bytes.TrimSpace(callID))
 		}
 	}
 }
@@ -101,7 +106,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 		}
 	}
 
-	if corrID, err := RTCPCache.Get(keyRTCP); err == nil && keyRTCP != nil {
+	if corrID := rtcpCache.Get(nil, keyRTCP); corrID != nil && keyRTCP != nil {
 		logp.Debug("rtcp", "Found '%x:%s' in RTCPCache srcIP=%s, srcPort=%d, dstIP=%s, dstPort=%d, payload=%s",
 			keyRTCP, corrID, srcIP, srcPort, dstIP, dstPort, jsonRTCP)
 		return jsonRTCP, corrID
@@ -110,28 +115,20 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	srcIPString := srcIP.String()
 	srcPortString := strconv.Itoa(int(srcPort))
 	srcKey := []byte(srcIPString + srcPortString)
-	if corrID, err := SDPCache.Get(srcKey); err == nil {
+	if corrID := sdpCache.Get(nil, srcKey); corrID != nil {
 		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, payload=%s",
 			srcKey, corrID, srcIPString, srcPortString, jsonRTCP)
-		err = RTCPCache.Set(keyRTCP, corrID, 21600)
-		if err != nil {
-			logp.Warn("%v", err)
-			return nil, nil
-		}
+		rtcpCache.Set(keyRTCP, corrID)
 		return jsonRTCP, corrID
 	}
 
 	dstIPString := dstIP.String()
 	dstPortString := strconv.Itoa(int(dstPort))
 	dstKey := []byte(dstIPString + dstPortString)
-	if corrID, err := SDPCache.Get(dstKey); err == nil {
+	if corrID := sdpCache.Get(nil, dstKey); corrID != nil {
 		logp.Debug("rtcp", "Found '%s:%s' in SDPCache dstIP=%s, dstPort=%s, payload=%s",
 			dstKey, corrID, dstIPString, dstPortString, jsonRTCP)
-		err = RTCPCache.Set(keyRTCP, corrID, 21600)
-		if err != nil {
-			logp.Warn("%v", err)
-			return nil, nil
-		}
+		rtcpCache.Set(keyRTCP, corrID)
 		return jsonRTCP, corrID
 	}
 
@@ -191,11 +188,7 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 		for rawMapKey, rawMapValue := range rawTypes {
 			if rawMapKey == "call-id" {
 				callid := rawMapValue.([]byte)
-				err = SIPCache.Set(cookie, callid, 10)
-				if err != nil {
-					logp.Warn("%v", err)
-					return nil, nil
-				}
+				sipCache.Set(cookie, callid)
 			}
 
 			if rawMapKey == "SSRC" {
@@ -204,7 +197,7 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 					logp.Warn("%v", err)
 					return nil, nil
 				}
-				if corrID, err := SIPCache.Get(cookie); err == nil {
+				if corrID := sipCache.Get(nil, cookie); corrID != nil {
 					logp.Debug("ng", "Found CallID: %s and QOS stats: %s", string(corrID), string(data))
 					return data, corrID
 				}

@@ -2,12 +2,13 @@ package decoder
 
 import (
 	"bytes"
+	"encoding/binary"
 	"net"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/coocood/freecache"
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
@@ -89,9 +90,7 @@ var parserOnlyTCP = gopacket.NewDecodingLayerParser(
 
 var PacketQueue = make(chan *Packet, 20000)
 
-var SIPCache = freecache.NewCache(20 * 1024 * 1024)  // 20 MB
-var SDPCache = freecache.NewCache(30 * 1024 * 1024)  // 30 MB
-var RTCPCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
+var sipCache = fastcache.New(20 * 1024 * 1024)
 
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	var lt gopacket.LayerType
@@ -138,16 +137,19 @@ func (d *Decoder) defragIP6(i6 layers.IPv6, i6frag layers.IPv6Fragment, t time.T
 
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	if config.Cfg.Dedup {
-		if len(data) > 128 {
-			_, err := SIPCache.Get(data[34:])
-			if err == nil {
-				atomic.AddUint64(&d.dupCount, 1)
-				return
+		if len(data) > 34 {
+			tu := uint64(ci.Timestamp.UnixNano())
+			if buf := sipCache.Get(nil, data[34:]); buf != nil {
+				i := binary.BigEndian.Uint64(buf)
+				delta := tu - i
+				if delta < 400e6 || delta > 1e18 {
+					atomic.AddUint64(&d.dupCount, 1)
+					return
+				}
 			}
-			err = SIPCache.Set(data[34:], nil, 1)
-			if err != nil {
-				logp.Warn("%v", err)
-			}
+			tb := make([]byte, 8)
+			binary.BigEndian.PutUint64(tb, tu)
+			sipCache.Set(data[34:], tb)
 		}
 	}
 
