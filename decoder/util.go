@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"runtime"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -122,34 +121,10 @@ func (d *Decoder) printPacketStats() {
 	atomic.StoreUint64(&d.unknownCount, 0)
 }
 
-func (d *Decoder) printSIPCacheStats() {
-	logp.Info("SIPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		SIPCache.EntryCount(), SIPCache.LookupCount(), SIPCache.HitCount(), SIPCache.ExpiredCount(), SIPCache.OverwriteCount())
-	SIPCache.ResetStatistics()
-}
-
-func (d *Decoder) printSDPCacheStats() {
-	logp.Info("SDPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		SDPCache.EntryCount(), SDPCache.LookupCount(), SDPCache.HitCount(), SDPCache.ExpiredCount(), SDPCache.OverwriteCount())
-	SDPCache.ResetStatistics()
-}
-
-func (d *Decoder) printRTCPCacheStats() {
-	logp.Info("RTCPCache EntryCount: %v, LookupCount: %v, HitCount: %v, ExpiredCount: %v, OverwriteCount: %v",
-		RTCPCache.EntryCount(), RTCPCache.LookupCount(), RTCPCache.HitCount(), RTCPCache.ExpiredCount(), RTCPCache.OverwriteCount())
-	RTCPCache.ResetStatistics()
-}
-
 func (d *Decoder) printStats(dt time.Duration) {
 	ticker := time.NewTicker(dt)
 	for range ticker.C {
 		d.printPacketStats()
-		if runtime.GOARCH == "amd64" {
-			d.printSIPCacheStats()
-			d.printSDPCacheStats()
-			d.printRTCPCacheStats()
-		}
-
 	}
 }
 
