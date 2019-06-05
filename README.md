@@ -40,7 +40,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -i    Listen on interface (default "any")
   -nt   Network types are [udp, tcp, tls] (default "udp")
   -t    Capture types are [pcap, af_packet] (default "pcap")
-  -m    Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP] (default "SIPRTCP")
+  -m    Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
   -pr   Portrange to capture SIP (default "5060-5090")
   -hs   HEP UDP server address (default "127.0.0.1:9060")
   -hi   HEP Node ID (default 2002)
@@ -69,6 +69,9 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print info to stdout
 ./heplify -hs 192.168.1.1:9060 -e
+
+# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060 and 192.168.2.2:9060
+./heplify -hs "192.168.1.1:9060,192.168.2.2:9060"
 
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print debug selectors
 ./heplify -hs 192.168.1.1:9060 -e -d fragment,payload,rtcp
