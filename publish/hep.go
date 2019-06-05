@@ -90,8 +90,8 @@ func (h *HEPOutputer) Output(msg []byte) {
 
 func (h *HEPOutputer) Send(msg []byte) {
 	for n := range h.addr {
-		_, err := h.client[n].writer.Write(msg)
-		err = h.client[n].writer.Flush()
+		h.client[n].writer.Write(msg)
+		err := h.client[n].writer.Flush()
 		if err != nil {
 			h.client[n].errCnt++
 			if h.client[n].errCnt%64 == 0 {

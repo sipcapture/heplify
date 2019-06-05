@@ -16,11 +16,11 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder"
 	"github.com/sipcapture/heplify/dump"
 	"github.com/sipcapture/heplify/publish"
-	"github.com/negbie/logp"
 )
 
 type SnifferSetup struct {
@@ -389,7 +389,7 @@ func (sniffer *SnifferSetup) printStats() {
 
 		case <-signals:
 			logp.Info("Sniffer received stop signal")
-			time.Sleep(1 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 			os.Exit(0)
 		}
 	}
