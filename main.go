@@ -12,9 +12,9 @@ import (
 	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.50"
+const version = "heplify 1.51"
 
-func init() {
+func createFlags() {
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Use %s like: %s [option]\n", version, os.Args[0])
@@ -95,7 +95,7 @@ func checkCritErr(err error) {
 }
 
 func main() {
-
+	createFlags()
 	/* 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}() */
