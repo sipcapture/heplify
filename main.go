@@ -51,7 +51,7 @@ func init() {
 	flag.BoolVar(&ifaceConfig.OneAtATime, "o", false, "Read packet for packet")
 	flag.StringVar(&fileRotator.Path, "p", "./", "Log filepath")
 	flag.StringVar(&fileRotator.Name, "n", "heplify.log", "Log filename")
-	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP]")
+	flag.StringVar(&config.Cfg.Mode, "m", "SIPRTCP", "Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP]")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by any string")
 	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")

@@ -5,105 +5,118 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strings"
+	"unicode"
 
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 )
 
+type HEPConn struct {
+	conn   net.Conn
+	writer *bufio.Writer
+	errCnt int
+}
 type HEPOutputer struct {
-	addr     string
-	conn     net.Conn
-	writer   *bufio.Writer
 	hepQueue chan []byte
-	errCnt   int
+	addr     []string
+	client   []HEPConn
 }
 
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
-	ho := &HEPOutputer{
-		addr:     serverAddr,
+	a := strings.Split(cutSpace(serverAddr), ",")
+	l := len(a)
+	h := &HEPOutputer{
+		addr:     a,
+		client:   make([]HEPConn, l),
 		hepQueue: make(chan []byte, 20000),
 	}
-
-	if err := ho.Init(); err != nil {
-		return nil, err
+	errCnt := 0
+	for n := range a {
+		if err := h.ConnectServer(n); err != nil {
+			logp.Err("%v", err)
+			errCnt++
+		}
+	}
+	if errCnt == l {
+		return nil, fmt.Errorf("cannot establish a connection")
 	}
 
-	go ho.Start()
-	return ho, nil
+	go h.Start()
+	return h, nil
 }
 
-func (ho *HEPOutputer) Init() error {
-	var err error
-	if ho.conn, err = ho.ConnectServer(ho.addr); err != nil {
+func (h *HEPOutputer) Close(n int) {
+	if err := h.client[n].conn.Close(); err != nil {
+		logp.Err("cannnot close connection to %s: %v", h.addr[n], err)
+	}
+}
+
+func (h *HEPOutputer) ReConnect(n int) (err error) {
+	if h.client[n].conn != nil {
+		h.Close(n)
+		logp.Info("close old connection and try reconnect to %s", h.addr[n])
+	}
+	if err = h.ConnectServer(n); err != nil {
 		return err
 	}
-
-	w := bufio.NewWriterSize(ho.conn, 8192)
-	ho.writer = w
-
-	return nil
+	h.client[n].writer.Reset(h.client[n].conn)
+	return err
 }
 
-func (ho *HEPOutputer) Close() {
-	if err := ho.conn.Close(); err != nil {
-		logp.Err("close connection error: %v", err)
-	}
-}
-
-func (ho *HEPOutputer) ReConnect() error {
-	var err error
-	if ho.conn != nil {
-		ho.Close()
-		logp.Info("close old connection and try to reconnect")
-	}
-	if ho.conn, err = ho.ConnectServer(ho.addr); err != nil {
-		return err
-	}
-	ho.writer.Reset(ho.conn)
-	return nil
-}
-
-func (ho *HEPOutputer) ConnectServer(addr string) (conn net.Conn, err error) {
+func (h *HEPOutputer) ConnectServer(n int) (err error) {
 	if config.Cfg.Network == "udp" {
-		if ho.conn, err = net.Dial("udp", addr); err != nil {
-			return nil, err
+		if h.client[n].conn, err = net.Dial("udp", h.addr[n]); err != nil {
+			return err
 		}
 	} else if config.Cfg.Network == "tcp" {
-		if ho.conn, err = net.Dial("tcp", addr); err != nil {
-			return nil, err
+		if h.client[n].conn, err = net.Dial("tcp", h.addr[n]); err != nil {
+			return err
 		}
 	} else if config.Cfg.Network == "tls" {
-		if ho.conn, err = tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true}); err != nil {
-			return nil, err
+		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: true}); err != nil {
+			return err
 		}
 	} else {
-		return nil, fmt.Errorf("not supported network type %s", config.Cfg.Network)
+		return fmt.Errorf("not supported network type %s", config.Cfg.Network)
 	}
-	return ho.conn, nil
+	h.client[n].writer = bufio.NewWriterSize(h.client[n].conn, 8192)
+	return err
 }
 
-func (ho *HEPOutputer) Output(msg []byte) {
-	ho.hepQueue <- msg
+func (h *HEPOutputer) Output(msg []byte) {
+	h.hepQueue <- msg
 }
 
-func (ho *HEPOutputer) Send(msg []byte) {
-	_, err := ho.writer.Write(msg)
-	err = ho.writer.Flush()
-	if err != nil {
-		ho.errCnt++
-		if ho.errCnt%64 == 0 {
-			ho.errCnt = 0
-			logp.Err("%v", err)
-			if err = ho.ReConnect(); err != nil {
-				logp.Err("reconnect error: %v", err)
-				return
+func (h *HEPOutputer) Send(msg []byte) {
+	for n := range h.addr {
+		_, err := h.client[n].writer.Write(msg)
+		err = h.client[n].writer.Flush()
+		if err != nil {
+			h.client[n].errCnt++
+			if h.client[n].errCnt%64 == 0 {
+				h.client[n].errCnt = 0
+				logp.Err("%v", err)
+				if err = h.ReConnect(n); err != nil {
+					logp.Err("reconnect error: %v", err)
+					return
+				}
 			}
 		}
 	}
 }
 
-func (ho *HEPOutputer) Start() {
-	for msg := range ho.hepQueue {
-		ho.Send(msg)
+func (h *HEPOutputer) Start() {
+	for msg := range h.hepQueue {
+		h.Send(msg)
 	}
+}
+
+func cutSpace(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, str)
 }
