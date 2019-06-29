@@ -103,9 +103,21 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		lt = layers.LayerTypeEthernet
 	}
 
-	decoder := gopacket.NewDecodingLayerParser(
+	/* 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
-	)
+	) */
+	decoder := gopacket.NewDecodingLayerParser(lt)
+	decoder.SetDecodingLayerContainer(gopacket.DecodingLayerSparse(nil))
+	decoder.AddDecodingLayer(&sll)
+	decoder.AddDecodingLayer(&d1q)
+	decoder.AddDecodingLayer(&gre)
+	decoder.AddDecodingLayer(&eth)
+	decoder.AddDecodingLayer(&ip4)
+	decoder.AddDecodingLayer(&ip6)
+	decoder.AddDecodingLayer(&udp)
+	decoder.AddDecodingLayer(&tcp)
+	decoder.AddDecodingLayer(&dns)
+	decoder.AddDecodingLayer(&payload)
 
 	d := &Decoder{
 		defrag4:   ip4defrag.NewIPv4Defragmenter(),
