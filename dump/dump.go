@@ -8,13 +8,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/sipcapture/heplify/config"
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/config"
 )
 
 type pcapWriter interface {
@@ -100,6 +101,7 @@ func movePcap(tempName, outputPath string) error {
 func Save(dc chan *Packet, lt layers.LinkType) {
 	outPath := config.Cfg.Iface.WriteFile
 	tmpName := fmt.Sprintf("%s_interface.pcap.tmp", config.Cfg.Iface.Device)
+	tmpName = strings.ReplaceAll(tmpName, "\\", "")
 
 	signals := make(chan os.Signal, 2)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
