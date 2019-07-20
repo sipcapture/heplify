@@ -361,10 +361,16 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		}
 	}
 
-	if bytes.Contains(pkt.Payload, []byte("CSeq")) {
+	var cPos int
+	if cPos = bytes.Index(pkt.Payload, []byte("CSeq")); cPos > -1 {
 		pkt.ProtoType = 1
-	} else if bytes.Contains(pkt.Payload, []byte("Cseq")) {
+	} else if cPos = bytes.Index(pkt.Payload, []byte("Cseq")); cPos > -1 {
 		pkt.ProtoType = 1
+	}
+	if cPos > 16 {
+		if s := bytes.Index(pkt.Payload[:cPos], []byte("Sip0")); s > -1 {
+			pkt.Payload = pkt.Payload[s+4:]
+		}
 	}
 
 	if pkt.Payload != nil {
