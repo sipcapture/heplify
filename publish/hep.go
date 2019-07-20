@@ -53,10 +53,6 @@ func (h *HEPOutputer) Close(n int) {
 }
 
 func (h *HEPOutputer) ReConnect(n int) (err error) {
-	if h.client[n].conn != nil {
-		h.Close(n)
-		logp.Info("close old connection and try reconnect to %s", h.addr[n])
-	}
 	if err = h.ConnectServer(n); err != nil {
 		return err
 	}
