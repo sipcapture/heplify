@@ -184,8 +184,19 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		switch decodedLayers[i] {
 		case layers.LayerTypeGRE:
 			if config.Cfg.Iface.WithErspan {
-				if len(gre.Payload) > 8 {
+				erspanVer := gre.Payload[0] & 0xF0 >> 4
+				if erspanVer == 1 && len(gre.Payload) > 8 {
 					d.parser.DecodeLayers(gre.Payload[8:], &decodedLayers)
+					if !foundGRELayer {
+						i = 0
+					}
+					foundGRELayer = true
+				} else if erspanVer == 2 && len(gre.Payload) > 12 {
+					off := 12
+					if gre.Payload[11]&1 == 1 && len(gre.Payload) > 20 {
+						off = 20
+					}
+					d.parser.DecodeLayers(gre.Payload[off:], &decodedLayers)
 					if !foundGRELayer {
 						i = 0
 					}
