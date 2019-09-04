@@ -169,6 +169,8 @@ func correlateLOG(payload []byte) (byte, []byte) {
 			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
 			return 100, callID
 		}
+	} else if ap := bytes.Index(payload, []byte("alert")); ap > -1 {
+		return 112, []byte("alert")
 	} else if wp := bytes.Index(payload, []byte("WARN")); wp > -1 {
 		return 112, []byte("warning")
 	} else if ep := bytes.Index(payload, []byte("ERR")); ep > -1 {
