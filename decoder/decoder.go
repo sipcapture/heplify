@@ -2,16 +2,15 @@ package decoder
 
 import (
 	"bytes"
-	"encoding/binary"
 	"net"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
+	"github.com/negbie/freecache"
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder/internal"
@@ -67,30 +66,31 @@ func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
 	return c.CaptureInfo
 }
 
-var sll layers.LinuxSLL
-var d1q layers.Dot1Q
-var gre layers.GRE
-var eth layers.Ethernet
-var ip4 layers.IPv4
-var ip6 layers.IPv6
-var tcp layers.TCP
-var udp layers.UDP
-var dns layers.DNS
-var payload gopacket.Payload
+var (
+	sll     layers.LinuxSLL
+	d1q     layers.Dot1Q
+	gre     layers.GRE
+	eth     layers.Ethernet
+	ip4     layers.IPv4
+	ip6     layers.IPv6
+	tcp     layers.TCP
+	udp     layers.UDP
+	dns     layers.DNS
+	payload gopacket.Payload
 
-var decodedLayers = make([]gopacket.LayerType, 0, 12)
-var parserOnlyUDP = gopacket.NewDecodingLayerParser(
-	layers.LayerTypeUDP,
-	&udp,
+	decodedLayers = make([]gopacket.LayerType, 0, 12)
+	parserOnlyUDP = gopacket.NewDecodingLayerParser(
+		layers.LayerTypeUDP,
+		&udp,
+	)
+	parserOnlyTCP = gopacket.NewDecodingLayerParser(
+		layers.LayerTypeTCP,
+		&tcp,
+	)
+
+	PacketQueue = make(chan *Packet, 20000)
+	sipCache    = freecache.NewCache(20 * 1024 * 1024) // 20 MB
 )
-var parserOnlyTCP = gopacket.NewDecodingLayerParser(
-	layers.LayerTypeTCP,
-	&tcp,
-)
-
-var PacketQueue = make(chan *Packet, 20000)
-
-var sipCache = fastcache.New(20 * 1024 * 1024)
 
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	var lt gopacket.LayerType
@@ -150,18 +150,15 @@ func (d *Decoder) defragIP6(i6 layers.IPv6, i6frag layers.IPv6Fragment, t time.T
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	if config.Cfg.Dedup {
 		if len(data) > 34 {
-			tu := uint64(ci.Timestamp.UnixNano())
-			if buf := sipCache.Get(nil, data[34:]); buf != nil {
-				i := binary.BigEndian.Uint64(buf)
-				delta := tu - i
-				if delta < 400e6 || delta > 1e18 {
-					atomic.AddUint64(&d.dupCount, 1)
-					return
-				}
+			_, err := sipCache.Get(data[34:])
+			if err == nil {
+				atomic.AddUint64(&d.dupCount, 1)
+				return
 			}
-			tb := make([]byte, 8)
-			binary.BigEndian.PutUint64(tb, tu)
-			sipCache.Set(data[34:], tb)
+			err = sipCache.Set(data[34:], nil, 3)
+			if err != nil {
+				logp.Warn("%v", err)
+			}
 		}
 	}
 
