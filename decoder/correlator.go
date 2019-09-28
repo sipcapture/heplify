@@ -6,7 +6,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/VictoriaMetrics/fastcache"
+	"github.com/negbie/freecache"
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/protos"
 )
@@ -16,8 +16,8 @@ var (
 	cLine     = []byte("c=IN IP")
 	mLine     = []byte("m=audio ")
 	aLine     = []byte("a=rtcp:")
-	sdpCache  = fastcache.New(30 * 1024 * 1024)
-	rtcpCache = fastcache.New(30 * 1024 * 1024)
+	sdpCache  = freecache.NewCache(30 * 1024 * 1024) // 30 MB
+	rtcpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
 )
 
 // cacheSDPIPPort will extract the source IP, source Port from SDP body and CallID from SIP header.
@@ -86,7 +86,7 @@ func cacheSDPIPPort(payload []byte) {
 			}
 
 			//logp.Debug("sdp", "Add to SDPCache key=%s, value=%s", ipPort.String(), string(callID))
-			sdpCache.Set(ipPort.Bytes(), bytes.TrimSpace(callID))
+			sdpCache.Set(ipPort.Bytes(), bytes.TrimSpace(callID), 1200)
 		}
 	}
 }
@@ -96,6 +96,8 @@ func cacheSDPIPPort(payload []byte) {
 // If it can't find a value it will look inside the shortlive SDPCache with (SDPIP+RTCPPort) as key.
 // If it finds a value inside the SDPCache it will add it to the RTCPCache with the ssrc as key.
 func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) ([]byte, []byte) {
+	var corrID []byte
+	var err error
 
 	keyRTCP, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
@@ -106,8 +108,8 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 		}
 	}
 
-	if corrID := rtcpCache.Get(nil, keyRTCP); corrID != nil && keyRTCP != nil {
-		logp.Debug("rtcp", "Found '%x:%s' in RTCPCache srcIP=%s, srcPort=%d, dstIP=%s, dstPort=%d, payload=%s",
+	if corrID, err = rtcpCache.GetWithBuf(keyRTCP, corrID[:0]); err == nil && keyRTCP != nil {
+		logp.Debug("rtcp", "Found '%x:%s' in rtcpCache srcIP=%s, srcPort=%d, dstIP=%s, dstPort=%d, payload=%s",
 			keyRTCP, corrID, srcIP, srcPort, dstIP, dstPort, jsonRTCP)
 		return jsonRTCP, corrID
 	}
@@ -115,20 +117,30 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	srcIPString := srcIP.String()
 	srcPortString := strconv.Itoa(int(srcPort))
 	srcKey := []byte(srcIPString + srcPortString)
-	if corrID := sdpCache.Get(nil, srcKey); corrID != nil {
-		logp.Debug("rtcp", "Found '%s:%s' in SDPCache srcIP=%s, srcPort=%s, payload=%s",
+
+	if corrID, err = sdpCache.GetWithBuf(srcKey, corrID[:0]); err == nil {
+		logp.Debug("rtcp", "Found '%s:%s' in sdpCache srcIP=%s, srcPort=%s, payload=%s",
 			srcKey, corrID, srcIPString, srcPortString, jsonRTCP)
-		rtcpCache.Set(keyRTCP, corrID)
+		err = rtcpCache.Set(keyRTCP, corrID, 216000)
+		if err != nil {
+			logp.Warn("%v", err)
+			return nil, nil
+		}
 		return jsonRTCP, corrID
 	}
 
 	dstIPString := dstIP.String()
 	dstPortString := strconv.Itoa(int(dstPort))
 	dstKey := []byte(dstIPString + dstPortString)
-	if corrID := sdpCache.Get(nil, dstKey); corrID != nil {
-		logp.Debug("rtcp", "Found '%s:%s' in SDPCache dstIP=%s, dstPort=%s, payload=%s",
+
+	if corrID, err = sdpCache.GetWithBuf(dstKey, corrID[:0]); err == nil {
+		logp.Debug("rtcp", "Found '%s:%s' in sdpCache dstIP=%s, dstPort=%s, payload=%s",
 			dstKey, corrID, dstIPString, dstPortString, jsonRTCP)
-		rtcpCache.Set(keyRTCP, corrID)
+		err = rtcpCache.Set(keyRTCP, corrID, 216000)
+		if err != nil {
+			logp.Warn("%v", err)
+			return nil, nil
+		}
 		return jsonRTCP, corrID
 	}
 
@@ -190,7 +202,11 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 		for rawMapKey, rawMapValue := range rawTypes {
 			if rawMapKey == "call-id" {
 				callid := rawMapValue.([]byte)
-				sipCache.Set(cookie, callid)
+				err = sipCache.Set(cookie, callid, 100)
+				if err != nil {
+					logp.Warn("%v", err)
+					return nil, nil
+				}
 			}
 
 			if rawMapKey == "SSRC" {
@@ -199,7 +215,7 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 					logp.Warn("%v", err)
 					return nil, nil
 				}
-				if corrID := sipCache.Get(nil, cookie); corrID != nil {
+				if corrID, err := sipCache.Get(cookie); err == nil {
 					logp.Debug("ng", "Found CallID: %s and QOS stats: %s", string(corrID), string(data))
 					return data, corrID
 				}
