@@ -128,10 +128,12 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	}
 
 	if config.Cfg.Reassembly {
-		d.asm = tcpassembly.NewAssembler(tcpassembly.NewStreamPool(new(sipStreamFactory)))
+		streamFactory := &tcpStreamFactory{}
+		streamPool := tcpassembly.NewStreamPool(streamFactory)
+		d.asm = tcpassembly.NewAssembler(streamPool)
 		d.asm.MaxBufferedPagesPerConnection = 1
 		d.asm.MaxBufferedPagesTotal = 1
-		go d.flushTCPAssembler(500 * time.Millisecond)
+		go d.flushTCPAssembler(1 * time.Second)
 	}
 
 	go d.flushFragments(1 * time.Minute)

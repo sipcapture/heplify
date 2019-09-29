@@ -3,7 +3,6 @@ package protos
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 )
 
 // WSOpCode represents operation code.
@@ -17,22 +16,20 @@ type WSHeader struct {
 	Masked bool
 	Mask   [4]byte
 	Length int64
+	Offset int
 }
 
 // Errors used by ReadWSHeader.
 var (
-	ErrHeaderLengthMSB        = fmt.Errorf("header error: the most significant bit must be 0")
-	ErrHeaderLengthUnexpected = fmt.Errorf("header error: unexpected payload length bits")
+	ErrHeaderLengthMSB        = fmt.Errorf("ws header most significant bit must be 0")
+	ErrHeaderLengthUnexpected = fmt.Errorf("ws header unexpected payload length bits")
 )
 
 // ReadWSHeader reads a Websocket header from r.
-func ReadWSHeader(r io.Reader) (h WSHeader, err error) {
+func ReadWSHeader(data []byte) (h WSHeader, err error) {
+	l := len(data)
 	bts := make([]byte, 2, 14)
-
-	_, err = io.ReadFull(r, bts)
-	if err != nil {
-		return
-	}
+	n := copy(bts, data)
 
 	h.Fin = bts[0]&0x80 != 0
 	h.Rsv = (bts[0] & 0x70) >> 4
@@ -66,10 +63,9 @@ func ReadWSHeader(r io.Reader) (h WSHeader, err error) {
 	}
 
 	bts = bts[:extra]
-	_, err = io.ReadFull(r, bts)
-	if err != nil {
-		return
-	}
+	data = data[n:]
+	n = copy(bts, data)
+	h.Offset = n + 2
 
 	switch {
 	case length == 126:
@@ -85,6 +81,11 @@ func ReadWSHeader(r io.Reader) (h WSHeader, err error) {
 		bts = bts[8:]
 	}
 
+	if l-h.Offset != int(h.Length) {
+		err = ErrHeaderLengthUnexpected
+		return
+	}
+
 	if h.Masked {
 		copy(h.Mask[:], bts)
 	}
@@ -93,15 +94,22 @@ func ReadWSHeader(r io.Reader) (h WSHeader, err error) {
 }
 
 // WSPayload returns the Websocket payload from r.
-func WSPayload(r io.Reader) (b []byte, err error) {
-	header, err := ReadWSHeader(r)
+func WSPayload(data []byte) (b []byte, err error) {
+	h, err := ReadWSHeader(data)
 	if err != nil {
 		return
 	}
 
-	if header.Length > 0 {
-		b = make([]byte, int(header.Length))
-		_, err = io.ReadFull(r, b)
+	if h.Length > 0 {
+		b = make([]byte, int(h.Length))
+		copy(b, data[h.Offset:])
+	}
+
+	if h.Masked {
+		n := len(b)
+		for i := 0; i < n; i++ {
+			b[i] ^= h.Mask[(i)%4]
+		}
 	}
 
 	return

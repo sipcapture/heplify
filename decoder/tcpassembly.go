@@ -11,37 +11,72 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/protos"
 )
 
-type sipStreamFactory struct{}
+type tcpStreamFactory struct{}
 
-type sipStream struct {
+type tcpStream struct {
 	net, transport gopacket.Flow
-	reader         tcpreader.ReaderStream
+	readerStream   readerStream
 }
 
-func (s *sipStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
-	st := &sipStream{
-		net:       net,
-		transport: transport,
-		reader:    tcpreader.NewReaderStream(),
+func (s *tcpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
+	rs := &tcpStream{
+		net:          net,
+		transport:    transport,
+		readerStream: newReaderStream(),
 	}
-	go st.run()
-	return &st.reader
+	go rs.run()
+	return &rs.readerStream
 }
 
-func (s *sipStream) run() {
+type readerStream struct {
+	tcpreader.ReaderStream
+	InitialTS time.Time
+}
+
+func newReaderStream() readerStream {
+	return readerStream{
+		ReaderStream: tcpreader.NewReaderStream(),
+	}
+}
+
+func (r *readerStream) Reassembled(reassembly []tcpassembly.Reassembly) {
+	if r.InitialTS.IsZero() && len(reassembly) > 0 {
+		r.InitialTS = reassembly[0].Seen
+	}
+	r.ReaderStream.Reassembled(reassembly)
+}
+
+func (s *tcpStream) run() {
 	var data []byte
 	var tmp = make([]byte, 4096)
 	for {
-		n, err := s.reader.Read(tmp)
+		n, err := s.readerStream.Read(tmp)
 		if err == io.EOF {
 			return
 		} else if err != nil {
 			logp.Err("got %v while reading temporary buffer", err)
+			continue
 		} else if n > 0 {
 			data = append(data, tmp[0:n]...)
-			if isSIP(data) {
+
+			if bytes.HasPrefix(data, []byte("GET")) || bytes.HasPrefix(data, []byte("HTTP")) {
+				data = nil
+				continue
+			}
+
+			var d []byte
+			var isWS bool
+			if (data[0] == 129 || data[0] == 130) && (data[1] == 126 || data[1] == 254) {
+				d, err = protos.WSPayload(data)
+				if err == nil {
+					isWS = true
+				}
+			}
+
+			if isWS || isSIP(data) {
 				ts := time.Now()
 				pkt := &Packet{}
 				pkt.Version = 0x02
@@ -59,12 +94,16 @@ func (s *sipStream) run() {
 				}
 				pkt.Tsec = uint32(ts.Unix())
 				pkt.Tmsec = uint32(ts.Nanosecond() / 1000)
-				pkt.Payload = data
 				pkt.ProtoType = 1
+				pkt.Payload = data
+				if isWS {
+					pkt.Payload = d
+				}
+				data = nil
 				PacketQueue <- pkt
 				cacheSDPIPPort(pkt.Payload)
-				logp.Debug("tcpassembly", "%s", pkt)
-				data = nil
+				//logp.Debug("tcpassembly", "%s", pkt)
+				//fmt.Printf("###################\n%s", pkt.Payload)
 			}
 		}
 	}
