@@ -188,7 +188,7 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	sniffer.file = sniffer.config.ReadFile
 
 	if sniffer.file == "" {
-		if sniffer.config.Device == "any" && runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		if sniffer.config.Device == "any" && (runtime.GOOS == "windows" || runtime.GOOS == "darwin") {
 			_, err := ListDeviceNames(true, false)
 			return nil, fmt.Errorf("%v -i any is not supported on %s\nPlease use one of the above devices", err, runtime.GOOS)
 		}
