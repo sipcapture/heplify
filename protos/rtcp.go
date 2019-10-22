@@ -192,9 +192,10 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 var enc = jingo.NewStructEncoder(RTCP_Packet{})
 
 func ParseRTCP(data []byte) ([]byte, []byte, string) {
+	curLen := len(data)
 	dataLen := len(data)
-	if dataLen < 28 {
-		return nil, nil, fmt.Sprintf("Fishy RTCP dataLen=%d in packet:\n% X", dataLen, data)
+	if curLen < 28 {
+		return nil, nil, fmt.Sprintf("Fishy RTCP curLen=%d in packet:\n% X", curLen, data)
 	}
 
 	var ssrcBytes []byte
@@ -202,9 +203,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 	pkt := &RTCP_Packet{}
 	offset := 0
 
-	for dataLen > 0 {
-		if dataLen < 4 || dataLen > 768 || offset > len(data)-4 {
-			infoMsg = fmt.Sprintf("Fishy RTCP dataLen=%d, offset=%d in packet:\n% X", dataLen, offset, data)
+	for curLen > 0 {
+		if curLen < 4 || curLen > 768 || offset > dataLen-4 {
+			infoMsg = fmt.Sprintf("Fishy RTCP curLen=%d, offset=%d in packet:\n% X", curLen, offset, data)
 			break
 		}
 
@@ -215,9 +216,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 		RTCPLength := int(binary.BigEndian.Uint16(data[offset+2:]) * 4)
 		offset += 4
 
-		if RTCPVersion != 2 || RTCPPadding > 1 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > dataLen {
-			infoMsg = fmt.Sprintf("Fishy RTCP_Header RTCPVersion=%d, RTCPPadding=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, packetLen=%d, dataLen=%d, offset=%d in packet:\n% X",
-				RTCPVersion, RTCPPadding, RTCPReportCount, RTCPType, RTCPLength, len(data), dataLen, offset, data)
+		if RTCPVersion != 2 || RTCPPadding > 1 || RTCPReportCount < 0 || RTCPReportCount > 4 || RTCPType < 200 || RTCPType > 207 || RTCPLength > curLen {
+			infoMsg = fmt.Sprintf("Fishy RTCP_Header RTCPVersion=%d, RTCPPadding=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, curLen=%d, offset=%d in packet:\n% X",
+				RTCPVersion, RTCPPadding, RTCPReportCount, RTCPType, RTCPLength, dataLen, curLen, offset, data)
 			break
 		}
 
@@ -226,9 +227,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 
 		switch RTCPType {
 		case TYPE_RTCP_SR:
-			if RTCPLength < 24 || offset+24 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_SR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
+			if RTCPLength < 24 || offset+24 > dataLen {
+				infoMsg = fmt.Sprintf("Fishy RTCP_SR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, curLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, curLen, offset, data)
 				break
 			}
 
@@ -242,9 +243,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			pkt.SenderInformation.Octet_count = binary.BigEndian.Uint32(data[offset+20:])
 			offset += 24
 
-			if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= len(data) {
-				tmpReportBlocks := make([]RTCP_report_block, RTCPReportCount)
-				for i := 0; i < RTCPReportCount; i++ {
+			tmpReportBlocks := make([]RTCP_report_block, RTCPReportCount)
+			for i := 0; i < RTCPReportCount; i++ {
+				if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= dataLen && len(data[offset:]) >= 4 {
 					tmpReportBlocks[i].SourceSsrc = binary.BigEndian.Uint32(data[offset:])
 					tmpReportBlocks[i].Fraction_lost = data[offset+4]
 					var cumBuf [4]byte
@@ -261,9 +262,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			}
 
 		case TYPE_RTCP_RR:
-			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_RR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
+			if RTCPLength < 4 || offset+4 > dataLen {
+				infoMsg = fmt.Sprintf("Fishy RTCP_RR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, curLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, curLen, offset, data)
 				break
 			}
 
@@ -271,9 +272,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			offset += 4
 
-			if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= len(data) {
-				tmpReportBlocks := make([]RTCP_report_block, RTCPReportCount)
-				for i := 0; i < RTCPReportCount; i++ {
+			tmpReportBlocks := make([]RTCP_report_block, RTCPReportCount)
+			for i := 0; i < RTCPReportCount; i++ {
+				if RTCPReportCount > 0 && RTCPLength >= 24 && offset+24 <= dataLen && len(data[offset:]) >= 4 {
 					tmpReportBlocks[i].SourceSsrc = binary.BigEndian.Uint32(data[offset:])
 					tmpReportBlocks[i].Fraction_lost = data[offset+4]
 					var cumBuf [4]byte
@@ -290,9 +291,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			}
 
 		case TYPE_RTCP_SDES:
-			if RTCPLength < 4 || offset+4 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_SDES RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
+			if RTCPLength < 4 || offset+4 > dataLen {
+				infoMsg = fmt.Sprintf("Fishy RTCP_SDES RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, curLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, curLen, offset, data)
 				break
 			}
 
@@ -307,9 +308,9 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			infoMsg = fmt.Sprintf("Discard RTCP_BYE packet type=%d", RTCPType)
 			offset += RTCPLength
 		case TYPE_RTCP_XR:
-			if RTCPLength < 8 || offset+8 > len(data) {
-				infoMsg = fmt.Sprintf("Fishy RTCP_XR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, dataLen=%d, offset=%d in packet:\n% X",
-					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, dataLen, offset, data)
+			if RTCPLength < 8 || offset+8 > dataLen {
+				infoMsg = fmt.Sprintf("Fishy RTCP_XR RTCPVersion=%d, RTCPReportCount=%d, RTCPType=%d, RTCPLength=%d, curLen=%d, offset=%d in packet:\n% X",
+					RTCPVersion, RTCPReportCount, RTCPType, RTCPLength, curLen, offset, data)
 				break
 			}
 
@@ -317,7 +318,7 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			pkt.Ssrc = binary.BigEndian.Uint32(data[offset:])
 			pkt.ReportBlocksXr.Type = data[offset+4]
 
-			if pkt.ReportBlocksXr.Type == 7 && RTCPLength >= 24 && offset+24 <= len(data) {
+			if pkt.ReportBlocksXr.Type == 7 && RTCPLength >= 24 && offset+24 <= dataLen {
 				pkt.ReportBlocksXr.ID = binary.BigEndian.Uint32(data[offset+8:])
 				pkt.ReportBlocksXr.Fraction_lost = data[offset+12]
 				pkt.ReportBlocksXr.Fraction_discard = data[offset+13]
@@ -330,7 +331,7 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 			}
 			offset += RTCPLength
 		}
-		dataLen -= RTCPLength + 4
+		curLen -= RTCPLength + 4
 	}
 
 	b := jingo.NewBufferFromPool()
