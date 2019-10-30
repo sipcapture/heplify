@@ -167,12 +167,12 @@ func correlateLOG(payload []byte) (byte, []byte) {
 			return 100, callID
 
 		}
-	} else if posID := bytes.Index(payload, []byte(": [")); posID > 0 {
+	} else if posID := bytes.Index(payload, []byte("INFO: [")); posID > 0 {
 		restID := payload[posID:]
 		if posRestID := bytes.Index(restID, []byte(" port ")); posRestID >= 8 {
-			callID = restID[len(": ["):posRestID]
+			callID = restID[len("INFO: ["):posRestID]
 		} else if posRestID := bytes.Index(restID, []byte("]: ")); posRestID >= 4 {
-			callID = restID[len(": ["):posRestID]
+			callID = restID[len("INFO: ["):posRestID]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
 			return 0, nil
