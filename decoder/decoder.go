@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sipcapture/heplify/ownlayers"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
@@ -71,6 +73,7 @@ var (
 	d1q     layers.Dot1Q
 	gre     layers.GRE
 	eth     layers.Ethernet
+	vxl     ownlayers.VXLAN
 	ip4     layers.IPv4
 	ip6     layers.IPv6
 	tcp     layers.TCP
@@ -112,6 +115,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	decoder.AddDecodingLayer(&d1q)
 	decoder.AddDecodingLayer(&gre)
 	decoder.AddDecodingLayer(&eth)
+	decoder.AddDecodingLayer(&vxl)
 	decoder.AddDecodingLayer(&ip4)
 	decoder.AddDecodingLayer(&ip6)
 	decoder.AddDecodingLayer(&udp)
@@ -179,7 +183,14 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	//logp.Debug("layer", "\n%v", decodedLayers)
 	foundGRELayer := false
 
+	i, j := 0, 0
 	for i := 0; i < len(decodedLayers); i++ {
+		if decodedLayers[i] == layers.LayerTypeVXLAN {
+			j = i
+		}
+	}
+
+	for i = j; i < len(decodedLayers); i++ {
 		switch decodedLayers[i] {
 		case layers.LayerTypeGRE:
 			if config.Cfg.Iface.WithErspan {
