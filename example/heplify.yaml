@@ -1,0 +1,32 @@
+# nfpm example config file
+name: "heplify"
+arch: "amd64"
+platform: "linux"
+version: "v${VERSION}"
+section: "default"
+priority: "extra"
+replaces:
+- heplify
+provides:
+- heplify
+maintainer: "QXIP SIPCapture <support@sipcapture.org>"
+description: |
+    HEP Capture Agent for HOMER/SIPCAPTURE
+vendor: "QXIP"
+homepage: "http://qxip.net"
+license: "AGPLv3"
+bindir: "/usr/local/bin"
+files:
+  /tmp/pkg/heplify: "/usr/local/bin/heplify"
+#config_files:
+#  /tmp/pkg/etc/webapp_config.json: "/usr/local/homer/etc/webapp_config.json"
+#overrides:
+#  rpm:
+#    scripts:
+#      preinstall: ./scripts/preinstall.sh
+#      postremove: ./scripts/postremove.sh
+#  deb:
+#    scripts:
+#      postinstall: ./scripts/postinstall.sh
+#      preremove: ./scripts/preremove.sh
+
