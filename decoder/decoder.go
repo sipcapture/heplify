@@ -326,13 +326,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						PacketQueue <- pkt
 					}
 					return
-				} else if udp.SrcPort == 2223 || udp.DstPort == 2223 {
-					pkt.Payload, pkt.CID = correlateNG(udp.Payload)
-					if pkt.Payload != nil {
-						pkt.ProtoType = 100
-						PacketQueue <- pkt
-					}
-					return
 				}
 			}
 			if config.Cfg.Mode != "SIP" {
