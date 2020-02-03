@@ -11,7 +11,7 @@ require (
 	github.com/negbie/freecache v1.1.1-0.20190928095610-8ee80c737421
 	github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846
 	github.com/stretchr/testify v1.4.0
-	golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
-	golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c // indirect
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
