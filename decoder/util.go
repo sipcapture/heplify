@@ -97,11 +97,12 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Decoder) printPacketStats() {
-	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, SCTP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
 		atomic.LoadUint64(&d.ip4Count),
 		atomic.LoadUint64(&d.ip6Count),
 		atomic.LoadUint64(&d.udpCount),
 		atomic.LoadUint64(&d.tcpCount),
+		atomic.LoadUint64(&d.sctpCount),
 		atomic.LoadUint64(&d.rtcpCount),
 		atomic.LoadUint64(&d.rtcpFailCount),
 		atomic.LoadUint64(&d.dnsCount),
@@ -113,6 +114,7 @@ func (d *Decoder) printPacketStats() {
 	atomic.StoreUint64(&d.ip6Count, 0)
 	atomic.StoreUint64(&d.udpCount, 0)
 	atomic.StoreUint64(&d.tcpCount, 0)
+	atomic.StoreUint64(&d.sctpCount, 0)
 	atomic.StoreUint64(&d.rtcpCount, 0)
 	atomic.StoreUint64(&d.rtcpFailCount, 0)
 	atomic.StoreUint64(&d.dnsCount, 0)
