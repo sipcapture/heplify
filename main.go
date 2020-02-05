@@ -30,7 +30,7 @@ func createFlags() {
 		std         bool
 		sys         bool
 	)
-
+	
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
