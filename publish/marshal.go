@@ -338,7 +338,7 @@ func (h *HepMsg) String() string {
 	if h == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`HEP package: {`,
+	s := strings.Join([]string{`HEP packet:{`,
 		`Version:` + fmt.Sprintf("%v", h.Version) + `,`,
 		`Protocol:` + fmt.Sprintf("%v", h.Protocol) + `,`,
 		`SrcIP:` + fmt.Sprintf("%v", h.SrcIP) + `,`,
