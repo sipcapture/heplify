@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"strconv"
 	strings "strings"
 	"unsafe"
 
@@ -339,7 +338,7 @@ func (h *HepMsg) String() string {
 	if h == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&HEP{`,
+	s := strings.Join([]string{`HEP package: {`,
 		`Version:` + fmt.Sprintf("%v", h.Version) + `,`,
 		`Protocol:` + fmt.Sprintf("%v", h.Protocol) + `,`,
 		`SrcIP:` + fmt.Sprintf("%v", h.SrcIP) + `,`,
@@ -351,12 +350,11 @@ func (h *HepMsg) String() string {
 		`ProtoType:` + fmt.Sprintf("%v", h.ProtoType) + `,`,
 		`NodeID:` + fmt.Sprintf("%v", h.NodeID) + `,`,
 		`NodePW:` + fmt.Sprintf("%s", h.NodePW) + `,`,
-		`Payload:` + fmt.Sprintf("%s", strconv.Quote(string(h.Payload))) + `,`,
 		`CID:` + fmt.Sprintf("%s", h.CID) + `,`,
-		`Vlan:` + fmt.Sprintf("%v", h.Vlan) + `,`,
+		`Vlan:` + fmt.Sprintf("%v", h.Vlan),
 		`}`,
 	}, "")
-	return s
+	return s + " with Payload:\n" + fmt.Sprintf("%s", string(h.Payload))
 }
 
 func unsafeBytesToStr(z []byte) string {
