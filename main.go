@@ -9,10 +9,9 @@ import (
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/sniffer"
-	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.54"
+const version = "heplify 1.55"
 
 func createFlags() {
 
@@ -30,7 +29,7 @@ func createFlags() {
 		std         bool
 		sys         bool
 	)
-	
+
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
@@ -96,9 +95,6 @@ func checkCritErr(err error) {
 
 func main() {
 	createFlags()
-	/* 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}() */
 
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
