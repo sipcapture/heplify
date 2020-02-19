@@ -19,7 +19,7 @@ bindir: "/usr/local/bin"
 files:
   /tmp/pkg/heplify: "/usr/local/bin/heplify"
 #config_files:
-#  /tmp/pkg/etc/webapp_config.json: "/usr/local/homer/etc/webapp_config.json"
+#  /tmp/pkg/etc/heplify.toml: "/opt/heplify/heplify.toml"
 #overrides:
 #  rpm:
 #    scripts:

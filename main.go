@@ -9,10 +9,9 @@ import (
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/sniffer"
-	//_ "github.com/mkevac/debugcharts"
 )
 
-const version = "heplify 1.53"
+const version = "heplify 1.55"
 
 func createFlags() {
 
@@ -96,9 +95,6 @@ func checkCritErr(err error) {
 
 func main() {
 	createFlags()
-	/* 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}() */
 
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
