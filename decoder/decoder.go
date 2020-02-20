@@ -404,7 +404,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		}
 	}
 
-	if pkt.Payload != nil {
+	if pkt.ProtoType > 0 && pkt.Payload != nil {
 		PacketQueue <- pkt
 	} else {
 		atomic.AddUint64(&d.unknownCount, 1)
