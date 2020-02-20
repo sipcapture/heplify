@@ -22,6 +22,7 @@ type Config struct {
 	Network       string
 	Protobuf      bool
 	Reassembly    bool
+	Version       bool
 }
 
 type InterfacesConfig struct {
