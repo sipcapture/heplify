@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sipcapture/heplify/ownlayers"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
@@ -18,6 +16,7 @@ import (
 	"github.com/sipcapture/heplify/decoder/internal"
 	"github.com/sipcapture/heplify/ip4defrag"
 	"github.com/sipcapture/heplify/ip6defrag"
+	"github.com/sipcapture/heplify/ownlayers"
 	"github.com/sipcapture/heplify/protos"
 )
 
