@@ -11,7 +11,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.55"
+const version = "heplify 1.56"
 
 func createFlags() {
 
@@ -62,6 +62,7 @@ func createFlags() {
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
+	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
@@ -95,6 +96,11 @@ func checkCritErr(err error) {
 
 func main() {
 	createFlags()
+
+	if config.Cfg.Version {
+		fmt.Println(version)
+		os.Exit(0)
+	}
 
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)

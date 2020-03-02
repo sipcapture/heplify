@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sipcapture/heplify/ownlayers"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
@@ -18,6 +16,7 @@ import (
 	"github.com/sipcapture/heplify/decoder/internal"
 	"github.com/sipcapture/heplify/ip4defrag"
 	"github.com/sipcapture/heplify/ip6defrag"
+	"github.com/sipcapture/heplify/ownlayers"
 	"github.com/sipcapture/heplify/protos"
 )
 
@@ -404,7 +403,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		}
 	}
 
-	if pkt.Payload != nil {
+	if pkt.ProtoType > 0 && pkt.Payload != nil {
 		PacketQueue <- pkt
 	} else {
 		atomic.AddUint64(&d.unknownCount, 1)
