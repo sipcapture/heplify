@@ -8,5 +8,7 @@ fi
 # BUILD GO BINARY
 docker run --rm \
   -v $PWD:/app \
-  golang:1.13 \
-  bash -c "apt update && apt install -y libpcap-dev && cd /app && make all"
+  golang:alpine \
+  sh -c "apk --update add linux-headers musl-dev gcc libpcap-dev ca-certificates git && cd /app && CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags \"-static -s -w\"' -o heplify ."
+
+
