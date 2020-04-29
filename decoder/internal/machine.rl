@@ -5,7 +5,7 @@ package internal
 	write data;
 }%%
 
-func parseCSeq(data []byte) (c []byte) {
+func ParseCSeq(data []byte) (c []byte) {
 	cs, p, pe := 0, 0, len(data)
 	mark := 0
 
@@ -35,7 +35,8 @@ func parseCSeq(data []byte) (c []byte) {
 		MESSAGEm = 0x4d.0x45.0x53.0x53.0x41.0x47.0x45;
 		REFERm = 0x52.0x45.0x46.0x45.0x52;
 		PUBLISHm = 0x50.0x55.0x42.0x4c.0x49.0x53.0x48;
-		Method = INVITEm | ACKm | OPTIONSm | BYEm | CANCELm | REGISTERm | INFOm | PRACKm | SUBSCRIBEm | NOTIFYm | UPDATEm | MESSAGEm | REFERm | PUBLISHm;
+		KDMQm = 0x4b.0x44.0x4d.0x51;
+		Method = INVITEm | ACKm | OPTIONSm | BYEm | CANCELm | REGISTERm | INFOm | PRACKm | SUBSCRIBEm | NOTIFYm | UPDATEm | MESSAGEm | REFERm | PUBLISHm | KDMQm;
 
 		action mark {
 			mark = p
