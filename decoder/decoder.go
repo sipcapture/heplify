@@ -350,7 +350,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						return
 					}
 				}
-				cacheSDPIPPort(udp.Payload)
+				cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 			}
 
 		case layers.LayerTypeTCP:
@@ -364,7 +364,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)
 				return
 			}
-			cacheSDPIPPort(pkt.Payload)
+			cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 
 		case layers.LayerTypeSCTP:
 			pkt.SrcPort = uint16(sctp.SrcPort)
@@ -378,7 +378,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			atomic.AddUint64(&d.sctpCount, 1)
 			logp.Debug("payload", "SCTP:\n%s", pkt)
 
-			cacheSDPIPPort(pkt.Payload)
+			cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 
 		case layers.LayerTypeDNS:
 			if config.Cfg.Mode == "SIPDNS" {

@@ -24,7 +24,7 @@ var (
 // It will do this only for SIP messages which have the strings "c=IN IP4 " and "m=audio " in the SDP body.
 // If there is one rtcp attribute in the SDP body it will use it as RTCP port. Otherwise it will add 1 to
 // the RTP source port. These data will be used for the SDPCache as key:value pairs.
-func cacheSDPIPPort(payload []byte) {
+func cacheSDPIPPort(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) {
 	if posSDPIP := bytes.Index(payload, cLine); posSDPIP > 0 {
 		if posSDPPort := bytes.Index(payload, mLine); posSDPPort > 0 {
 			ipPort.Reset()

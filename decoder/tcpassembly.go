@@ -101,7 +101,7 @@ func (s *tcpStream) run() {
 				}
 				data = nil
 				PacketQueue <- pkt
-				cacheSDPIPPort(pkt.Payload)
+				cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 				//logp.Debug("tcpassembly", "%s", pkt)
 				//fmt.Printf("###################\n%s", pkt.Payload)
 			}
