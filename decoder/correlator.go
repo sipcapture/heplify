@@ -29,11 +29,24 @@ var (
 )
 
 // addSDPCacheEntry will add an entry to SDPCache with rtcpIP+rtcpPort as key and callID as value.
+// If scrIP is different from rtcpIP a srcIP+rtcpPort key will added too.
+//
+// If rtcp ip is different from source ip, it may indicate that the source is behind nat and uses
+// internal ips in sdp. Therefore we add a key with source ip to, in the hope that later rtcp packet
+// source ip will be the same as sip packet source ip. But rtcp and source ip could be different for
+// other reasons (e.g. different sip and rtp endpoints), which would make rtcp ip the correct one.
+// As we can not known which is the correct one we add two keys in this case.
 // Key parts will be separated by a single space.
-func addSDPCacheEntry(rtcpIP []byte, rtcpPort []byte, callID []byte) {
-	key := bytes.Join([][]byte{rtcpIP, rtcpPort}, []byte(" "))
+func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byte) {
+	var key []byte = nil
+	key = append(append(append(key, rtcpIP...), ' '), rtcpPort...)
 	logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
 	sdpCache.Set(key, callID, sdpCacheTime)
+	if !bytes.Equal(rtcpIP, srcIP) {
+		key = append(append(append(key[:0], srcIP...), ' '), rtcpPort...)
+		logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+		sdpCache.Set(key, callID, sdpCacheTime)
+	}
 }
 
 // cacheSDPIPPort will extract the Call-ID and all RTCP ip and port combinations will add them to the sdpCache,
@@ -155,11 +168,7 @@ sdpLoop:
 			session = false
 			// Add keys for previous media.
 			if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
-				addSDPCacheEntry(rtcpIP, rtcpPort, callID)
-				if !bytes.Equal(rtcpIP, srcIPb) {
-					// rtcp ip may be natted, use seen source ip too.
-					addSDPCacheEntry(srcIPb, rtcpPort, callID)
-				}
+				addSDPCacheEntry(srcIPb, rtcpIP, rtcpPort, callID)
 			}
 			// Reset rtcp data for this media.
 			rtcpIP = sessionIP
@@ -226,11 +235,7 @@ sdpLoop:
 	}
 	// Add keys for last media.
 	if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
-		addSDPCacheEntry(rtcpIP, rtcpPort, callID)
-		if !bytes.Equal(rtcpIP, srcIPb) {
-			// rtcp ip may be natted, use seen source ip too.
-			addSDPCacheEntry(srcIPb, rtcpPort, callID)
-		}
+		addSDPCacheEntry(srcIPb, rtcpIP, rtcpPort, callID)
 	}
 }
 
