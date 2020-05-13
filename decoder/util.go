@@ -249,6 +249,8 @@ func parseNG(data []byte) (interface{}, int, error) {
 func getHeaderValue(headerNames [][]byte, data []byte) ([]byte, error) {
 	var startPos int = -1
 	var headerName []byte
+	var buffer [60]byte // use large enough buffer for header name and separators on stack for fast append
+	var search []byte
 	for hederNameIdx := range headerNames {
 		headerName = headerNames[hederNameIdx]
 		// Check if first header.
@@ -256,10 +258,10 @@ func getHeaderValue(headerNames [][]byte, data []byte) ([]byte, error) {
 			if len(data) > len(headerName) && data[len(headerName)] == ':' {
 				startPos = 0
 				break
-            }
+			}
 		}
 		// Check if other header.
-		search := bytes.Join([][]byte{[]byte("\r\n"), headerName, []byte(":")}, []byte(""))
+		search = append(append(append(buffer[:0], '\r', '\n'), headerName...), ':')
 		startPos = bytes.Index(data, search)
 		if startPos >= 0 {
 			// Skip new line
@@ -274,7 +276,7 @@ func getHeaderValue(headerNames [][]byte, data []byte) ([]byte, error) {
 	if endPos < 0 {
 		return nil, errors.New("no such header")
 	}
-	return bytes.TrimSpace(data[startPos + len(headerName) + 1 : startPos + endPos]), nil
+	return bytes.TrimSpace(data[startPos+len(headerName)+1 : startPos+endPos]), nil
 }
 
 // Extract header value as integer from RFC2822 like header data.

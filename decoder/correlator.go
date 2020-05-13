@@ -38,12 +38,13 @@ var (
 // As we can not known which is the correct one we add two keys in this case.
 // Key parts will be separated by a single space.
 func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byte) {
-	var key []byte = nil
-	key = append(append(append(key, rtcpIP...), ' '), rtcpPort...)
+	var buffer [60]byte // use large enough buffer on stack for fast append
+	var key []byte
+	key = append(append(append(buffer[:0], rtcpIP...), ' '), rtcpPort...)
 	logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
 	sdpCache.Set(key, callID, sdpCacheTime)
 	if !bytes.Equal(rtcpIP, srcIP) {
-		key = append(append(append(key[:0], srcIP...), ' '), rtcpPort...)
+		key = append(append(append(buffer[:0], srcIP...), ' '), rtcpPort...)
 		logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
 		sdpCache.Set(key, callID, sdpCacheTime)
 	}
