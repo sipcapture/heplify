@@ -23,9 +23,9 @@ var (
 	// Some guesses: concurrent-calls=10000, number-of-rtcp-endpoints=3, entry-size=1000.
 	rtcpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
 	// sdpCacheTime is the maximum time between seeing sdp and seeing the first packets for all associated rtcp streams.
-	sdpCacheTime = 60 * 20 // 20 minutes in seconds.
+	sdpCacheTime = 10 * 60 * 20 // 20 minutes in tenth of a seconds.
 	// rtcpCacheTime is the maximum time a rtcp stream may be associated to a call (maximum allowed call time).
-	rtcpCacheTime = 60 * 60 * 60 // 60 hours in seconds.
+	rtcpCacheTime = 10 * 60 * 60 * 12 // 12 hours in tenth of a seconds.
 )
 
 // addSDPCacheEntry will add an entry to SDPCache with rtcpIP+rtcpPort as key and callID as value.
@@ -41,11 +41,15 @@ func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byt
 	var buffer [60]byte // use large enough buffer on stack for fast append
 	var key []byte
 	key = append(append(append(buffer[:0], rtcpIP...), ' '), rtcpPort...)
-	logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+	if logp.HasSelector("sdp") {
+		logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+	}
 	sdpCache.Set(key, callID, sdpCacheTime)
 	if !bytes.Equal(rtcpIP, srcIP) {
 		key = append(append(append(buffer[:0], srcIP...), ' '), rtcpPort...)
-		logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+		if logp.HasSelector("sdp") {
+			logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+		}
 		sdpCache.Set(key, callID, sdpCacheTime)
 	}
 }
@@ -248,14 +252,15 @@ sdpLoop:
 // If it finds a value inside the SDPCache it will add it to the RTCPCache.
 // Key parts will be separated by a single space.
 func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) ([]byte, []byte) {
-	var corrID []byte
-	var err error
+	var corrID = make([]byte, 0, 60)
 
 	// Parse RTCP.
 	ssrcBytes, jsonRTCP, info := protos.ParseRTCP(payload)
 	if info != "" {
-		logp.Debug("rtcp", "Parsing rtcp returned info. ssrc=%x, srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v, info=%q",
-			ssrcBytes, srcIP, srcPort, dstIP, dstPort, info)
+		if logp.HasSelector("rtcp") {
+			logp.Debug("rtcp", "Parsing rtcp returned info. ssrc=%x, srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v, info=%q",
+				ssrcBytes, srcIP, srcPort, dstIP, dstPort, info)
+		}
 		if jsonRTCP == nil {
 			// Not RTP or broken RTP
 			return nil, nil
@@ -267,32 +272,32 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	srcPortString := strconv.Itoa(int(srcPort))
 	srcKey := []byte(srcIPString + " " + srcPortString)
 
+	// TODO: this could lead to missing RTCP packets.
 	// Build rtcp key for source ip + port + ssrc.
-	var rtcpKey = bytes.Join([][]byte{srcKey, ssrcBytes}, []byte(" "))
+	rtcpKey := bytes.Join([][]byte{srcKey, ssrcBytes}, []byte(" "))
 
 	// Lookup correlation ID with rtcp key.
-	corrID, err = rtcpCache.GetWithBuf(rtcpKey, corrID[:0])
+	corrID, err := rtcpCache.GetWithBuf(rtcpKey, corrID[:0])
 	if err == nil && rtcpKey != nil {
-		// Found it.
-		logp.Debug("rtcp", "Found key=%q value=%q in rtcpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
-			rtcpKey, corrID, srcIP, srcPort, dstIP, dstPort)
-		// Return it.
+		if logp.HasSelector("rtcp") {
+			logp.Debug("rtcp", "Found key=%q value=%q in rtcpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+				rtcpKey, corrID, srcIP, srcPort, dstIP, dstPort)
+		}
 		return jsonRTCP, corrID
 	}
 
 	// Lookup correlation ID with rtcp source ip and port and add with rtcp key
 	corrID, err = sdpCache.GetWithBuf(srcKey, corrID[:0])
 	if err == nil {
-		// Found it.
-		logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
-			srcKey, corrID, srcIP, srcPort, dstIP, dstPort)
-		// Add it to rtcp cache.
+		if logp.HasSelector("rtcp") {
+			logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+				srcKey, corrID, srcIP, srcPort, dstIP, dstPort)
+		}
 		err = rtcpCache.Set(rtcpKey, corrID, rtcpCacheTime)
 		if err != nil {
 			logp.Warn("%v", err)
 			return nil, nil
 		}
-		// Return it.
 		return jsonRTCP, corrID
 	}
 
@@ -304,23 +309,23 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	// Lookup correlation ID with rtcp destination ip and port and add with rtcp key
 	corrID, err = sdpCache.GetWithBuf(dstKey, corrID[:0])
 	if err == nil {
-		// Found it.
-		logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
-			dstKey, corrID, srcIP, srcPort, dstIP, dstPort)
-		// Add it to rtcp cache.
+		if logp.HasSelector("rtcp") {
+			logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+				dstKey, corrID, srcIP, srcPort, dstIP, dstPort)
+		}
 		err = rtcpCache.Set(rtcpKey, corrID, rtcpCacheTime)
 		if err != nil {
 			logp.Warn("%v", err)
 			return nil, nil
 		}
-		// Return it.
 		return jsonRTCP, corrID
 	}
 
-	// Nothing found.
-	logp.Debug("rtcp", "No correlationID for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
-		srcIP, srcPort, dstIP, dstPort)
-	// Return failure.
+	if logp.HasSelector("rtcp") {
+		logp.Debug("rtcp", "No correlationID for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+			srcIP, srcPort, dstIP, dstPort)
+	}
+	// Nothing found so return failure.
 	return nil, nil
 }
 
