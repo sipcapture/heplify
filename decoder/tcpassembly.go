@@ -52,6 +52,7 @@ func (r *readerStream) Reassembled(reassembly []tcpassembly.Reassembly) {
 func (s *tcpStream) run() {
 	var data []byte
 	var tmp = make([]byte, 4096)
+	ts := time.Now()
 	for {
 		n, err := s.readerStream.Read(tmp)
 		if err == io.EOF {
@@ -60,6 +61,11 @@ func (s *tcpStream) run() {
 			logp.Err("got %v while reading temporary buffer", err)
 			continue
 		} else if n > 0 {
+			/* we should make a correct timestamp */
+			if(data == nil) {
+				ts = time.Now()
+			}
+			
 			data = append(data, tmp[0:n]...)
 
 			if bytes.HasPrefix(data, []byte("GET")) || bytes.HasPrefix(data, []byte("HTTP")) {
@@ -77,7 +83,6 @@ func (s *tcpStream) run() {
 			}
 
 			if isWS || isSIP(data) {
-				ts := time.Now()
 				pkt := &Packet{}
 				pkt.Version = 0x02
 				pkt.Protocol = 0x06
@@ -101,7 +106,7 @@ func (s *tcpStream) run() {
 				}
 				data = nil
 				PacketQueue <- pkt
-				cacheSDPIPPort(pkt.Payload)
+				cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 				//logp.Debug("tcpassembly", "%s", pkt)
 				//fmt.Printf("###################\n%s", pkt.Payload)
 			}

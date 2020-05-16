@@ -241,3 +241,88 @@ func parseNG(data []byte) (interface{}, int, error) {
 		return data[length+1 : endPosition], endPosition, nil
 	}
 }
+
+// Extract header value from RFC2822 like header data.
+// Does not allow whitespaces before colon, but allows them after.
+// headerNames must be array of possible header names without colon.
+// E.g. "Call-ID", "Call-Id", "call-id", "i".
+func getHeaderValue(headerNames [][]byte, data []byte) ([]byte, error) {
+	var startPos int = -1
+	var headerName []byte
+	var buffer [60]byte // use large enough buffer for header name and separators on stack for fast append
+	var search []byte
+	for hederNameIdx := range headerNames {
+		headerName = headerNames[hederNameIdx]
+		// Check if first header.
+		if bytes.HasPrefix(data, headerName) {
+			if len(data) > len(headerName) && data[len(headerName)] == ':' {
+				startPos = 0
+				break
+			}
+		}
+		// Check if other header.
+		search = append(append(append(buffer[:0], '\r', '\n'), headerName...), ':')
+		startPos = bytes.Index(data, search)
+		if startPos >= 0 {
+			// Skip new line
+			startPos += 2
+			break
+		}
+	}
+	if startPos < 0 {
+		return nil, errors.New("no such header")
+	}
+	endPos := bytes.Index(data[startPos:], []byte("\r\n"))
+	if endPos < 0 {
+		return nil, errors.New("no such header")
+	}
+	return bytes.TrimSpace(data[startPos+len(headerName)+1 : startPos+endPos]), nil
+}
+
+// Extract header value as integer from RFC2822 like header data.
+// Does not allow whitespaces before colon, but allows them after.
+// headerNames must be array of possible header names without colon.
+// E.g. "Content-Length", "content-length", "l".
+func getHeaderValueInt(headerNames [][]byte, data []byte) (int, error) {
+	value, err := getHeaderValue(headerNames, data)
+	if err != nil {
+		return -1, err
+	}
+	valueInt, err := strconv.Atoi(string(value))
+	if err != nil {
+		return -1, err
+	}
+	return valueInt, nil
+}
+
+// Header names for use with getHeaderValue,
+var (
+	contentTypeHeaderNames = [][]byte{
+		[]byte("Content-Type"),
+		[]byte("Content-type"),
+		[]byte("content-type"),
+		[]byte("c"),
+	}
+	contentLengthHeaderNames = [][]byte{
+		[]byte("Content-Length"),
+		[]byte("Content-length"),
+		[]byte("content-length"),
+		[]byte("l"),
+	}
+	callIdHeaderNames = [][]byte{
+		[]byte("Call-ID"),
+		[]byte("Call-Id"),
+		[]byte("Call-id"),
+		[]byte("call-id"),
+		[]byte("i"),
+	}
+	transferEncodingHeaderNames = [][]byte{
+		[]byte("Transfer-Encoding"),
+		[]byte("Transfer-encoding"),
+		[]byte("transfer-encoding"),
+	}
+	upgradeHeaderNames = [][]byte{
+		[]byte("Upgrade"),
+		[]byte("upgrade"),
+	}
+)
