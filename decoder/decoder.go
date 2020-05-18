@@ -26,8 +26,11 @@ type Decoder struct {
 	asm           *tcpassembly.Assembler
 	defrag4       *ip4defrag.IPv4Defragmenter
 	defrag6       *ip6defrag.IPv6Defragmenter
-	parser        *gopacket.DecodingLayerParser
 	layerType     gopacket.LayerType
+	decodedLayers []gopacket.LayerType
+	parser        *gopacket.DecodingLayerParser
+	parserUDP     *gopacket.DecodingLayerParser
+	parserTCP     *gopacket.DecodingLayerParser
 	sll           layers.LinuxSLL
 	d1q           layers.Dot1Q
 	gre           layers.GRE
@@ -40,9 +43,6 @@ type Decoder struct {
 	dns           layers.DNS
 	sctp          layers.SCTP
 	payload       gopacket.Payload
-	decodedLayers []gopacket.LayerType
-	parserOnlyUDP *gopacket.DecodingLayerParser
-	parserOnlyTCP *gopacket.DecodingLayerParser
 	dedupCache    *freecache.Cache
 	filter        []string
 	stats
@@ -121,8 +121,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.defrag4 = ip4defrag.NewIPv4Defragmenter()
 	d.defrag6 = ip6defrag.NewIPv6Defragmenter()
 	d.decodedLayers = make([]gopacket.LayerType, 0, 12)
-	d.parserOnlyUDP = gopacket.NewDecodingLayerParser(layers.LayerTypeUDP, &d.udp)
-	d.parserOnlyTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
+	d.parserUDP = gopacket.NewDecodingLayerParser(layers.LayerTypeUDP, &d.udp)
+	d.parserTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
 
 	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
 
@@ -244,9 +244,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 				)
 
 				if ip4New.Protocol == layers.IPProtocolUDP {
-					d.parserOnlyUDP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
+					d.parserUDP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
 				} else if ip4New.Protocol == layers.IPProtocolTCP {
-					d.parserOnlyTCP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
+					d.parserTCP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
 				} else {
 					logp.Warn("unsupported IPv4 fragment layer")
 					return
@@ -277,9 +277,9 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 				)
 
 				if ip6New.NextHeader == layers.IPProtocolUDP {
-					d.parserOnlyUDP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
+					d.parserUDP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
 				} else if ip6New.NextHeader == layers.IPProtocolTCP {
-					d.parserOnlyTCP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
+					d.parserTCP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
 				} else {
 					logp.Warn("unsupported IPv6 fragment layer")
 					return
