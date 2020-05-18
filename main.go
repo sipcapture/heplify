@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
@@ -32,6 +33,8 @@ func createFlags() {
 
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
+	flag.UintVar(&ifaceConfig.FanoutID, "fg", 0, "Fanout group ID for af_packet")
+	flag.IntVar(&ifaceConfig.FanoutWorker, "fw", 4, "Fanout worker count for af_packet")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
 	flag.StringVar(&ifaceConfig.WriteFile, "wf", "", "Path to write pcap file")
 	flag.IntVar(&ifaceConfig.RotationTime, "rt", 60, "Pcap rotation time in minutes")
@@ -43,7 +46,7 @@ func createFlags() {
 	flag.BoolVar(&ifaceConfig.WithVlan, "vlan", false, "vlan")
 	flag.BoolVar(&ifaceConfig.WithErspan, "erspan", false, "erspan")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 32, "Interface buffersize (MB)")
-	flag.StringVar(&dbg, "d", "", "Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]")
+	flag.StringVar(&dbg, "d", "", "Enable certain debug selectors [defrag,layer,payload,rtp,rtcp,sdp]")
 	flag.BoolVar(&std, "e", false, "Log to stderr and disable syslog/file output")
 	flag.BoolVar(&sys, "sl", false, "Log to syslog")
 	flag.StringVar(&logging.Level, "l", "info", "Log level [debug, info, warning, error]")
@@ -105,10 +108,28 @@ func main() {
 	err := logp.Init("heplify", config.Cfg.Logging)
 	checkCritErr(err)
 
-	capture, err := sniffer.New(config.Cfg.Mode, config.Cfg.Iface)
-	checkCritErr(err)
-	defer capture.Close()
+	worker := 1
+	if config.Cfg.Iface.Type == "af_packet" &&
+		config.Cfg.Iface.FanoutID > 0 && config.Cfg.Iface.FanoutWorker > 1 {
+		worker = config.Cfg.Iface.FanoutWorker
+	}
 
-	err = capture.Run()
-	checkCritErr(err)
+	var wg sync.WaitGroup
+	for i := 0; i < worker; i++ {
+		capture, err := sniffer.New(config.Cfg.Mode, config.Cfg.Iface)
+		checkCritErr(err)
+
+		defer func() {
+			err = capture.Close()
+			checkCritErr(err)
+		}()
+
+		wg.Add(1)
+		go func() {
+			err = capture.Run()
+			checkCritErr(err)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

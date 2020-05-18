@@ -12,29 +12,29 @@ import (
 )
 
 var (
-	// sdpCache need to be at least large enough for concurrent-calls * rtp-endpoints * entry-size.
-	// rtp-endpoints is the average number of rtp endpoints per call, counting endpoints different from sip source ip twice.
-	// entry-size is the average size of one endpoint entry, including textual ip length, textual port length, call-id length and one separators.
-	// Some guesses: concurrent-calls=10000, number-of-rtp-endpoints=3, entry-size=1000.
+	// sdpCache need to be at least large enough for concurrent-calls * RTP-endpoints * entry-size.
+	// RTP-endpoints is the average number of RTP endpoints per call, counting endpoints different from SIP source IP twice.
+	// entry-size is the average size of one endpoint entry, including textual IP length, textual port length, Call-ID length and one separators.
+	// Some guesses: concurrent-calls=10000, number-of-RTP-endpoints=3, entry-size=1000.
 	sdpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
-	// rtcpCache need to be at least large enough for concurrent-calls * rtcp-endpoints * entry-size.
-	// rtcp-endpoints is the average number of used rtcp endpoints per call.
-	// entry-size is the average size of one endpoint entry, including textual ip length, textual port length, ssrc-length, call-id length and two separators.
-	// Some guesses: concurrent-calls=10000, number-of-rtcp-endpoints=3, entry-size=1000.
+	// rtcpCache need to be at least large enough for concurrent-calls * RTCP-endpoints * entry-size.
+	// RTCP-endpoints is the average number of used RTCP endpoints per call.
+	// entry-size is the average size of one endpoint entry, including textual IP length, textual port length, SSRC-length, Call-ID length and two separators.
+	// Some guesses: concurrent-calls=10000, number-of-RTCP-endpoints=3, entry-size=1000.
 	rtcpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
-	// sdpCacheTime is the maximum time between seeing sdp and seeing the first packets for all associated rtcp streams.
+	// sdpCacheTime is the maximum time between seeing sdp and seeing the first packets for all associated RTCP streams.
 	sdpCacheTime = 10 * 60 * 20 // 20 minutes in tenth of a seconds.
-	// rtcpCacheTime is the maximum time a rtcp stream may be associated to a call (maximum allowed call time).
+	// rtcpCacheTime is the maximum time a RTCP stream may be associated to a call (maximum allowed call time).
 	rtcpCacheTime = 10 * 60 * 60 * 12 // 12 hours in tenth of a seconds.
 )
 
 // addSDPCacheEntry will add an entry to SDPCache with rtcpIP+rtcpPort as key and callID as value.
 // If scrIP is different from rtcpIP a srcIP+rtcpPort key will added too.
 //
-// If rtcp ip is different from source ip, it may indicate that the source is behind nat and uses
-// internal ips in sdp. Therefore we add a key with source ip to, in the hope that later rtcp packet
-// source ip will be the same as sip packet source ip. But rtcp and source ip could be different for
-// other reasons (e.g. different sip and rtp endpoints), which would make rtcp ip the correct one.
+// If RTCP IP is different from source IP, it may indicate that the source is behind NAT and uses
+// internal IP's in SDP. Therefore we add a key with source IP to, in the hope that later RTCP packet
+// source IP will be the same as SIP packet source IP. But RTCP and source IP could be different for
+// other reasons (e.g. different SIP and RTP endpoints), which would make RTCP IP the correct one.
 // As we can not known which is the correct one we add two keys in this case.
 // Key parts will be separated by a single space.
 func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byte) {
@@ -54,26 +54,27 @@ func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byt
 	}
 }
 
-// cacheSDPIPPort will extract the Call-ID and all RTCP ip and port combinations will add them to the sdpCache,
-// with ip+port as key and Call-ID as value.
+// cacheSDPIPPort will extract the Call-ID and all RTCP IP and port combinations will add them to the sdpCache,
+// with IP+port as key and Call-ID as value.
 //
 // It will only process payload that has SDP content or multipart content that contains SDP.
 // It will only process audio media.
 // There must be a Call-ID in the SIP-Headers.
-// It will use ips from source, c lines and a=rtcp lines.
-// It will use rtcp ports from m lines (rtp port + 1) or a=rtcp lines.
+// It will use IP's from source, c lines and a=rtcp lines.
+// It will use RTCP ports from m lines (RTP port + 1) or a=rtcp lines.
 // It will only use the first address from multi address notation.
 // It will only use the first port from multi port notation.
 // The function makes some assumptions about the well-formedness of the SDP for faster parsing.
 // Key parts will be separated by a single space.
 func cacheSDPIPPort(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) {
 	// TODO: improve multipart handling.
-
-	srcIPb := []byte(srcIP.String()) // source ip as text as bytes.
-	var contentType []byte           // content type header value.
-	var callID []byte                // call id header value.
-	var err error                    // for error checking.
-	var multipart = false            // is this a multipart content message?
+	var (
+		srcIPb      = []byte(srcIP.String()) // source IP as text as bytes.
+		contentType []byte                   // Content-Type header value.
+		callID      []byte                   // Call-ID header value.
+		err         error                    // for error checking.
+		multipart   = false                  // is this a multipart content message?
+	)
 
 	// Do we have a header separator?
 	posHeaderEnd := bytes.Index(payload, []byte("\r\n\r\n"))
@@ -84,23 +85,23 @@ func cacheSDPIPPort(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, 
 	headers := payload[:posHeaderEnd+4] // keep separator
 	content := payload[posHeaderEnd+4:] // strip separator
 
-	// Do we have sdp content?
+	// Do we have SDP content?
 	contentType, err = getHeaderValue(contentTypeHeaderNames, headers)
 	if err != nil {
-		// Content type only exists if there is content, no need for logging.
+		// Content-Type only exists if there is content, no need for logging.
 		return
 	}
 	if !bytes.HasPrefix(contentType, []byte("application/sdp")) {
-		// Not sdp. It is multipart?
+		// Not SDP. It is multipart?
 		if !bytes.HasPrefix(contentType, []byte("multipart/")) {
 			// Not multipart, nothing to do.
 			return
 		}
 		// It is multipart.
 		multipart = true
-		// Multipart must contain sdp.
+		// Multipart must contain SDP.
 		if bytes.Index(payload, []byte("applicaton/sdp")) < 0 {
-			// No sdp, nothing to do.
+			// No SDP, nothing to do.
 			return
 		}
 		logp.Debug("sdp", "Found sdp in multipart message. srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
@@ -117,12 +118,14 @@ func cacheSDPIPPort(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, 
 
 	// Loop through all content lines.
 	// Allow \n and \r\n line separators.
-	var posLine = 0            // start of line.
-	var posLineEnd = 0         // end of line, position of \n or end of content.
-	var session = true         // in session or multimedia?
-	var sessionIP []byte = nil // ip found in session connection.
-	var rtcpIP []byte = nil    // ip for rtcp.
-	var rtcpPort []byte = nil  // port for rtcp.
+	var (
+		posLine    = 0    // start of line.
+		posLineEnd = 0    // end of line, position of \n or end of content.
+		session    = true // in session or multimedia?
+		sessionIP  []byte // IP found in session connection.
+		rtcpIP     []byte // IP for RTCP.
+		rtcpPort   []byte // port for RTCP.
+	)
 sdpLoop:
 	for posLine = 0; posLine < len(content); posLine = posLineEnd + 1 {
 		// Find \n at end of line.
@@ -136,16 +139,16 @@ sdpLoop:
 			line = line[:len(line)-1]
 		}
 
-		// Skip lines that do not look like sdp.
+		// Skip lines that do not look like SDP.
 		if len(line) < 2 || line[1] != '=' {
-			// Multipart content contains non sdp lines, do not clutter the log.
+			// Multipart content contains non SDP lines, do not clutter the log.
 			if !multipart {
 				logp.Debug("sdp", "Fishy sdp line %q. callID=%q", line, callID)
 			}
 			continue sdpLoop
 		}
 
-		// Process sdp line.
+		// Process SDP line.
 		switch line[0] {
 		case 'c':
 			// Connection line should contain at least
@@ -154,14 +157,14 @@ sdpLoop:
 				logp.Debug("sdp", "Fishy c= line %q. callID=%q", line, callID)
 				continue sdpLoop
 			}
-			// Extract ip.
+			// Extract IP.
 			ip := line[9:]
 			// Check for and strip ttl/count separated by slash.
 			sep := bytes.Index(ip, []byte("/"))
 			if sep > 0 {
 				ip = ip[:sep]
 			}
-			// Use as session or rtcp ip.
+			// Use as session or RTCP IP.
 			if session {
 				sessionIP = ip
 			} else {
@@ -175,28 +178,28 @@ sdpLoop:
 			if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
 				addSDPCacheEntry(srcIPb, rtcpIP, rtcpPort, callID)
 			}
-			// Reset rtcp data for this media.
+			// Reset RTCP data for this media.
 			rtcpIP = sessionIP
 			rtcpPort = nil
 			// We are only interested in audio.
 			if !bytes.HasPrefix(line, []byte("m=audio ")) {
 				continue sdpLoop
 			}
-			// Find separator after rtp port number.
+			// Find separator after RTP port number.
 			sep := bytes.Index(line[8:], []byte(" "))
 			if sep < 4 { // Port should be above 1000
 				logp.Debug("sdp", "Fishy m=audio line %q. callID=%q", line, callID)
 				continue sdpLoop
 			}
-			// Extract rtp port.
+			// Extract RTP port.
 			rtpPort := line[8 : 8+sep]
 			// Check for and strip port count.
 			sep2 := bytes.Index(rtpPort, []byte("/"))
 			if sep2 > 0 {
 				rtpPort = rtpPort[:sep2]
 			}
-			// Convert from rtp port to rtcp port by adding 1.
-			// Do not assume that rtp port is even.
+			// Convert from RTP port to RTCP port by adding 1.
+			// Do not assume that RTP port is even.
 			rtpPortNb, err2 := strconv.Atoi(string(rtpPort))
 			if err2 != nil {
 				logp.Debug("sdp", "Fishy m=audio line %q. callID=%q", line, callID)
@@ -208,13 +211,13 @@ sdpLoop:
 			if !bytes.HasPrefix(line, []byte("a=rtcp:")) {
 				continue sdpLoop
 			}
-			// May contain only port or port and ip.
+			// May contain only port or port and IP.
 			sep := bytes.Index(line[7:], []byte(" "))
 			if sep < 0 {
 				// Port only.
 				rtcpPort = line[7:]
 			} else {
-				// Port and ip, e.g. "1000 IN IP4 1.1.1.1".
+				// Port and IP, e.g. "1000 IN IP4 1.1.1.1".
 				if !bytes.HasPrefix(line[7+sep+1:], []byte("IN IP")) {
 					logp.Debug("sdp", "Fishy a=rtcp line %q. callID=%q", line, callID)
 					continue sdpLoop
@@ -226,7 +229,7 @@ sdpLoop:
 				if sep2 > 0 {
 					rtcpPort = rtcpPort[:sep2]
 				}
-				// Extract ip.
+				// Extract IP.
 				rtcpIP = line[7+sep+1+5+2:] // space + "IN IP" + version + space.
 				// Check for and strip ttl/count separated by slash.
 				sep3 := bytes.Index(rtcpIP, []byte("/"))
@@ -235,7 +238,7 @@ sdpLoop:
 				}
 			}
 		default:
-			// ignore other sdp lines.
+			// ignore other SDP lines.
 		}
 	}
 	// Add keys for last media.
@@ -245,9 +248,9 @@ sdpLoop:
 }
 
 // correlateRTCP will try to correlate RTCP data with SIP messages.
-// It will return the parsed rtcp and the correlation id.
+// It will return the parsed RTCP JSON and the correlation ID.
 //
-// First it will look inside the long-lived RTCPCache with the srcIP+srcPort+ssrc as key.
+// First it will look inside the long-lived RTCPCache with the srcIP+srcPort+SSRC as key.
 // If it can't find a value it will look inside the short-lived SDPCache with srcIP+srcPort or dstIP+dstPort as key.
 // If it finds a value inside the SDPCache it will add it to the RTCPCache.
 // Key parts will be separated by a single space.
@@ -267,16 +270,16 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 		}
 	}
 
-	// Build source ip + port key.
+	// Build source IP + port key.
 	srcIPString := srcIP.String()
 	srcPortString := strconv.Itoa(int(srcPort))
 	srcKey := []byte(srcIPString + " " + srcPortString)
 
 	// TODO: this could lead to missing RTCP packets.
-	// Build rtcp key for source ip + port + ssrc.
+	// Build RTCP key for source IP + port + SSRC.
 	rtcpKey := bytes.Join([][]byte{srcKey, ssrcBytes}, []byte(" "))
 
-	// Lookup correlation ID with rtcp key.
+	// Lookup correlation ID with RTCP key.
 	corrID, err := rtcpCache.GetWithBuf(rtcpKey, corrID[:0])
 	if err == nil && rtcpKey != nil {
 		if logp.HasSelector("rtcp") {
@@ -286,7 +289,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 		return jsonRTCP, corrID
 	}
 
-	// Lookup correlation ID with rtcp source ip and port and add with rtcp key
+	// Lookup correlation ID with RTCP source IP and port and add with RTCP key
 	corrID, err = sdpCache.GetWithBuf(srcKey, corrID[:0])
 	if err == nil {
 		if logp.HasSelector("rtcp") {
@@ -301,12 +304,12 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 		return jsonRTCP, corrID
 	}
 
-	// Build destination ip + port key.
+	// Build destination IP + port key.
 	dstIPString := dstIP.String()
 	dstPortString := strconv.Itoa(int(dstPort))
 	dstKey := []byte(dstIPString + " " + dstPortString)
 
-	// Lookup correlation ID with rtcp destination ip and port and add with rtcp key
+	// Lookup correlation ID with RTCP destination IP and port and add with RTCP key
 	corrID, err = sdpCache.GetWithBuf(dstKey, corrID[:0])
 	if err == nil {
 		if logp.HasSelector("rtcp") {

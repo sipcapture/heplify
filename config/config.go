@@ -39,4 +39,6 @@ type InterfacesConfig struct {
 	ReadSpeed    bool   `config:"top_speed"`
 	OneAtATime   bool   `config:"one_at_a_time"`
 	Loop         int    `config:"loop"`
+	FanoutID     uint   `config:"fanout_id"`
+	FanoutWorker int    `config:"fanout_worker"`
 }
