@@ -62,10 +62,10 @@ func (s *tcpStream) run() {
 			continue
 		} else if n > 0 {
 			/* we should make a correct timestamp */
-			if(data == nil) {
+			if data == nil {
 				ts = time.Now()
 			}
-			
+
 			data = append(data, tmp[0:n]...)
 
 			if bytes.HasPrefix(data, []byte("GET")) || bytes.HasPrefix(data, []byte("HTTP")) {
@@ -106,7 +106,7 @@ func (s *tcpStream) run() {
 				}
 				data = nil
 				PacketQueue <- pkt
-				cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 				//logp.Debug("tcpassembly", "%s", pkt)
 				//fmt.Printf("###################\n%s", pkt.Payload)
 			}
