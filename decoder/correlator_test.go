@@ -98,9 +98,9 @@ func TestCacheSDPIPPort(t *testing.T) {
 	d.Process(rawSIPPacket, &ci)
 	d.Process(rawRTCPPacket, &ci)
 
-	//printCache("sdpCache", sdpCache)
+	//printCache("cidCache", cidCache)
 
-	v, err := sdpCache.Get(SDPIPRTCPPort)
+	v, err := cidCache.Get(SDPIPRTCPPort)
 	if err != nil || !bytes.Equal(SIPCallID, v) {
 		fmt.Printf("want:%s but got:%s\n", SIPCallID, v)
 		t.Fail()

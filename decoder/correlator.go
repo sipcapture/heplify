@@ -12,23 +12,23 @@ import (
 )
 
 var (
-	// sdpCache need to be at least large enough for concurrent-calls * RTP-endpoints * entry-size.
+	// cidCache need to be at least large enough for concurrent-calls * RTP-endpoints * entry-size.
 	// RTP-endpoints is the average number of RTP endpoints per call, counting endpoints different from SIP source IP twice.
 	// entry-size is the average size of one endpoint entry, including textual IP length, textual port length, Call-ID length and one separators.
-	// Some guesses: concurrent-calls=10000, number-of-RTP-endpoints=3, entry-size=1000.
-	sdpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
+	// Some guesses: concurrent-calls=1000, number-of-RTP-endpoints=400, entry-size=100.
+	cidCache = freecache.NewCache(40 * 1024 * 1024) // 40 MB
 	// rtcpCache need to be at least large enough for concurrent-calls * RTCP-endpoints * entry-size.
 	// RTCP-endpoints is the average number of used RTCP endpoints per call.
 	// entry-size is the average size of one endpoint entry, including textual IP length, textual port length, SSRC-length, Call-ID length and two separators.
-	// Some guesses: concurrent-calls=10000, number-of-RTCP-endpoints=3, entry-size=1000.
-	rtcpCache = freecache.NewCache(30 * 1024 * 1024) // 30 MB
-	// sdpCacheTime is the maximum time between seeing sdp and seeing the first packets for all associated RTCP streams.
-	sdpCacheTime = 10 * 60 * 20 // 20 minutes in tenth of a seconds.
+	// Some guesses: concurrent-calls=1000, number-of-RTCP-endpoints=400, entry-size=100.
+	rtcpCache = freecache.NewCache(40 * 1024 * 1024) // 40 MB
+	// cidCacheTime is the maximum time between seeing SDP and seeing the first packets for all associated RTCP streams.
+	cidCacheTime = 10 * 60 * 20 // 20 minutes in tenth of a seconds.
 	// rtcpCacheTime is the maximum time a RTCP stream may be associated to a call (maximum allowed call time).
 	rtcpCacheTime = 10 * 60 * 60 * 12 // 12 hours in tenth of a seconds.
 )
 
-// addSDPCacheEntry will add an entry to SDPCache with rtcpIP+rtcpPort as key and callID as value.
+// cacheCID will add an entry to cidCache with rtcpIP+rtcpPort as key and callID as value.
 // If scrIP is different from rtcpIP a srcIP+rtcpPort key will added too.
 //
 // If RTCP IP is different from source IP, it may indicate that the source is behind NAT and uses
@@ -37,24 +37,24 @@ var (
 // other reasons (e.g. different SIP and RTP endpoints), which would make RTCP IP the correct one.
 // As we can not known which is the correct one we add two keys in this case.
 // Key parts will be separated by a single space.
-func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byte) {
+func cacheCID(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byte) {
 	var buffer [60]byte // use large enough buffer on stack for fast append
 	var key []byte
 	key = append(append(append(buffer[:0], rtcpIP...), ' '), rtcpPort...)
 	if logp.HasSelector("sdp") {
-		logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+		logp.Debug("sdp", "Add to cidCache key=%q, value=%q", key, callID)
 	}
-	sdpCache.Set(key, callID, sdpCacheTime)
+	cidCache.Set(key, callID, cidCacheTime)
 	if !bytes.Equal(rtcpIP, srcIP) {
 		key = append(append(append(buffer[:0], srcIP...), ' '), rtcpPort...)
 		if logp.HasSelector("sdp") {
-			logp.Debug("sdp", "Add to sdpCache key=%q, value=%q", key, callID)
+			logp.Debug("sdp", "Add to cidCache key=%q, value=%q", key, callID)
 		}
-		sdpCache.Set(key, callID, sdpCacheTime)
+		cidCache.Set(key, callID, cidCacheTime)
 	}
 }
 
-// cacheSDPIPPort will extract the Call-ID and all RTCP IP and port combinations will add them to the sdpCache,
+// extractCID will extract the Call-ID and all RTCP IP and port combinations will add them to the cidCache,
 // with IP+port as key and Call-ID as value.
 //
 // It will only process payload that has SDP content or multipart content that contains SDP.
@@ -66,7 +66,7 @@ func addSDPCacheEntry(srcIP []byte, rtcpIP []byte, rtcpPort []byte, callID []byt
 // It will only use the first port from multi port notation.
 // The function makes some assumptions about the well-formedness of the SDP for faster parsing.
 // Key parts will be separated by a single space.
-func cacheSDPIPPort(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) {
+func extractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) {
 	// TODO: improve multipart handling.
 	var (
 		srcIPb      = []byte(srcIP.String()) // source IP as text as bytes.
@@ -176,7 +176,7 @@ sdpLoop:
 			session = false
 			// Add keys for previous media.
 			if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
-				addSDPCacheEntry(srcIPb, rtcpIP, rtcpPort, callID)
+				cacheCID(srcIPb, rtcpIP, rtcpPort, callID)
 			}
 			// Reset RTCP data for this media.
 			rtcpIP = sessionIP
@@ -243,7 +243,7 @@ sdpLoop:
 	}
 	// Add keys for last media.
 	if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
-		addSDPCacheEntry(srcIPb, rtcpIP, rtcpPort, callID)
+		cacheCID(srcIPb, rtcpIP, rtcpPort, callID)
 	}
 }
 
@@ -251,8 +251,8 @@ sdpLoop:
 // It will return the parsed RTCP JSON and the correlation ID.
 //
 // First it will look inside the long-lived RTCPCache with the srcIP+srcPort+SSRC as key.
-// If it can't find a value it will look inside the short-lived SDPCache with srcIP+srcPort or dstIP+dstPort as key.
-// If it finds a value inside the SDPCache it will add it to the RTCPCache.
+// If it can't find a value it will look inside the short-lived cidCache with srcIP+srcPort or dstIP+dstPort as key.
+// If it finds a value inside the cidCache it will add it to the RTCPCache.
 // Key parts will be separated by a single space.
 func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) ([]byte, []byte) {
 	var corrID = make([]byte, 0, 60)
@@ -290,10 +290,10 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	}
 
 	// Lookup correlation ID with RTCP source IP and port and add with RTCP key
-	corrID, err = sdpCache.GetWithBuf(srcKey, corrID[:0])
+	corrID, err = cidCache.GetWithBuf(srcKey, corrID[:0])
 	if err == nil {
 		if logp.HasSelector("rtcp") {
-			logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+			logp.Debug("rtcp", "Found key=%q value=%q in cidCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
 				srcKey, corrID, srcIP, srcPort, dstIP, dstPort)
 		}
 		err = rtcpCache.Set(rtcpKey, corrID, rtcpCacheTime)
@@ -310,10 +310,10 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	dstKey := []byte(dstIPString + " " + dstPortString)
 
 	// Lookup correlation ID with RTCP destination IP and port and add with RTCP key
-	corrID, err = sdpCache.GetWithBuf(dstKey, corrID[:0])
+	corrID, err = cidCache.GetWithBuf(dstKey, corrID[:0])
 	if err == nil {
 		if logp.HasSelector("rtcp") {
-			logp.Debug("rtcp", "Found key=%q value=%q in sdpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
+			logp.Debug("rtcp", "Found key=%q value=%q in cidCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",
 				dstKey, corrID, srcIP, srcPort, dstIP, dstPort)
 		}
 		err = rtcpCache.Set(rtcpKey, corrID, rtcpCacheTime)
@@ -379,7 +379,7 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 		for rawMapKey, rawMapValue := range rawTypes {
 			if rawMapKey == "call-id" {
 				callid := rawMapValue.([]byte)
-				err = sipCache.Set(cookie, callid, 100)
+				err = cidCache.Set(cookie, callid, 100)
 				if err != nil {
 					logp.Warn("%v", err)
 					return nil, nil
@@ -392,7 +392,7 @@ func correlateNG(payload []byte) ([]byte, []byte) {
 					logp.Warn("%v", err)
 					return nil, nil
 				}
-				if corrID, err := sipCache.Get(cookie); err == nil {
+				if corrID, err := cidCache.Get(cookie); err == nil {
 					logp.Debug("ng", "Found CallID: %s and QOS stats: %s", string(corrID), string(data))
 					return data, corrID
 				}

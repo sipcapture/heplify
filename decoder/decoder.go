@@ -20,6 +20,8 @@ import (
 	"github.com/sipcapture/heplify/protos"
 )
 
+var PacketQueue = make(chan *Packet, 20000)
+
 type Decoder struct {
 	asm           *tcpassembly.Assembler
 	defrag4       *ip4defrag.IPv4Defragmenter
@@ -41,6 +43,7 @@ type Decoder struct {
 	decodedLayers []gopacket.LayerType
 	parserOnlyUDP *gopacket.DecodingLayerParser
 	parserOnlyTCP *gopacket.DecodingLayerParser
+	dedupCache    *freecache.Cache
 	filter        []string
 	stats
 }
@@ -83,11 +86,6 @@ func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
 	return c.CaptureInfo
 }
 
-var (
-	PacketQueue = make(chan *Packet, 20000)
-	sipCache    = freecache.NewCache(20 * 1024 * 1024) // 20 MB
-)
-
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	var lt gopacket.LayerType
 	switch datalink {
@@ -125,7 +123,12 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.decodedLayers = make([]gopacket.LayerType, 0, 12)
 	d.parserOnlyUDP = gopacket.NewDecodingLayerParser(layers.LayerTypeUDP, &d.udp)
 	d.parserOnlyTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
+
 	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+
+	if config.Cfg.Dedup {
+		d.dedupCache = freecache.NewCache(20 * 1024 * 1024) // 20 MB
+	}
 
 	if config.Cfg.Reassembly {
 		streamFactory := &tcpStreamFactory{}
@@ -152,12 +155,12 @@ func (d *Decoder) defragIP6(i6 layers.IPv6, i6frag layers.IPv6Fragment, t time.T
 func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	if config.Cfg.Dedup {
 		if len(data) > 34 {
-			_, err := sipCache.Get(data[34:])
+			_, err := d.dedupCache.Get(data[34:])
 			if err == nil {
 				atomic.AddUint64(&d.dupCount, 1)
 				return
 			}
-			err = sipCache.Set(data[34:], nil, 3)
+			err = d.dedupCache.Set(data[34:], nil, 4) // 400 ms expire time
 			if err != nil {
 				logp.Warn("%v", err)
 			}
@@ -252,37 +255,36 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			}
 
 		case layers.LayerTypeIPv6:
-			ip6Len := d.ip6.Length
 			atomic.AddUint64(&d.ip6Count, 1)
-
 			if d.ip6.NextHeader != layers.IPProtocolIPv6Fragment {
 				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, d.ip6.NetworkFlow(), ci, 0x0a, uint8(d.ip6.NextHeader), d.ip6.SrcIP, d.ip6.DstIP)
-			} else {
-				packet := gopacket.NewPacket(data, d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
-				if ip6frag := packet.Layer(layers.LayerTypeIPv6Fragment).(*layers.IPv6Fragment); ip6frag != nil {
-					ip6New, err := d.defragIP6(d.ip6, *ip6frag, ci.Timestamp)
-					if err != nil {
-						logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, d.ip6.SrcIP, d.ip6.DstIP)
-						return
-					} else if ip6New == nil {
-						atomic.AddUint64(&d.fragCount, 1)
-						return
-					}
+				break
+			}
 
-					logp.Debug("defrag", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
-						ip6Len, d.decodedLayers, d.ip6.Payload, ip6New.Length, ip6New.Payload,
-					)
-
-					if ip6New.NextHeader == layers.IPProtocolUDP {
-						d.parserOnlyUDP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
-					} else if ip6New.NextHeader == layers.IPProtocolTCP {
-						d.parserOnlyTCP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
-					} else {
-						logp.Warn("unsupported IPv6 fragment layer")
-						return
-					}
-					d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, ip6New.NetworkFlow(), ci, 0x0a, uint8(ip6New.NextHeader), ip6New.SrcIP, ip6New.DstIP)
+			packet := gopacket.NewPacket(data, d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
+			if ip6frag := packet.Layer(layers.LayerTypeIPv6Fragment).(*layers.IPv6Fragment); ip6frag != nil {
+				ip6New, err := d.defragIP6(d.ip6, *ip6frag, ci.Timestamp)
+				if err != nil {
+					logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, d.ip6.SrcIP, d.ip6.DstIP)
+					return
+				} else if ip6New == nil {
+					atomic.AddUint64(&d.fragCount, 1)
+					return
 				}
+
+				logp.Debug("defrag", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
+					d.ip6.Length, d.decodedLayers, d.ip6.Payload, ip6New.Length, ip6New.Payload,
+				)
+
+				if ip6New.NextHeader == layers.IPProtocolUDP {
+					d.parserOnlyUDP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
+				} else if ip6New.NextHeader == layers.IPProtocolTCP {
+					d.parserOnlyTCP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
+				} else {
+					logp.Warn("unsupported IPv6 fragment layer")
+					return
+				}
+				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, ip6New.NetworkFlow(), ci, 0x0a, uint8(ip6New.NextHeader), ip6New.SrcIP, ip6New.DstIP)
 			}
 		}
 	}
@@ -344,7 +346,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						return
 					}
 				}
-				cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 			}
 
 		case layers.LayerTypeTCP:
@@ -358,7 +360,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)
 				return
 			}
-			cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+			extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 
 		case layers.LayerTypeSCTP:
 			pkt.SrcPort = uint16(sctp.SrcPort)
@@ -372,7 +374,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			atomic.AddUint64(&d.sctpCount, 1)
 			logp.Debug("payload", "SCTP:\n%s", pkt)
 
-			cacheSDPIPPort(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+			extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 
 		case layers.LayerTypeDNS:
 			if config.Cfg.Mode == "SIPDNS" {
