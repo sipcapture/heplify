@@ -21,12 +21,27 @@ import (
 )
 
 type Decoder struct {
-	asm       *tcpassembly.Assembler
-	defrag4   *ip4defrag.IPv4Defragmenter
-	defrag6   *ip6defrag.IPv6Defragmenter
-	parser    *gopacket.DecodingLayerParser
-	layerType gopacket.LayerType
-	filter    []string
+	asm           *tcpassembly.Assembler
+	defrag4       *ip4defrag.IPv4Defragmenter
+	defrag6       *ip6defrag.IPv6Defragmenter
+	parser        *gopacket.DecodingLayerParser
+	layerType     gopacket.LayerType
+	sll           layers.LinuxSLL
+	d1q           layers.Dot1Q
+	gre           layers.GRE
+	eth           layers.Ethernet
+	vxl           ownlayers.VXLAN
+	ip4           layers.IPv4
+	ip6           layers.IPv6
+	tcp           layers.TCP
+	udp           layers.UDP
+	dns           layers.DNS
+	sctp          layers.SCTP
+	payload       gopacket.Payload
+	decodedLayers []gopacket.LayerType
+	parserOnlyUDP *gopacket.DecodingLayerParser
+	parserOnlyTCP *gopacket.DecodingLayerParser
+	filter        []string
 	stats
 }
 
@@ -69,29 +84,6 @@ func (c *Context) GetCaptureInfo() gopacket.CaptureInfo {
 }
 
 var (
-	sll     layers.LinuxSLL
-	d1q     layers.Dot1Q
-	gre     layers.GRE
-	eth     layers.Ethernet
-	vxl     ownlayers.VXLAN
-	ip4     layers.IPv4
-	ip6     layers.IPv6
-	tcp     layers.TCP
-	udp     layers.UDP
-	dns     layers.DNS
-	sctp    layers.SCTP
-	payload gopacket.Payload
-
-	decodedLayers = make([]gopacket.LayerType, 0, 12)
-	parserOnlyUDP = gopacket.NewDecodingLayerParser(
-		layers.LayerTypeUDP,
-		&udp,
-	)
-	parserOnlyTCP = gopacket.NewDecodingLayerParser(
-		layers.LayerTypeTCP,
-		&tcp,
-	)
-
 	PacketQueue = make(chan *Packet, 20000)
 	sipCache    = freecache.NewCache(20 * 1024 * 1024) // 20 MB
 )
@@ -110,28 +102,30 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	/* 	decoder := gopacket.NewDecodingLayerParser(
 		lt, &sll, &d1q, &gre, &eth, &ip4, &ip6, &tcp, &udp, &dns, &payload,
 	) */
-	decoder := gopacket.NewDecodingLayerParser(lt)
-	decoder.SetDecodingLayerContainer(gopacket.DecodingLayerSparse(nil))
-	decoder.AddDecodingLayer(&sll)
-	decoder.AddDecodingLayer(&d1q)
-	decoder.AddDecodingLayer(&gre)
-	decoder.AddDecodingLayer(&eth)
-	decoder.AddDecodingLayer(&vxl)
-	decoder.AddDecodingLayer(&ip4)
-	decoder.AddDecodingLayer(&ip6)
-	decoder.AddDecodingLayer(&sctp)
-	decoder.AddDecodingLayer(&udp)
-	decoder.AddDecodingLayer(&tcp)
-	decoder.AddDecodingLayer(&dns)
-	decoder.AddDecodingLayer(&payload)
+	d := &Decoder{}
+	dlp := gopacket.NewDecodingLayerParser(lt)
+	dlp.SetDecodingLayerContainer(gopacket.DecodingLayerSparse(nil))
+	dlp.AddDecodingLayer(&d.sll)
+	dlp.AddDecodingLayer(&d.d1q)
+	dlp.AddDecodingLayer(&d.gre)
+	dlp.AddDecodingLayer(&d.eth)
+	dlp.AddDecodingLayer(&d.vxl)
+	dlp.AddDecodingLayer(&d.ip4)
+	dlp.AddDecodingLayer(&d.ip6)
+	dlp.AddDecodingLayer(&d.sctp)
+	dlp.AddDecodingLayer(&d.udp)
+	dlp.AddDecodingLayer(&d.tcp)
+	dlp.AddDecodingLayer(&d.dns)
+	dlp.AddDecodingLayer(&d.payload)
 
-	d := &Decoder{
-		defrag4:   ip4defrag.NewIPv4Defragmenter(),
-		defrag6:   ip6defrag.NewIPv6Defragmenter(),
-		parser:    decoder,
-		layerType: lt,
-		filter:    strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ","),
-	}
+	d.parser = dlp
+	d.layerType = lt
+	d.defrag4 = ip4defrag.NewIPv4Defragmenter()
+	d.defrag6 = ip6defrag.NewIPv6Defragmenter()
+	d.decodedLayers = make([]gopacket.LayerType, 0, 12)
+	d.parserOnlyUDP = gopacket.NewDecodingLayerParser(layers.LayerTypeUDP, &d.udp)
+	d.parserOnlyTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
+	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
 
 	if config.Cfg.Reassembly {
 		streamFactory := &tcpStreamFactory{}
@@ -181,41 +175,41 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 	}
 
-	d.parser.DecodeLayers(data, &decodedLayers)
-	//logp.Debug("layer", "\n%v", decodedLayers)
+	d.parser.DecodeLayers(data, &d.decodedLayers)
+	//logp.Debug("layer", "\n%v", d.decodedLayers)
 	foundGRELayer := false
 
 	i, j := 0, 0
-	for i := 0; i < len(decodedLayers); i++ {
-		if decodedLayers[i] == layers.LayerTypeVXLAN {
+	for i := 0; i < len(d.decodedLayers); i++ {
+		if d.decodedLayers[i] == layers.LayerTypeVXLAN {
 			j = i
 		}
 	}
 
-	for i = j; i < len(decodedLayers); i++ {
-		switch decodedLayers[i] {
+	for i = j; i < len(d.decodedLayers); i++ {
+		switch d.decodedLayers[i] {
 		case layers.LayerTypeGRE:
 			if config.Cfg.Iface.WithErspan {
-				erspanVer := gre.Payload[0] & 0xF0 >> 4
-				if erspanVer == 1 && len(gre.Payload) > 8 {
-					d.parser.DecodeLayers(gre.Payload[8:], &decodedLayers)
+				erspanVer := d.gre.Payload[0] & 0xF0 >> 4
+				if erspanVer == 1 && len(d.gre.Payload) > 8 {
+					d.parser.DecodeLayers(d.gre.Payload[8:], &d.decodedLayers)
 					if !foundGRELayer {
 						i = 0
 					}
 					foundGRELayer = true
-				} else if erspanVer == 2 && len(gre.Payload) > 12 {
+				} else if erspanVer == 2 && len(d.gre.Payload) > 12 {
 					off := 12
-					if gre.Payload[11]&1 == 1 && len(gre.Payload) > 20 {
+					if d.gre.Payload[11]&1 == 1 && len(d.gre.Payload) > 20 {
 						off = 20
 					}
-					d.parser.DecodeLayers(gre.Payload[off:], &decodedLayers)
+					d.parser.DecodeLayers(d.gre.Payload[off:], &d.decodedLayers)
 					if !foundGRELayer {
 						i = 0
 					}
 					foundGRELayer = true
 				}
 			} else {
-				d.parser.DecodeLayers(gre.Payload, &decodedLayers)
+				d.parser.DecodeLayers(d.gre.Payload, &d.decodedLayers)
 				if !foundGRELayer {
 					i = 0
 				}
@@ -224,15 +218,15 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 
 		case layers.LayerTypeIPv4:
 			atomic.AddUint64(&d.ip4Count, 1)
-			if ip4.Flags&layers.IPv4DontFragment != 0 || (ip4.Flags&layers.IPv4MoreFragments == 0 && ip4.FragOffset == 0) {
-				d.processTransport(&decodedLayers, &udp, &tcp, &sctp, ip4.NetworkFlow(), ci, 0x02, uint8(ip4.Protocol), ip4.SrcIP, ip4.DstIP)
+			if d.ip4.Flags&layers.IPv4DontFragment != 0 || (d.ip4.Flags&layers.IPv4MoreFragments == 0 && d.ip4.FragOffset == 0) {
+				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, d.ip4.NetworkFlow(), ci, 0x02, uint8(d.ip4.Protocol), d.ip4.SrcIP, d.ip4.DstIP)
 				break
 			}
 
-			ip4Len := ip4.Length
-			ip4New, err := d.defragIP4(ip4, ci.Timestamp)
+			ip4Len := d.ip4.Length
+			ip4New, err := d.defragIP4(d.ip4, ci.Timestamp)
 			if err != nil {
-				logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, ip4.SrcIP, ip4.DstIP)
+				logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, d.ip4.SrcIP, d.ip4.DstIP)
 				return
 			} else if ip4New == nil {
 				atomic.AddUint64(&d.fragCount, 1)
@@ -240,54 +234,54 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			}
 
 			if ip4New.Length == ip4Len {
-				d.processTransport(&decodedLayers, &udp, &tcp, &sctp, ip4.NetworkFlow(), ci, 0x02, uint8(ip4.Protocol), ip4.SrcIP, ip4.DstIP)
+				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, d.ip4.NetworkFlow(), ci, 0x02, uint8(d.ip4.Protocol), d.ip4.SrcIP, d.ip4.DstIP)
 			} else {
-				logp.Debug("fragment", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
-					ip4Len, decodedLayers, ip4.Payload, ip4New.Length, ip4New.Payload,
+				logp.Debug("defrag", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
+					ip4Len, d.decodedLayers, d.ip4.Payload, ip4New.Length, ip4New.Payload,
 				)
 
 				if ip4New.Protocol == layers.IPProtocolUDP {
-					parserOnlyUDP.DecodeLayers(ip4New.Payload, &decodedLayers)
+					d.parserOnlyUDP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
 				} else if ip4New.Protocol == layers.IPProtocolTCP {
-					parserOnlyTCP.DecodeLayers(ip4New.Payload, &decodedLayers)
+					d.parserOnlyTCP.DecodeLayers(ip4New.Payload, &d.decodedLayers)
 				} else {
-					logp.Warn("unsupported ipv4fragment layer")
+					logp.Warn("unsupported IPv4 fragment layer")
 					return
 				}
-				d.processTransport(&decodedLayers, &udp, &tcp, &sctp, ip4New.NetworkFlow(), ci, 0x02, uint8(ip4New.Protocol), ip4New.SrcIP, ip4New.DstIP)
+				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, ip4New.NetworkFlow(), ci, 0x02, uint8(ip4New.Protocol), ip4New.SrcIP, ip4New.DstIP)
 			}
 
 		case layers.LayerTypeIPv6:
-			ip6Len := ip6.Length
+			ip6Len := d.ip6.Length
 			atomic.AddUint64(&d.ip6Count, 1)
 
-			if ip6.NextHeader != layers.IPProtocolIPv6Fragment {
-				d.processTransport(&decodedLayers, &udp, &tcp, &sctp, ip6.NetworkFlow(), ci, 0x0a, uint8(ip6.NextHeader), ip6.SrcIP, ip6.DstIP)
+			if d.ip6.NextHeader != layers.IPProtocolIPv6Fragment {
+				d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, d.ip6.NetworkFlow(), ci, 0x0a, uint8(d.ip6.NextHeader), d.ip6.SrcIP, d.ip6.DstIP)
 			} else {
 				packet := gopacket.NewPacket(data, d.layerType, gopacket.DecodeOptions{Lazy: true, NoCopy: true})
 				if ip6frag := packet.Layer(layers.LayerTypeIPv6Fragment).(*layers.IPv6Fragment); ip6frag != nil {
-					ip6New, err := d.defragIP6(ip6, *ip6frag, ci.Timestamp)
+					ip6New, err := d.defragIP6(d.ip6, *ip6frag, ci.Timestamp)
 					if err != nil {
-						logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, ip6.SrcIP, ip6.DstIP)
+						logp.Warn("%v, srcIP: %s, dstIP: %s\n\n", err, d.ip6.SrcIP, d.ip6.DstIP)
 						return
 					} else if ip6New == nil {
 						atomic.AddUint64(&d.fragCount, 1)
 						return
 					}
 
-					logp.Debug("fragment", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
-						ip6Len, decodedLayers, ip6.Payload, ip6New.Length, ip6New.Payload,
+					logp.Debug("defrag", "%d byte fragment layer: %s with payload:\n%s\n%d byte re-assembled payload:\n%s\n\n",
+						ip6Len, d.decodedLayers, d.ip6.Payload, ip6New.Length, ip6New.Payload,
 					)
 
 					if ip6New.NextHeader == layers.IPProtocolUDP {
-						parserOnlyUDP.DecodeLayers(ip6New.Payload, &decodedLayers)
+						d.parserOnlyUDP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
 					} else if ip6New.NextHeader == layers.IPProtocolTCP {
-						parserOnlyTCP.DecodeLayers(ip6New.Payload, &decodedLayers)
+						d.parserOnlyTCP.DecodeLayers(ip6New.Payload, &d.decodedLayers)
 					} else {
-						logp.Warn("unsupported ipv6fragment layer")
+						logp.Warn("unsupported IPv6 fragment layer")
 						return
 					}
-					d.processTransport(&decodedLayers, &udp, &tcp, &sctp, ip6New.NetworkFlow(), ci, 0x0a, uint8(ip6New.NextHeader), ip6New.SrcIP, ip6New.DstIP)
+					d.processTransport(&d.decodedLayers, &d.udp, &d.tcp, &d.sctp, ip6New.NetworkFlow(), ci, 0x0a, uint8(ip6New.NextHeader), ip6New.SrcIP, ip6New.DstIP)
 				}
 			}
 		}
@@ -307,7 +301,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	for _, layerType := range *foundLayerTypes {
 		switch layerType {
 		case layers.LayerTypeDot1Q:
-			pkt.Vlan = d1q.VLANIdentifier
+			pkt.Vlan = d.d1q.VLANIdentifier
 
 		case layers.LayerTypeUDP:
 			if len(udp.Payload) < 16 {
@@ -383,7 +377,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		case layers.LayerTypeDNS:
 			if config.Cfg.Mode == "SIPDNS" {
 				pkt.ProtoType = 53
-				pkt.Payload = protos.ParseDNS(&dns)
+				pkt.Payload = protos.ParseDNS(&d.dns)
 				atomic.AddUint64(&d.dnsCount, 1)
 				PacketQueue <- pkt
 				return

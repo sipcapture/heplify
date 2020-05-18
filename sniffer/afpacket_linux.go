@@ -54,6 +54,10 @@ func (h *afpacketHandle) ZeroCopyReadPacketData() (data []byte, ci gopacket.Capt
 	return h.TPacket.ZeroCopyReadPacketData()
 }
 
+func (h *afpacketHandle) SetFanout(id uint16) error {
+	return h.TPacket.SetFanout(afpacket.FanoutHashWithDefrag, id)
+}
+
 func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
 	// use pcap bpf compiler to get raw bpf instruction
 	pcapBPF, err := pcap.CompileBPFFilter(h.LinkType(), snaplen, filter)

@@ -166,6 +166,13 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			return fmt.Errorf("setting af_packet handle: %v", err)
 		}
 
+		if sniffer.config.FanoutID > 0 {
+			err = sniffer.afpacketHandle.SetFanout(uint16(sniffer.config.FanoutID))
+			if err != nil {
+				return fmt.Errorf("SetFanout '%d' for af_packet: %v", uint16(sniffer.config.FanoutID), err)
+			}
+		}
+
 		err = sniffer.afpacketHandle.SetBPFFilter(sniffer.bpf, sniffer.config.Snaplen)
 		if err != nil {
 			return fmt.Errorf("SetBPFFilter '%s' for af_packet: %v", sniffer.bpf, err)
