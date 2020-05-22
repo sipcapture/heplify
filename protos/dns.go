@@ -1,11 +1,11 @@
 package protos
 
 import (
-	"encoding/json"
 	"net"
 
 	"github.com/google/gopacket/layers"
 	"github.com/negbie/logp"
+	"github.com/segmentio/encoding/json"
 )
 
 type DNS struct {
