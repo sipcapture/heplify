@@ -333,7 +333,7 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 
 	rtcpPkt, err := pkt.MarshalJSON()
 	if err != nil {
-		return nil, nil, err.Error()
+		return ssrcBytes, rtcpPkt, err.Error()
 	}
 
 	return ssrcBytes, rtcpPkt, infoMsg
