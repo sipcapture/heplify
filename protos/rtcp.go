@@ -2,10 +2,9 @@ package protos
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 
-	"github.com/bet365/jingo"
+	"github.com/segmentio/encoding/json"
 )
 
 /* RTCP header
@@ -189,8 +188,6 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 	return bytes, err
 }
 
-var enc = jingo.NewStructEncoder(RTCP_Packet{})
-
 func ParseRTCP(data []byte) ([]byte, []byte, string) {
 	curLen := len(data)
 	dataLen := len(data)
@@ -334,10 +331,10 @@ func ParseRTCP(data []byte) ([]byte, []byte, string) {
 		curLen -= RTCPLength + 4
 	}
 
-	b := jingo.NewBufferFromPool()
-	enc.Marshal(pkt, b)
-	rtcpPkt := make([]byte, len(b.Bytes))
-	copy(rtcpPkt, b.Bytes)
-	b.ReturnToPool()
+	rtcpPkt, err := pkt.MarshalJSON()
+	if err != nil {
+		return nil, nil, err.Error()
+	}
+
 	return ssrcBytes, rtcpPkt, infoMsg
 }
