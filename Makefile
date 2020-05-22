@@ -11,7 +11,7 @@ debug:
 
 test:
 	go vet $(PKGLIST)
-	go test $(PKGLIST)
+	go test $(PKGLIST) -race
 
 .PHONY: clean
 clean:
