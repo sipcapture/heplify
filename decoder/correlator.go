@@ -334,36 +334,52 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 
 func correlateLOG(payload []byte) (byte, []byte) {
 	var callID []byte
-	if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
+	if posID := bytes.Index(payload, []byte("ID=«")); posID > 0 {
 		restID := payload[posID:]
-		// Minimum Call-ID length of "ID=a" = 4
+		// Minimum Call-ID length of "ID=«a" is 5
+		if posRestID := bytes.IndexRune(restID, '»'); posRestID >= 5 {
+			callID = restID[len("ID=«"):posRestID]
+		} else if len(restID) > 5 && len(restID) < 80 {
+			callID = restID[len("ID=«"):]
+		} else {
+			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
+			return 0, nil
+		}
+	} else if posID := bytes.Index(payload, []byte("ID=")); posID > 0 {
+		restID := payload[posID:]
+		// Minimum Call-ID length of "ID=a" is 4
 		if posRestID := bytes.IndexRune(restID, ' '); posRestID >= 4 {
 			callID = restID[len("ID="):posRestID]
 		} else if len(restID) > 4 && len(restID) < 80 {
-			callID = restID[3:]
+			callID = restID[len("ID="):]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
 			return 0, nil
 		}
-		if callID != nil {
-			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return 100, callID
-
-		}
-	} else if posID := bytes.Index(payload, []byte("INFO: [")); posID > 0 {
+	} else if posID := bytes.Index(payload, []byte(": [«")); posID > 0 {
 		restID := payload[posID:]
-		if posRestID := bytes.Index(restID, []byte(" port ")); posRestID >= 8 {
-			callID = restID[len("INFO: ["):posRestID]
-		} else if posRestID := bytes.Index(restID, []byte("]: ")); posRestID >= 4 {
-			callID = restID[len("INFO: ["):posRestID]
+		if posRestID := bytes.Index(restID, []byte("» port ")); posRestID >= 5 {
+			callID = restID[len(": [«"):posRestID]
+		} else if posRestID := bytes.Index(restID, []byte("»]: ")); posRestID >= 5 {
+			callID = restID[len(": [«"):posRestID]
 		} else {
 			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
 			return 0, nil
 		}
-		if len(callID) > 4 && len(callID) < 80 {
-			logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
-			return 100, callID
+	} else if posID := bytes.Index(payload, []byte(": [")); posID > 0 {
+		restID := payload[posID:]
+		if posRestID := bytes.Index(restID, []byte(" port ")); posRestID >= 4 {
+			callID = restID[len(": ["):posRestID]
+		} else if posRestID := bytes.Index(restID, []byte("]: ")); posRestID >= 4 {
+			callID = restID[len(": ["):posRestID]
+		} else {
+			logp.Debug("log", "No end or fishy Call-ID in '%s'", restID)
+			return 0, nil
 		}
+	}
+	if len(callID) > 1 && len(callID) < 80 {
+		logp.Debug("log", "Found CallID: %s in Logline: '%s'", callID, payload)
+		return 100, callID
 	}
 	return 0, nil
 }
