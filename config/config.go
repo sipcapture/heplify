@@ -7,22 +7,23 @@ import (
 var Cfg Config
 
 type Config struct {
-	Iface         *InterfacesConfig
-	Logging       *logp.Logging
-	Mode          string
-	Dedup         bool
-	Filter        string
-	Discard       string
-	DiscardMethod string
-	Zip           bool
-	HepServer     string
-	HepNodePW     string
-	HepNodeID     uint
-	HepNodeName   string
-	Network       string
-	Protobuf      bool
-	Reassembly    bool
-	Version       bool
+	Iface           *InterfacesConfig
+	Logging         *logp.Logging
+	Mode            string
+	Dedup           bool
+	Filter          string
+	CIDPrefix       string
+	Discard         string
+	DiscardMethod   string
+	Zip             bool
+	HepServer       string
+	HepNodePW       string
+	HepNodeID       uint
+	HepNodeName     string
+	Network         string
+	Protobuf        bool
+	Reassembly      bool
+	Version         bool
 }
 
 type InterfacesConfig struct {

@@ -57,6 +57,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by any string")
 	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")
+	flag.StringVar(&config.Cfg.CIDPrefix, "cid", "", "remove prefix from correlationID which is obtain from callID [asbc,isbc,sbcpfx]")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP server address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "", "HEP node PW")

@@ -46,6 +46,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -hi   HEP Node ID (default 2002)
   -di   Discard uninteresting packets by string
   -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+  -cid  remove prefix from correlationID which is obtain from callID [asbc,isbc,sbcpfx]
   -fi   Filter interesting packets by string
   -rf   Read PCAP file
   -rs   Use original timestamps when reading PCAP file

@@ -23,28 +23,29 @@ import (
 var PacketQueue = make(chan *Packet, 20000)
 
 type Decoder struct {
-	asm           *tcpassembly.Assembler
-	defrag4       *ip4defrag.IPv4Defragmenter
-	defrag6       *ip6defrag.IPv6Defragmenter
-	layerType     gopacket.LayerType
-	decodedLayers []gopacket.LayerType
-	parser        *gopacket.DecodingLayerParser
-	parserUDP     *gopacket.DecodingLayerParser
-	parserTCP     *gopacket.DecodingLayerParser
-	sll           layers.LinuxSLL
-	d1q           layers.Dot1Q
-	gre           layers.GRE
-	eth           layers.Ethernet
-	vxl           ownlayers.VXLAN
-	ip4           layers.IPv4
-	ip6           layers.IPv6
-	tcp           layers.TCP
-	udp           layers.UDP
-	dns           layers.DNS
-	sctp          layers.SCTP
-	payload       gopacket.Payload
-	dedupCache    *freecache.Cache
-	filter        []string
+	asm              *tcpassembly.Assembler
+	defrag4          *ip4defrag.IPv4Defragmenter
+	defrag6          *ip6defrag.IPv6Defragmenter
+	layerType        gopacket.LayerType
+	decodedLayers    []gopacket.LayerType
+	parser           *gopacket.DecodingLayerParser
+	parserUDP        *gopacket.DecodingLayerParser
+	parserTCP        *gopacket.DecodingLayerParser
+	sll              layers.LinuxSLL
+	d1q              layers.Dot1Q
+	gre              layers.GRE
+	eth              layers.Ethernet
+	vxl              ownlayers.VXLAN
+	ip4              layers.IPv4
+	ip6              layers.IPv6
+	tcp              layers.TCP
+	udp              layers.UDP
+	dns              layers.DNS
+	sctp             layers.SCTP
+	payload          gopacket.Payload
+	dedupCache       *freecache.Cache
+	filter           []string
+	filterCIDPrefix  []string
 	stats
 }
 
@@ -125,6 +126,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.parserTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
 
 	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+	d.filterCIDPrefix = strings.Split(config.Cfg.CIDPrefix, ",")
 
 	if config.Cfg.Dedup {
 		d.dedupCache = freecache.NewCache(20 * 1024 * 1024) // 20 MB
@@ -321,6 +323,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				if udp.DstPort == 514 {
 					pkt.ProtoType, pkt.CID = correlateLOG(udp.Payload)
 					if pkt.ProtoType > 0 && pkt.CID != nil {
+						d.processCID(pkt)
 						PacketQueue <- pkt
 					}
 					return
@@ -333,6 +336,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						if pkt.Payload != nil {
 							pkt.ProtoType = 5
 							atomic.AddUint64(&d.rtcpCount, 1)
+							d.processCID(pkt)
 							PacketQueue <- pkt
 							return
 						}
@@ -400,8 +404,33 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	}
 
 	if pkt.ProtoType > 0 && pkt.Payload != nil {
+		d.processCID(pkt)
 		PacketQueue <- pkt
 	} else {
 		atomic.AddUint64(&d.unknownCount, 1)
+	}
+}
+
+func (d *Decoder) processCID(pkt *Packet){
+	if config.Cfg.CIDPrefix != "" {
+		if pkt.CID == nil {
+			// Get Call-ID for SIP packets
+			callID, err := getHeaderValue(callIdHeaderNames, pkt.Payload)
+			if err != nil || len(callID) == 0 {
+				logp.Debug("processCID error", "\n%s", err)
+				return
+			}
+			pkt.CID = callID
+		}
+		
+		//remove prefix from CID
+		// **need comment:
+		// i notice you can just call bytes.TrimPrefix directly, if the prefix does not exist it will just return the original value
+		// Would it be better to check if the prefix exist first before trim? which would save more time?
+		for _, v := range d.filterCIDPrefix {
+			if (bytes.HasPrefix(pkt.CID, []byte(v))){
+				pkt.CID = bytes.TrimPrefix(pkt.CID, []byte(v))
+			}
+		}
 	}
 }

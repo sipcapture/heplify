@@ -105,6 +105,11 @@ func (s *tcpStream) run() {
 					pkt.Payload = d
 				}
 				data = nil
+				
+				//**need comment:
+				//looking at this, it seems i should process CID for this packet as well before it being send to the queue
+				//however i am not very sure how i can all the decoder.processCID from here. 
+				//Do i have to recreate the function and reassign the String[] filterCIDPrefix here?
 				PacketQueue <- pkt
 				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 				//logp.Debug("tcpassembly", "%s", pkt)
