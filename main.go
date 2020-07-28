@@ -65,6 +65,7 @@ func createFlags() {
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
+	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 64, "Number of retries for sending before giving up and reconnecting")
 	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
 	flag.Parse()
 
