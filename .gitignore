@@ -1,1 +1,3 @@
 heplify
+heplify.log*
+vendor/
