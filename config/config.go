@@ -22,6 +22,7 @@ type Config struct {
 	Network       string
 	Protobuf      bool
 	Reassembly    bool
+	SendRetries   uint
 	Version       bool
 }
 

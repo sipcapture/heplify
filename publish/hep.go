@@ -15,7 +15,7 @@ import (
 type HEPConn struct {
 	conn   net.Conn
 	writer *bufio.Writer
-	errCnt int
+	errCnt uint
 }
 type HEPOutputer struct {
 	hepQueue chan []byte
@@ -89,10 +89,16 @@ func (h *HEPOutputer) Send(msg []byte) {
 		h.client[n].writer.Write(msg)
 		err := h.client[n].writer.Flush()
 		if err != nil {
+			logp.Err("%v", err)
 			h.client[n].errCnt++
-			if h.client[n].errCnt%64 == 0 {
+			var retry bool
+			if config.Cfg.SendRetries > 0 {
+				retry = (h.client[n].errCnt % config.Cfg.SendRetries) == 0
+			} else {
+				retry = true
+			}
+			if retry {
 				h.client[n].errCnt = 0
-				logp.Err("%v", err)
 				if err = h.ReConnect(n); err != nil {
 					logp.Err("reconnect error: %v", err)
 					return
