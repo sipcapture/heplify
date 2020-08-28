@@ -14,6 +14,7 @@ type Config struct {
 	Filter        string
 	Discard       string
 	DiscardMethod string
+	DiscardSrcIP  string
 	Zip           bool
 	HepServer     string
 	HepNodePW     string
@@ -22,6 +23,7 @@ type Config struct {
 	Network       string
 	Protobuf      bool
 	Reassembly    bool
+	SendRetries   uint
 	Version       bool
 }
 

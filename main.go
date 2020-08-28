@@ -57,6 +57,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by any string")
 	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")
+	flag.StringVar(&config.Cfg.DiscardSrcIP, "disip", "", "Discard uninteresting SIP packets by Source IP(s)")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP server address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "", "HEP node PW")
@@ -65,6 +66,7 @@ func createFlags() {
 	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
+	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 64, "Number of retries for sending before giving up and reconnecting")
 	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
 	flag.Parse()
 
