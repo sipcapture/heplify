@@ -44,6 +44,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -pr   Portrange to capture SIP (default "5060-5090")
   -hs   HEP UDP server address (default "127.0.0.1:9060")
   -hi   HEP Node ID (default 2002)
+  -hn   HEP Node Name (default hostname)
   -di   Discard uninteresting packets by string
   -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
   -fi   Filter interesting packets by string
@@ -64,7 +65,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 # Capture SIP and RTCP packets on any interface and send them via TLS to 192.168.1.1:9060
 ./heplify -hs 192.168.1.1:9060 -nt tls
 
-# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Use a HEPNodeName
+# Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Use a someNodeName
 ./heplify -hs 192.168.1.1:9060 -hn someNodeName
 
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Print info to stdout
