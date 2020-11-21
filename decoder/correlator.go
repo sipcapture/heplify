@@ -262,7 +262,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	var info string
 
 	// Parse RTCP.
-	if config.Cfg.Mode == "SIPRTCPNG" {
+	if config.Cfg.Mode == "SIP3RTCP" {
 		ssrcBytes, jsonRTCP, info = protos.ParseRTCPNG(payload)
 	} else {
 		ssrcBytes, jsonRTCP, info = protos.ParseRTCP(payload)
