@@ -8,7 +8,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/negbie/freecache v1.1.0
 	github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846
-	github.com/negbie/rtcp v1.2.5-0.20201121213733-a14c8b74778c
+	github.com/negbie/rtcp v1.2.5-0.20201121223725-c8aecb0fdf67
 	github.com/segmentio/encoding v0.2.3
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
