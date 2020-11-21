@@ -189,7 +189,7 @@ func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 	return bytes, err
 }
 
-func ParseRTCPNG(data []byte) ([]byte, []byte, string) {
+func ParseRTCPPion(data []byte) ([]byte, []byte, string) {
 	packet, err := rtcp.Unmarshal(data)
 	if err != nil {
 		return nil, nil, err.Error()

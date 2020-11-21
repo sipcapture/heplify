@@ -14,8 +14,8 @@ github.com/negbie/freecache v1.1.0 h1:21vPkO0aFvrSlh0j37cwXlIe3swtjYi3xt+InoxjOt
 github.com/negbie/freecache v1.1.0/go.mod h1:Tu27l8sYK6JgwergLHD7u8lRw1or1T4MeXvV6R+hwQs=
 github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846 h1:PAr5hcOgvc2m71W4SlbUsAbUnea5lNjB5/DfIHW9f8Q=
 github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846/go.mod h1:xTKf9aKLuVL0r9wxWouR+/4ctK2ywm0rTPFY2klrnOg=
-github.com/negbie/rtcp v1.2.5-0.20201121180427-78ef9882755f h1:y1P8fnDEIVZqLcYRiilVZVxWR1W5bUEbju8Fd4RiYrg=
-github.com/negbie/rtcp v1.2.5-0.20201121180427-78ef9882755f/go.mod h1:YsWZ2GiaZOr0lYqyPXeibbRZqAHyxsQF7VC2L3YA7ME=
+github.com/negbie/rtcp v1.2.5-0.20201121213733-a14c8b74778c h1:c+nzetGksS/pYAKaDM7JNF6N3hMuJ98DWFSNQQfA2Qo=
+github.com/negbie/rtcp v1.2.5-0.20201121213733-a14c8b74778c/go.mod h1:YsWZ2GiaZOr0lYqyPXeibbRZqAHyxsQF7VC2L3YA7ME=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/segmentio/encoding v0.2.3 h1:BXuf12zD8My4+mYj6vBANEy8Dqd/z2UMfLU0tW36af0=
