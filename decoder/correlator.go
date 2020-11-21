@@ -8,6 +8,7 @@ import (
 
 	"github.com/negbie/freecache"
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/protos"
 )
 
@@ -255,10 +256,18 @@ sdpLoop:
 // If it finds a value inside the cidCache it will add it to the RTCPCache.
 // Key parts will be separated by a single space.
 func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payload []byte) ([]byte, []byte) {
-	var corrID = make([]byte, 0, 60)
+
+	var err error
+	var ssrcBytes, jsonRTCP []byte
+	var info string
 
 	// Parse RTCP.
-	ssrcBytes, jsonRTCP, info := protos.ParseRTCP(payload)
+	if config.Cfg.Mode == "SIPRTCPNG" {
+		ssrcBytes, jsonRTCP, info = protos.ParseRTCPNG(payload)
+	} else {
+		ssrcBytes, jsonRTCP, info = protos.ParseRTCP(payload)
+	}
+
 	if info != "" {
 		if logp.HasSelector("rtcp") {
 			logp.Debug("rtcp", "Parsing rtcp returned info. ssrc=%x, srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v, info=%q",
@@ -280,7 +289,8 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 	rtcpKey := bytes.Join([][]byte{srcKey, ssrcBytes}, []byte(" "))
 
 	// Lookup correlation ID with RTCP key.
-	corrID, err := rtcpCache.GetWithBuf(rtcpKey, corrID[:0])
+	var corrID = make([]byte, 0, 60)
+	corrID, err = rtcpCache.GetWithBuf(rtcpKey, corrID[:0])
 	if err == nil && rtcpKey != nil {
 		if logp.HasSelector("rtcp") {
 			logp.Debug("rtcp", "Found key=%q value=%q in rtcpCache for srcIP=%v, srcPort=%v, dstIP=%v, dstPort=%v",

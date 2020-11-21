@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/negbie/rtcp"
 	"github.com/segmentio/encoding/json"
 )
 
@@ -186,6 +187,26 @@ func (rp *RTCP_Packet) AddReportBlock(rb RTCP_report_block) []RTCP_report_block 
 func (rp *RTCP_Packet) MarshalJSON() ([]byte, error) {
 	bytes, err := json.Marshal(*rp)
 	return bytes, err
+}
+
+func ParseRTCPNG(data []byte) ([]byte, []byte, string) {
+	packet, err := rtcp.Unmarshal(data)
+	if err != nil {
+		return nil, nil, err.Error()
+	}
+	bytes, err := json.Marshal(packet)
+	if err != nil {
+		return nil, nil, err.Error()
+	}
+	return uintsToBytes(packet[0].DestinationSSRC()), bytes, ""
+}
+
+func uintsToBytes(vs []uint32) []byte {
+	buf := make([]byte, len(vs)*4)
+	for i, v := range vs {
+		binary.BigEndian.PutUint32(buf[i*4:], v)
+	}
+	return buf
 }
 
 func ParseRTCP(data []byte) ([]byte, []byte, string) {
