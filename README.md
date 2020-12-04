@@ -37,23 +37,83 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 ## Usage
 
 ```bash
-  -i    Listen on interface (default "any")
-  -nt   Network types are [udp, tcp, tls] (default "udp")
-  -t    Capture types are [pcap, af_packet] (default "pcap")
-  -m    Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
-  -pr   Portrange to capture SIP (default "5060-5090")
-  -hs   HEP UDP server address (default "127.0.0.1:9060")
-  -hi   HEP Node ID (default 2002)
-  -hn   HEP Node Name (default hostname)
-  -di   Discard uninteresting packets by string
-  -dim  Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
-  -fi   Filter interesting packets by string
-  -rf   Read PCAP file
-  -rs   Use original timestamps when reading PCAP file
-  -wf   Path to write pcap file
-  -zf   Enable pcap compression
-  -e    Log to stderr and disable syslog/file output
-  -d    Enable certain debug selectors [fragment,layer,payload,rtp,rtcp,sdp]
+ -assembly_debug_log
+    	If true, the github.com/google/gopacket/tcpassembly library will log verbose debugging information (at least one line per packet)
+  -assembly_memuse_log
+    	If true, the github.com/google/gopacket/tcpassembly library will log information regarding its memory use every once in a while.
+  -b int
+    	Interface buffersize (MB) (default 32)
+  -d string
+    	Enable certain debug selectors [defrag,layer,payload,rtp,rtcp,sdp]
+  -dd
+    	Deduplicate packets
+  -di string
+    	Discard uninteresting packets by any string
+  -dim string
+    	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+  -disip string
+    	Discard uninteresting SIP packets by Source IP(s)
+  -e	Log to stderr and disable syslog/file output
+  -erspan
+    	erspan
+  -fg uint
+    	Fanout group ID for af_packet
+  -fi string
+    	Filter interesting packets by any string
+  -fw int
+    	Fanout worker count for af_packet (default 4)
+  -hi uint
+    	HEP node ID (default 2002)
+  -hn string
+    	HEP node Name
+  -hp string
+    	HEP node PW
+  -hs string
+    	HEP server address (default "127.0.0.1:9060")
+  -i string
+    	Listen on interface (default "any")
+  -l string
+    	Log level [debug, info, warning, error] (default "info")
+  -lp int
+    	Loop count over ReadFile. Use 0 to loop forever (default 1)
+  -m string
+    	Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
+  -n string
+    	Log filename (default "heplify.log")
+  -nt string
+    	Network types are [udp, tcp, tls] (default "udp")
+  -o	Read packet for packet
+  -p string
+    	Log filepath (default "./")
+  -pr string
+    	Portrange to capture SIP (default "5060-5090")
+  -protobuf
+    	Use Protobuf on wire
+  -rf string
+    	Read pcap file
+  -rs
+    	Use packet timestamps with maximum pcap read speed
+  -rt int
+    	Pcap rotation time in minutes (default 60)
+  -s int
+    	Snaplength (default 8192)
+  -sl
+    	Log to syslog
+  -t string
+    	Capture types are [pcap, af_packet] (default "pcap")
+  -tcpassembly
+    	If true, tcpassembly will be enabled
+  -tcpsendretries uint
+    	Number of retries for sending before giving up and reconnecting (default 64)
+  -version
+    	Show heplify version
+  -vlan
+    	vlan
+  -wf string
+    	Path to write pcap file
+  -zf
+    	Enable pcap compression
+
 ```
 
 ## Examples
