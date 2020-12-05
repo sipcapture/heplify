@@ -342,6 +342,9 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 						pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
 						if pkt.Payload != nil {
 							pkt.ProtoType = 5
+							if config.Cfg.Mode == "SIPRTCPPION" {
+								pkt.ProtoType = 58
+							}
 							atomic.AddUint64(&d.rtcpCount, 1)
 							PacketQueue <- pkt
 							return
