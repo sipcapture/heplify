@@ -103,6 +103,9 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 	if sniffer.config.WithVlan {
 		sniffer.bpf = fmt.Sprintf("%s or (vlan and (%s))", sniffer.bpf, sniffer.bpf)
 	}
+	if sniffer.config.CustomBPF != "" {
+		sniffer.bpf = sniffer.config.CustomBPF
+	}
 
 	if config.Cfg.Filter != "" {
 		sniffer.filter = strings.Split(config.Cfg.Filter, ",")

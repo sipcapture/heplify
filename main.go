@@ -45,6 +45,7 @@ func createFlags() {
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Use packet timestamps with maximum pcap read speed")
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 8192, "Snaplength")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
+	flag.StringVar(&ifaceConfig.CustomBPF, "bpf", "", "Custom BPF to capture packets")
 	flag.BoolVar(&ifaceConfig.WithVlan, "vlan", false, "vlan")
 	flag.BoolVar(&ifaceConfig.WithErspan, "erspan", false, "erspan")
 	flag.IntVar(&ifaceConfig.BufferSizeMb, "b", 32, "Interface buffersize (MB)")
