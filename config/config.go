@@ -43,4 +43,5 @@ type InterfacesConfig struct {
 	Loop         int    `config:"loop"`
 	FanoutID     uint   `config:"fanout_id"`
 	FanoutWorker int    `config:"fanout_worker"`
+	CustomBPF    string `config:"custom_bpf"`
 }
