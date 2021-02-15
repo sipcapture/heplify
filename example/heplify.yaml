@@ -18,7 +18,8 @@ license: "AGPLv3"
 bindir: "/usr/local/bin"
 files:
   /tmp/pkg/heplify: "/usr/local/bin/heplify"
-#config_files:
+config_files:
+  /tmp/pkg/example/heplify.service: "/lib/systemd/system/heplify.service"
 #  /tmp/pkg/etc/heplify.toml: "/opt/heplify/heplify.toml"
 #overrides:
 #  rpm:
