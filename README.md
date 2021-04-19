@@ -77,7 +77,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -lp int
     	Loop count over ReadFile. Use 0 to loop forever (default 1)
   -m string
-    	Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
+    	Capture modes [SIP, SIPDNS, SIPLOG, SIPRTP, SIPRTCP] (default "SIPRTCP")
   -n string
     	Log filename (default "heplify.log")
   -nt string
