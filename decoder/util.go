@@ -301,12 +301,14 @@ var (
 		[]byte("Content-Type"),
 		[]byte("Content-type"),
 		[]byte("content-type"),
+		[]byte("CONTENT-TYPE"),
 		[]byte("c"),
 	}
 	contentLengthHeaderNames = [][]byte{
 		[]byte("Content-Length"),
 		[]byte("Content-length"),
 		[]byte("content-length"),
+		[]byte("CONTENT-LENGTH"),
 		[]byte("l"),
 	}
 	callIdHeaderNames = [][]byte{
@@ -314,15 +316,18 @@ var (
 		[]byte("Call-Id"),
 		[]byte("Call-id"),
 		[]byte("call-id"),
+		[]byte("CALL-ID"),
 		[]byte("i"),
 	}
 	transferEncodingHeaderNames = [][]byte{
 		[]byte("Transfer-Encoding"),
 		[]byte("Transfer-encoding"),
 		[]byte("transfer-encoding"),
+		[]byte("TRANSFER-ENCODING"),
 	}
 	upgradeHeaderNames = [][]byte{
 		[]byte("Upgrade"),
 		[]byte("upgrade"),
+		[]byte("UPGRADE"),
 	}
 )
