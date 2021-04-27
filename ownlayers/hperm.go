@@ -27,13 +27,27 @@ func (v *HPERM) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 		return fmt.Errorf("malformed HPERM packet")
 	}
 
+	flag := 0
+	
 	// check the first 8 byte - for HPERM must be all 0s
 	var buffUnk1 [8]byte
-	copy(buffUnk, data[:9])
-	// TODO check 
+	copy(buffUnk1, data[:9])
+	for _, v := range buffUnk1 {
+		if v != 0 {
+			flag = 1
+			break
+		}
+	}
+	
 	// check the 9th byte - must be 0
 	
 	// check the 12th byte - could be 0x00 or 0x80
+
+	if flag == 1 {
+		return fmt.Errorf("malformed HPERM packet")
+	} else {
+		fmt.Println("HPERM parsed correctly")
+	}
 	
 	v.Payload = data[12:]
 
