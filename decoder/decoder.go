@@ -36,6 +36,7 @@ type Decoder struct {
 	gre           layers.GRE
 	eth           layers.Ethernet
 	vxl           ownlayers.VXLAN
+	hperm         ownlayers.HPERM
 	ip4           layers.IPv4
 	ip6           layers.IPv6
 	tcp           layers.TCP
@@ -190,6 +191,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			j = i
 		}
 	}
+
+	// TODO HPERM layer check
 
 	for i = j; i < len(d.decodedLayers); i++ {
 		switch d.decodedLayers[i] {
