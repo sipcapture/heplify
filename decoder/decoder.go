@@ -110,6 +110,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	dlp.AddDecodingLayer(&d.gre)
 	dlp.AddDecodingLayer(&d.eth)
 	dlp.AddDecodingLayer(&d.vxl)
+	//dlp.AddDecodingLayer(&d.hperm)
 	dlp.AddDecodingLayer(&d.ip4)
 	dlp.AddDecodingLayer(&d.ip6)
 	dlp.AddDecodingLayer(&d.sctp)
@@ -181,6 +182,8 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 	}
 
+	// if HPERM layer detected, goto here again
+
 	d.parser.DecodeLayers(data, &d.decodedLayers)
 	//logp.Debug("layer", "\n%v", d.decodedLayers)
 	foundGRELayer := false
@@ -191,8 +194,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 			j = i
 		}
 	}
-
-	// TODO HPERM layer check
 
 	for i = j; i < len(d.decodedLayers); i++ {
 		switch d.decodedLayers[i] {
