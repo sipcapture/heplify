@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	//"github.com/google/gopacket/layers"
 )
 
 // Register the layer type so we can use it
@@ -78,11 +77,21 @@ func decodeHPERMLayer(data []byte, p gopacket.PacketBuilder) error {
 
 	p.AddLayer(&HPERM{
 		Unk1:  data[:8],
-		Unk2:  data[9],
-		Unk3:  data[12],
-		payld: data[13:],
+		Unk2:  data[8],
+		Unk3:  data[11],
+		payld: data[12:],
 	})
 
 	// The rest of the packet is the real pkt, so we decode from Ethernet again
 	return p.NextDecoder(layers.LayerTypeEthernet)
 }
+
+// CanDecode returns the set of layer types that this DecodingLayer can decode.
+/*func (hp *HPERM) CanDecode() gopacket.LayerClass {
+	return layers.LayerTypeHPERM
+}*/
+
+// NextLayerType returns the layer type contained by this DecodingLayer.
+/*func (hp *HPERM) NextLayerType() gopacket.LayerType {
+	return layers.LayerTypeEthernet
+}*/

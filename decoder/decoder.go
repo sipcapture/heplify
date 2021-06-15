@@ -182,7 +182,7 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 	}
 
-	// if HPERM layer detected, goto here again
+	// if HPERM layer detected, comeback here again
 
 	d.parser.DecodeLayers(data, &d.decodedLayers)
 	//logp.Debug("layer", "\n%v", d.decodedLayers)
@@ -330,6 +330,24 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.Payload = udp.Payload
 			atomic.AddUint64(&d.udpCount, 1)
 			logp.Debug("payload", "UDP:\n%s", pkt)
+
+			// HPERM layer check
+			if pkt.SrcPort == 7932 || pkt.DstPort == 7932 {
+				pkt := gopacket.NewPacket(pkt.Payload, d.hperm.LayerType(), gopacket.NoCopy)
+				HPERML := pkt.Layer(d.hperm.LayerType())
+				if HPERML != nil {
+					logp.Info("Packet was successfully decoded with HPERM layer decoder.")
+					HPERMContent, _ := HPERML.(*ownlayers.HPERM)
+					logp.Info("UNK1:", HPERMContent.Unk1)
+					logp.Info("UNK2:", HPERMContent.Unk2)
+					logp.Info("UNK3:", HPERMContent.Unk3)
+					logp.Info("Payload: ", HPERMContent.LayerPayload())
+				}
+				/* TODO:
+				1. Parse again Datalink and Network layer here
+				2. goto -> begin of this function
+				*/
+			}
 
 			if config.Cfg.Mode == "SIPLOG" {
 				if udp.DstPort == 514 {
