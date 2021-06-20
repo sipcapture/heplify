@@ -337,16 +337,14 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				HPERML := pkt.Layer(d.hperm.LayerType())
 				if HPERML != nil {
 					logp.Info("Packet was successfully decoded with HPERM layer decoder.")
-					HPERMContent, _ := HPERML.(*ownlayers.HPERM)
-					logp.Info("UNK1:", HPERMContent.Unk1)
-					logp.Info("UNK2:", HPERMContent.Unk2)
-					logp.Info("UNK3:", HPERMContent.Unk3)
-					logp.Info("Payload: ", HPERMContent.LayerPayload())
+					HPERMpkt, _ := HPERML.(*ownlayers.HPERM)
+					HPERMContent := HPERMpkt.LayerContents()
+					HPERMPayload := HPERMpkt.LayerPayload()
+					logp.Info("HPERM Content:", HPERMContent)
+					logp.Info("Payload: ", HPERMPayload)
+					// call again the process pkt to dissect the inner layers (aka the real pkt)
+					d.Process(HPERMPayload, ci)
 				}
-				/* TODO:
-				1. Parse again Datalink and Network layer here
-				2. goto -> begin of this function
-				*/
 			}
 
 			if config.Cfg.Mode == "SIPLOG" {

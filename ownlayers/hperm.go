@@ -72,7 +72,7 @@ func decodeHPERMLayer(data []byte, p gopacket.PacketBuilder) error {
 	if flag == 1 {
 		return fmt.Errorf("malformed HPERM packet")
 	} else {
-		fmt.Println("HPERM parsed correctly")
+		//fmt.Println("HPERM parsed correctly")
 	}
 
 	p.AddLayer(&HPERM{
