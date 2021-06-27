@@ -182,8 +182,6 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 		}
 	}
 
-	// if HPERM layer detected, comeback here again
-
 	d.parser.DecodeLayers(data, &d.decodedLayers)
 	//logp.Debug("layer", "\n%v", d.decodedLayers)
 	foundGRELayer := false
@@ -329,7 +327,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(udp.DstPort)
 			pkt.Payload = udp.Payload
 			atomic.AddUint64(&d.udpCount, 1)
-			logp.Debug("payload", "UDP:\n%s", pkt)
+			logp.Debug("payload - UDP:\n%s", string(pkt.Payload))
 
 			// HPERM layer check
 			if pkt.SrcPort == 7932 || pkt.DstPort == 7932 {
@@ -338,10 +336,10 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				if HPERML != nil {
 					logp.Info("Packet was successfully decoded with HPERM layer decoder.")
 					HPERMpkt, _ := HPERML.(*ownlayers.HPERM)
-					HPERMContent := HPERMpkt.LayerContents()
+					//HPERMContent := HPERMpkt.LayerContents()
 					HPERMPayload := HPERMpkt.LayerPayload()
-					logp.Info("HPERM Content:", HPERMContent)
-					logp.Info("Payload: ", HPERMPayload)
+					//logp.Info("HPERM Content:", HPERMContent)
+					//logp.Info("Payload: ", HPERMPayload)
 					// call again the process pkt to dissect the inner layers (aka the real pkt)
 					d.Process(HPERMPayload, ci)
 				}
