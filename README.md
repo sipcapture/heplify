@@ -146,8 +146,11 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 # Read example/rtp_rtcp_sip.pcap and send SIP and correlated RTCP packets to 192.168.1.1:9060
 ./heplify -rf example/rtp_rtcp_sip.pcap -hs 192.168.1.1:9060
 
-# Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060.
+# Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060
 ./heplify -hs 192.168.1.1:9060 -dim OPTIONS,NOTIFY
+
+# Capture SIP packet with HPERM encapsulation on port 7932 and interface eth2, send to 192.168.1.1:9060 and print info on stdout
+./heplify -i eth2 -bpf "port 7932" -hs 192.168.1.1:9060
 
 ```
 
