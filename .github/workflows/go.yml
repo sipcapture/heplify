@@ -17,6 +17,9 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: 1.17
-
+        
+    - name: Libraries
+      run: apt-install -y libpcap-dev
+      
     - name: Build
       run: go build -ldflags "-s -w"  -o heplify *.go
