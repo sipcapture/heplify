@@ -337,24 +337,17 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				}
 			}
 			if config.Cfg.Mode != "SIP" {
-				if (udp.Payload[0]&0xc0)>>6 == 2 {
-					if (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) && udp.SrcPort%2 != 0 && udp.DstPort%2 != 0 {
-						pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
-						if pkt.Payload != nil {
-							pkt.ProtoType = 5
-							atomic.AddUint64(&d.rtcpCount, 1)
-							PacketQueue <- pkt
-							return
-						}
-						atomic.AddUint64(&d.rtcpFailCount, 1)
-						return
-					} else if udp.SrcPort%2 == 0 && udp.DstPort%2 == 0 {
-						if config.Cfg.Mode == "SIPRTP" {
-							logp.Debug("rtp", "\n%v", protos.NewRTP(udp.Payload))
-						}
-						pkt.Payload = nil
-						return
-					}
+				if (udp.Payload[0]&0xc0)>>6 == 2 &&
+				    (udp.Payload[1] == 200 || udp.Payload[1] == 201 || udp.Payload[1] == 207) {
+					    pkt.Payload, pkt.CID = correlateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, udp.Payload)
+					    if pkt.Payload != nil {
+						    pkt.ProtoType = 5
+						    atomic.AddUint64(&d.rtcpCount, 1)
+						    PacketQueue <- pkt
+						    return
+					    }
+					    atomic.AddUint64(&d.rtcpFailCount, 1)
+					    return
 				}
 				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 			}
