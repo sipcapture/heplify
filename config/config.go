@@ -15,6 +15,7 @@ type Config struct {
 	Discard       string
 	DiscardMethod string
 	DiscardSrcIP  string
+	DiscardDstIP  string
 	Zip           bool
 	HepServer     string
 	HepNodePW     string

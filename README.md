@@ -49,6 +49,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
     	Deduplicate packets
   -di string
     	Discard uninteresting packets by any string
+  -didip string
+        Discard uninteresting SIP packets by Destination IP(s)
   -dim string
     	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
   -disip string
