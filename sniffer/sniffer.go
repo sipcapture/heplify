@@ -5,10 +5,12 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -24,18 +26,22 @@ import (
 )
 
 type SnifferSetup struct {
-	pcapHandle     *pcap.Handle
-	afpacketHandle *afpacketHandle
-	config         *config.InterfacesConfig
-	isAlive        bool
-	dumpChan       chan *dump.Packet
-	mode           string
-	bpf            string
-	file           string
-	filter         []string
-	discard        []string
-	worker         Worker
-	DataSource     gopacket.PacketDataSource
+	pcapHandle       *pcap.Handle
+	afpacketHandle   *afpacketHandle
+	config           *config.InterfacesConfig
+	isAlive          bool
+	dumpChan         chan *dump.Packet
+	mode             string
+	collectorAddress string
+	isCollector      bool
+	collectOnlySIP   bool
+	bpf              string
+	file             string
+	filter           []string
+	discard          []string
+	worker           Worker
+	collectorUDPconn *net.UDPConn
+	DataSource       gopacket.PacketDataSource
 }
 
 type MainWorker struct {
@@ -45,6 +51,7 @@ type MainWorker struct {
 
 type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
+	OnHEPPacket(data []byte)
 }
 
 type WorkerFactory func(layers.LinkType) (Worker, error)
@@ -72,6 +79,10 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 	mw.decoder.Process(data, ci)
 }
 
+func (mw *MainWorker) OnHEPPacket(data []byte) {
+	mw.decoder.ProcessHEPPacket(data)
+}
+
 func (sniffer *SnifferSetup) setFromConfig() error {
 	var err error
 
@@ -81,6 +92,11 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	if sniffer.config.Type != "af_packet" {
 		sniffer.config.Type = "pcap"
+	}
+
+	if sniffer.isCollector {
+		fmt.Print("COLLECTOR: ", sniffer.collectorAddress)
+		sniffer.config.Type = "collector"
 	}
 
 	switch sniffer.mode {
@@ -183,6 +199,29 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 		sniffer.DataSource = gopacket.PacketDataSource(sniffer.afpacketHandle)
 
+	case "collector":
+
+		if !strings.HasPrefix(sniffer.collectorAddress, "udp:") {
+			return fmt.Errorf("collector support only udp right now ")
+		}
+
+		hostAdress := strings.TrimPrefix(sniffer.collectorAddress, "udp:")
+
+		host, port, _ := net.SplitHostPort(hostAdress)
+		portInt, _ := strconv.Atoi(port)
+
+		sniffer.collectorUDPconn, err = net.ListenUDP("udp", &net.UDPAddr{
+			Port: portInt,
+			IP:   net.ParseIP(host),
+		})
+
+		if err != nil {
+			defer sniffer.collectorUDPconn.Close()
+			return fmt.Errorf("couldn't start collector server: %v", err)
+		}
+
+		fmt.Printf("server listening %s\n", sniffer.collectorUDPconn.LocalAddr().String())
+
 	default:
 		return fmt.Errorf("unknown sniffer type: %s", sniffer.config.Type)
 	}
@@ -190,12 +229,20 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 	return nil
 }
 
-func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
+//mode string, cfg *config.InterfacesConfig, collector string, onlySip bool
+
+func New(cfgMain *config.Config) (*SnifferSetup, error) {
 	var err error
 	sniffer := &SnifferSetup{}
-	sniffer.config = cfg
-	sniffer.mode = mode
+	sniffer.config = cfgMain.Iface
+	sniffer.mode = cfgMain.Mode
 	sniffer.file = sniffer.config.ReadFile
+
+	if cfgMain.HepCollector != "" {
+		sniffer.collectorAddress = cfgMain.HepCollector
+		sniffer.isCollector = true
+		sniffer.collectOnlySIP = cfgMain.CollectOnlySip
+	}
 
 	if sniffer.file == "" {
 		if sniffer.config.Device == "any" && (runtime.GOOS == "windows" || runtime.GOOS == "darwin") {
@@ -225,6 +272,7 @@ func New(mode string, cfg *config.InterfacesConfig) (*SnifferSetup, error) {
 	}
 
 	sniffer.isAlive = true
+
 	go sniffer.printStats()
 
 	return sniffer, nil
@@ -239,83 +287,115 @@ func (sniffer *SnifferSetup) Run() error {
 
 LOOP:
 	for sniffer.isAlive {
+
 		if sniffer.config.OneAtATime {
 			fmt.Println("Press enter to read next packet")
 			fmt.Scanln()
 		}
 
-		data, ci, err := sniffer.DataSource.ReadPacketData()
+		if sniffer.isCollector {
 
-		if err == pcap.NextErrorTimeoutExpired || sniffer.afpacketHandle.IsErrTimeout(err) || err == syscall.EINTR {
-			continue
-		}
-
-		if err == io.EOF {
-			logp.Debug("sniffer", "End of file")
-			loopCount++
-			if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
-				// Give the publish goroutine 200 ms to flush
-				time.Sleep(200 * time.Millisecond)
-				sniffer.isAlive = false
-				continue
-			}
-
-			logp.Debug("sniffer", "Reopening the file")
-			err = sniffer.Reopen()
+			message := make([]byte, 5000)
+			rlen, remote, err := sniffer.collectorUDPconn.ReadFromUDP(message[:])
 			if err != nil {
-				retError = fmt.Errorf("error reopening file: %s", err)
+				retError = fmt.Errorf("collector error: %s", err)
 				sniffer.isAlive = false
 				continue
 			}
-			lastPktTime = nil
-			continue
-		}
 
-		if err != nil {
-			retError = fmt.Errorf("sniffing error: %s", err)
-			sniffer.isAlive = false
-			continue
-		}
+			logp.Debug("collector", fmt.Sprintf("received hep data from %s\n", remote))
 
-		if len(data) == 0 {
-			continue
-		}
+			if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
 
-		if len(sniffer.filter) > 0 {
-			for i := range sniffer.filter {
-				if !bytes.Contains(data, []byte(sniffer.filter[i])) {
-					continue LOOP
+				//If we wanna filter only SIP
+				if sniffer.collectOnlySIP {
+					hep, err := decoder.DecodeHEP(message[:rlen])
+					if err != nil {
+						logp.Err("Bad HEP!")
+					}
+					if hep.ProtoType != 1 {
+						logp.Debug("collector", "this is non sip")
+					}
+				}
+				sniffer.worker.OnHEPPacket(message[:rlen])
+			}
+
+		} else {
+
+			data, ci, err := sniffer.DataSource.ReadPacketData()
+
+			if err == pcap.NextErrorTimeoutExpired || sniffer.afpacketHandle.IsErrTimeout(err) || err == syscall.EINTR {
+				continue
+			}
+
+			if err == io.EOF {
+				logp.Debug("sniffer", "End of file")
+				loopCount++
+				if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
+					// Give the publish goroutine 200 ms to flush
+					time.Sleep(200 * time.Millisecond)
+					sniffer.isAlive = false
+					continue
+				}
+
+				logp.Debug("sniffer", "Reopening the file")
+				err = sniffer.Reopen()
+				if err != nil {
+					retError = fmt.Errorf("error reopening file: %s", err)
+					sniffer.isAlive = false
+					continue
+				}
+				lastPktTime = nil
+				continue
+			}
+
+			if err != nil {
+				retError = fmt.Errorf("sniffing error: %s", err)
+				sniffer.isAlive = false
+				continue
+			}
+
+			if len(data) == 0 {
+				continue
+			}
+
+			if len(sniffer.filter) > 0 {
+				for i := range sniffer.filter {
+					if !bytes.Contains(data, []byte(sniffer.filter[i])) {
+						continue LOOP
+					}
 				}
 			}
-		}
-		if len(sniffer.discard) > 0 {
-			for i := range sniffer.discard {
-				if bytes.Contains(data, []byte(sniffer.discard[i])) {
-					continue LOOP
+			if len(sniffer.discard) > 0 {
+				for i := range sniffer.discard {
+					if bytes.Contains(data, []byte(sniffer.discard[i])) {
+						continue LOOP
+					}
 				}
 			}
-		}
 
-		if sniffer.file != "" {
-			if lastPktTime != nil && !sniffer.config.ReadSpeed {
-				sleep := ci.Timestamp.Sub(*lastPktTime)
-				if sleep > 0 {
-					time.Sleep(sleep)
-				} else {
-					logp.Warn("Time in pcap went backwards: %d", sleep)
+			if sniffer.file != "" {
+				if lastPktTime != nil && !sniffer.config.ReadSpeed {
+					sleep := ci.Timestamp.Sub(*lastPktTime)
+					if sleep > 0 {
+						time.Sleep(sleep)
+					} else {
+						logp.Warn("Time in pcap went backwards: %d", sleep)
+					}
 				}
+				_lastPktTime := ci.Timestamp
+				lastPktTime = &_lastPktTime
+				if !sniffer.config.ReadSpeed {
+					// Overwrite what we get from the pcap
+					ci.Timestamp = time.Now()
+				}
+			} else if sniffer.config.WriteFile != "" {
+				sniffer.dumpChan <- &dump.Packet{Ci: ci, Data: data}
 			}
-			_lastPktTime := ci.Timestamp
-			lastPktTime = &_lastPktTime
-			if !sniffer.config.ReadSpeed {
-				// Overwrite what we get from the pcap
-				ci.Timestamp = time.Now()
-			}
-		} else if sniffer.config.WriteFile != "" {
-			sniffer.dumpChan <- &dump.Packet{Ci: ci, Data: data}
-		}
 
-		sniffer.worker.OnPacket(data, &ci)
+			sniffer.worker.OnPacket(data, &ci)
+
+		}
 	}
 	sniffer.Close()
 	return retError
@@ -327,6 +407,8 @@ func (sniffer *SnifferSetup) Close() error {
 		sniffer.pcapHandle.Close()
 	case "af_packet":
 		sniffer.afpacketHandle.Close()
+	case "collector":
+		sniffer.collectorUDPconn.Close()
 	}
 	return nil
 }
