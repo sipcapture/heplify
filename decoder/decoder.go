@@ -59,6 +59,7 @@ type stats struct {
 	rtcpCount     uint64
 	rtcpFailCount uint64
 	tcpCount      uint64
+	hepCount      uint64
 	sctpCount     uint64
 	udpCount      uint64
 	unknownCount  uint64
@@ -467,5 +468,7 @@ func (d *Decoder) ProcessHEPPacket(data []byte) {
 		Version: 100,
 		Payload: data,
 	}
+	atomic.AddUint64(&d.hepCount, 1)
+
 	PacketQueue <- pkt
 }

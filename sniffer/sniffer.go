@@ -10,8 +10,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -41,7 +41,10 @@ type SnifferSetup struct {
 	discard          []string
 	worker           Worker
 	collectorUDPconn *net.UDPConn
+	collectorTCPconn *net.TCPListener
+	isCollectorTcp   bool
 	DataSource       gopacket.PacketDataSource
+	stats
 }
 
 type MainWorker struct {
@@ -52,6 +55,14 @@ type MainWorker struct {
 type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 	OnHEPPacket(data []byte)
+}
+
+type stats struct {
+	hepTcpCount  uint64
+	hepUDPCount  uint64
+	hepSIPCount  uint64
+	hepDropCount uint64
+	unknownCount uint64
 }
 
 type WorkerFactory func(layers.LinkType) (Worker, error)
@@ -95,7 +106,6 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 	}
 
 	if sniffer.isCollector {
-		fmt.Print("COLLECTOR: ", sniffer.collectorAddress)
 		sniffer.config.Type = "collector"
 	}
 
@@ -201,26 +211,52 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	case "collector":
 
-		if !strings.HasPrefix(sniffer.collectorAddress, "udp:") {
-			return fmt.Errorf("collector support only udp right now ")
+		if !strings.HasPrefix(sniffer.collectorAddress, "udp:") && !strings.HasPrefix(sniffer.collectorAddress, "tcp:") {
+			return fmt.Errorf("collector support only udp and tcp right now ")
 		}
 
-		hostAdress := strings.TrimPrefix(sniffer.collectorAddress, "udp:")
+		//host
+		hostAdress := sniffer.collectorAddress[4:]
 
-		host, port, _ := net.SplitHostPort(hostAdress)
-		portInt, _ := strconv.Atoi(port)
+		if strings.HasPrefix(sniffer.collectorAddress, "udp:") {
 
-		sniffer.collectorUDPconn, err = net.ListenUDP("udp", &net.UDPAddr{
-			Port: portInt,
-			IP:   net.ParseIP(host),
-		})
+			laddr, err := net.ResolveUDPAddr("udp", hostAdress)
+			if nil != err {
+				logp.Err("ResolveTCPAddr error: %v\n", err)
+				return err
+			}
+			sniffer.collectorUDPconn, err = net.ListenUDP("udp", laddr)
 
-		if err != nil {
-			defer sniffer.collectorUDPconn.Close()
-			return fmt.Errorf("couldn't start collector server: %v", err)
+			if err != nil {
+				defer sniffer.collectorUDPconn.Close()
+				return fmt.Errorf("couldn't start collector server: %v", err)
+			}
+
+			logp.Info("collector udp server listening %s\n", sniffer.collectorUDPconn.LocalAddr().String())
+		} else {
+
+			// listen workers
+			laddr, err := net.ResolveTCPAddr("tcp", hostAdress)
+			if nil != err {
+				logp.Err("ResolveTCPAddr error: %v\n", err)
+				return err
+			}
+
+			sniffer.collectorTCPconn, err = net.ListenTCP("tcp", laddr)
+			if err != nil {
+				logp.Err("collectorTCPconn error: %v\n", err)
+				return err
+			}
+
+			sniffer.isCollectorTcp = true
+
+			if err != nil {
+				defer sniffer.collectorUDPconn.Close()
+				return fmt.Errorf("couldn't start collector server: %v", err)
+			}
+
+			logp.Info("collector tcp server listening %s\n", sniffer.collectorTCPconn.Addr().String())
 		}
-
-		fmt.Printf("server listening %s\n", sniffer.collectorUDPconn.LocalAddr().String())
 
 	default:
 		return fmt.Errorf("unknown sniffer type: %s", sniffer.config.Type)
@@ -295,29 +331,52 @@ LOOP:
 
 		if sniffer.isCollector {
 
-			message := make([]byte, 5000)
-			rlen, remote, err := sniffer.collectorUDPconn.ReadFromUDP(message[:])
-			if err != nil {
-				retError = fmt.Errorf("collector error: %s", err)
-				sniffer.isAlive = false
-				continue
-			}
-
-			logp.Debug("collector", fmt.Sprintf("received hep data from %s\n", remote))
-
-			if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
-
-				//If we wanna filter only SIP
-				if sniffer.collectOnlySIP {
-					hep, err := decoder.DecodeHEP(message[:rlen])
+			if sniffer.isCollectorTcp {
+				for {
+					// Listen for an incoming connection.
+					conn, err := sniffer.collectorTCPconn.Accept()
 					if err != nil {
-						logp.Err("Bad HEP!")
+						logp.Err("Error accepting tcp connection: ", err.Error())
+						continue
 					}
-					if hep.ProtoType != 1 {
-						logp.Debug("collector", "this is non sip")
-					}
+					// Handle connections in a new goroutine.
+					go sniffer.handleRequest(conn)
 				}
-				sniffer.worker.OnHEPPacket(message[:rlen])
+
+			} else {
+				message := make([]byte, 5000)
+				rlen, remote, err := sniffer.collectorUDPconn.ReadFromUDP(message[:])
+				if err != nil {
+					retError = fmt.Errorf("collector error: %s", err)
+					sniffer.isAlive = false
+					continue
+				}
+
+				logp.Debug("collector", fmt.Sprintf("received hep data from %s\n", remote))
+
+				if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
+					//counter
+					atomic.AddUint64(&sniffer.hepUDPCount, 1)
+
+					//If we wanna filter only SIP
+					if sniffer.collectOnlySIP {
+						hep, err := decoder.DecodeHEP(message[:rlen])
+						if err != nil {
+							logp.Err("Bad HEP!")
+						}
+						if hep.ProtoType != 1 {
+							logp.Debug("collector", "this is non sip")
+							continue
+						} else {
+							//counter
+							atomic.AddUint64(&sniffer.hepSIPCount, 1)
+						}
+					}
+					sniffer.worker.OnHEPPacket(message[:rlen])
+				} else {
+					//counter
+					atomic.AddUint64(&sniffer.unknownCount, 1)
+				}
 			}
 
 		} else {
@@ -408,7 +467,11 @@ func (sniffer *SnifferSetup) Close() error {
 	case "af_packet":
 		sniffer.afpacketHandle.Close()
 	case "collector":
-		sniffer.collectorUDPconn.Close()
+		if sniffer.isCollectorTcp {
+			sniffer.collectorTCPconn.Close()
+		} else {
+			sniffer.collectorUDPconn.Close()
+		}
 	}
 	return nil
 }
@@ -477,6 +540,9 @@ func (sniffer *SnifferSetup) printStats() {
 					logp.Warn("Stats err: %v", err)
 				}
 				logp.Info("Stats {received dropped}: {%d %d}", p, d)
+
+			case "collector":
+				logp.Info("HEP collector Stats {HEPTcp:%d, HEPUdp:%d, HEPSip: %d, HEPDrops: %d}", sniffer.hepTcpCount, sniffer.hepUDPCount, sniffer.hepSIPCount, sniffer.unknownCount)
 			}
 
 		case <-signals:
@@ -485,6 +551,53 @@ func (sniffer *SnifferSetup) printStats() {
 			os.Exit(0)
 		}
 	}
+}
+
+// Handles incoming tcp requests.
+func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
+
+	for {
+
+		// Make a buffer to hold incoming data.
+		message := make([]byte, 5000)
+
+		// Read the incoming connection into the buffer.
+		_, err := conn.Read(message)
+		if err != nil {
+			fmt.Println("Error reading:", err.Error())
+			break
+		}
+
+		logp.Debug("collector", "received hep data in tcp")
+
+		if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
+
+			//counter
+			atomic.AddUint64(&sniffer.hepTcpCount, 1)
+
+			//If we wanna filter only SIP
+			if sniffer.collectOnlySIP {
+				hep, err := decoder.DecodeHEP(message)
+				if err != nil {
+					logp.Err("Bad HEP!")
+				}
+				if hep.ProtoType != 1 {
+					logp.Debug("collector", "this is non sip")
+					continue
+				} else {
+					//counter
+					atomic.AddUint64(&sniffer.hepSIPCount, 1)
+				}
+			}
+			sniffer.worker.OnHEPPacket(message)
+		} else {
+			//counter
+			atomic.AddUint64(&sniffer.unknownCount, 1)
+		}
+	}
+
+	// Close the connection when you're done with it.
+	conn.Close()
 }
 
 func ungzip(inputFile string) (string, error) {
