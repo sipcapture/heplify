@@ -3,6 +3,7 @@ package sniffer
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -558,8 +559,8 @@ func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
 
 	for {
 
-		// Make a buffer to hold incoming data.
-		message := make([]byte, 5000)
+		// Make a buffer for HEP header.
+		message := make([]byte, 10)
 
 		// Read the incoming connection into the buffer.
 		_, err := conn.Read(message)
@@ -574,6 +575,18 @@ func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
 
 			//counter
 			atomic.AddUint64(&sniffer.hepTcpCount, 1)
+
+			length := binary.BigEndian.Uint16(message[4:6])
+			data := make([]byte, length-10)
+
+			// Read the incoming connection into the buffer.
+			_, err := conn.Read(data)
+			if err != nil {
+				fmt.Println("Error reading:", err.Error())
+				break
+			}
+
+			message = append(message, data...)
 
 			//If we wanna filter only SIP
 			if sniffer.collectOnlySIP {
