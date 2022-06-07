@@ -557,55 +557,84 @@ func (sniffer *SnifferSetup) printStats() {
 // Handles incoming tcp requests.
 func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
 
+	var bufferPool bytes.Buffer
+	message := make([]byte, 3000)
 	for {
 
-		// Make a buffer for HEP header.
-		message := make([]byte, 10)
-
 		// Read the incoming connection into the buffer.
-		_, err := conn.Read(message)
+		n, err := conn.Read(message)
 		if err != nil {
-			fmt.Println("Error reading:", err.Error())
+			logp.Err("closed tcp connection [1]:", err.Error())
 			break
 		}
 
-		logp.Debug("collector", "received hep data in tcp")
+		bufferPool.Write(message[:n])
 
-		if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
+		for {
 
-			//counter
-			atomic.AddUint64(&sniffer.hepTcpCount, 1)
+			logp.Debug("collector", "received hep data in tcp")
+			dataHeader := make([]byte, 10)
 
-			length := binary.BigEndian.Uint16(message[4:6])
-			data := make([]byte, length-10)
-
-			// Read the incoming connection into the buffer.
-			_, err := conn.Read(data)
+			n, err := bufferPool.Read(dataHeader)
 			if err != nil {
-				fmt.Println("Error reading:", err.Error())
+				if err.Error() != "EOF" {
+					logp.Err("error during read buffer: ", err)
+				}
 				break
 			}
 
-			message = append(message, data...)
-
-			//If we wanna filter only SIP
-			if sniffer.collectOnlySIP {
-				hep, err := decoder.DecodeHEP(message)
-				if err != nil {
-					logp.Err("Bad HEP!")
-				}
-				if hep.ProtoType != 1 {
-					logp.Debug("collector", "this is non sip")
-					continue
-				} else {
-					//counter
-					atomic.AddUint64(&sniffer.hepSIPCount, 1)
-				}
+			if n < 10 {
+				logp.Debug("sniffer", "error during read buffer len")
+				break
 			}
-			sniffer.worker.OnHEPPacket(message)
-		} else {
-			//counter
-			atomic.AddUint64(&sniffer.unknownCount, 1)
+
+			if bytes.HasPrefix(dataHeader, []byte{0x48, 0x45, 0x50, 0x33}) {
+
+				length := binary.BigEndian.Uint16(dataHeader)
+
+				for {
+
+					if int(length) >= (bufferPool.Len() - 10) {
+
+						dataHeader = append(dataHeader, bufferPool.Next(int(length)-10)...)
+
+						//If we wanna filter only SIP
+						if sniffer.collectOnlySIP {
+							hep, err := decoder.DecodeHEP(dataHeader)
+							if err != nil {
+								logp.Err("Bad HEP!")
+							}
+							if hep.ProtoType != 1 {
+								logp.Debug("collector", "this is non sip")
+								break
+							} else {
+								//counter
+								atomic.AddUint64(&sniffer.hepSIPCount, 1)
+							}
+						}
+						//counter
+						atomic.AddUint64(&sniffer.hepTcpCount, 1)
+						//send out
+						sniffer.worker.OnHEPPacket(dataHeader)
+						break
+
+					} else {
+
+						// Read the incoming connection into the buffer.
+						n, err := conn.Read(message)
+						if err != nil {
+							logp.Err("closed tcp connection [2]:", err.Error())
+							bufferPool.Reset()
+							break
+						}
+
+						bufferPool.Write(message[:n])
+					}
+				}
+			} else {
+				//counter
+				atomic.AddUint64(&sniffer.unknownCount, 1)
+			}
 		}
 	}
 
