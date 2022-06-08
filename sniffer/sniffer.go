@@ -341,7 +341,7 @@ LOOP:
 						continue
 					}
 					// Handle connections in a new goroutine.
-					go sniffer.handleRequest(conn)
+					go sniffer.handleRequestExtended(conn)
 				}
 
 			} else {
@@ -555,7 +555,66 @@ func (sniffer *SnifferSetup) printStats() {
 }
 
 // Handles incoming tcp requests.
-func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
+func (sniffer *SnifferSetup) handleRequestSimple(conn net.Conn) {
+
+	for {
+
+		// Make a buffer for HEP header.
+		message := make([]byte, 10)
+
+		// Read the incoming connection into the buffer.
+		_, err := conn.Read(message)
+		if err != nil {
+			fmt.Println("Error reading:", err.Error())
+			break
+		}
+
+		logp.Debug("collector", "received hep data in tcp")
+
+		if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
+
+			//counter
+			atomic.AddUint64(&sniffer.hepTcpCount, 1)
+
+			length := binary.BigEndian.Uint16(message[4:6])
+			data := make([]byte, length-10)
+
+			// Read the incoming connection into the buffer.
+			_, err := conn.Read(data)
+			if err != nil {
+				fmt.Println("Error reading:", err.Error())
+				break
+			}
+
+			message = append(message, data...)
+
+			//If we wanna filter only SIP
+			if sniffer.collectOnlySIP {
+				hep, err := decoder.DecodeHEP(message)
+				if err != nil {
+					logp.Err("Bad HEP!")
+				}
+				if hep.ProtoType != 1 {
+					logp.Debug("collector", "this is non sip")
+					continue
+				} else {
+					//counter
+					atomic.AddUint64(&sniffer.hepSIPCount, 1)
+				}
+			}
+			sniffer.worker.OnHEPPacket(message)
+		} else {
+			//counter
+			atomic.AddUint64(&sniffer.unknownCount, 1)
+		}
+	}
+
+	// Close the connection when you're done with it.
+	conn.Close()
+}
+
+// Handles incoming tcp requests.
+func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 
 	var bufferPool bytes.Buffer
 	message := make([]byte, 3000)
@@ -590,11 +649,11 @@ func (sniffer *SnifferSetup) handleRequest(conn net.Conn) {
 
 			if bytes.HasPrefix(dataHeader, []byte{0x48, 0x45, 0x50, 0x33}) {
 
-				length := binary.BigEndian.Uint16(dataHeader)
+				length := binary.BigEndian.Uint16(dataHeader[4:6])
 
 				for {
 
-					if int(length) >= (bufferPool.Len() - 10) {
+					if int(length) <= (bufferPool.Len() - 10) {
 
 						dataHeader = append(dataHeader, bufferPool.Next(int(length)-10)...)
 
