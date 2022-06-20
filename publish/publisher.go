@@ -4,8 +4,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sipcapture/heplify/decoder"
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/decoder"
 )
 
 type Outputer interface {
@@ -38,13 +38,21 @@ func (pub *Publisher) output(msg []byte) {
 
 func (pub *Publisher) Start(pq chan *decoder.Packet) {
 	for pkt := range pq {
+
 		atomic.AddUint64(&pub.pubCount, 1)
-		msg, err := EncodeHEP(pkt)
-		if err != nil {
-			logp.Warn("%v", err)
-			continue
+
+		//Version == 100 just for forwarding...
+		if pkt.Version == 100 {
+			pub.output(pkt.Payload)
+			logp.Debug("publisher", "sent hep message from collector")
+		} else {
+			msg, err := EncodeHEP(pkt)
+			if err != nil {
+				logp.Warn("%v", err)
+				continue
+			}
+			pub.output(msg)
 		}
-		pub.output(msg)
 	}
 }
 
