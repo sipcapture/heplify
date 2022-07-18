@@ -18,7 +18,7 @@ None if you use the binary from the releases
 
 ### Linux
 
-Download [heplify](https://github.com/sipcapture/heplify/releases) and execute 'chmod +x heplify'  
+Download [heplify](https://github.com/sipcapture/heplify/releases) and run `make`, then execute `chmod +x heplify`  
 
 ### Windows
 
