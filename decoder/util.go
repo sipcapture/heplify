@@ -97,7 +97,7 @@ func (p *Packet) MarshalJSON() ([]byte, error) {
 }
 
 func (d *Decoder) printPacketStats() {
-	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, SCTP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, duplicate: %d, fragments: %d, unknown: %d",
+	logp.Info("Packets since last minute IPv4: %d, IPv6: %d, UDP: %d, TCP: %d, SCTP: %d, RTCP: %d, RTCPFail: %d, DNS: %d, HEP: %d, duplicate: %d, fragments: %d, unknown: %d",
 		atomic.LoadUint64(&d.ip4Count),
 		atomic.LoadUint64(&d.ip6Count),
 		atomic.LoadUint64(&d.udpCount),
@@ -106,6 +106,7 @@ func (d *Decoder) printPacketStats() {
 		atomic.LoadUint64(&d.rtcpCount),
 		atomic.LoadUint64(&d.rtcpFailCount),
 		atomic.LoadUint64(&d.dnsCount),
+		atomic.LoadUint64(&d.hepCount),
 		atomic.LoadUint64(&d.dupCount),
 		atomic.LoadUint64(&d.fragCount),
 		atomic.LoadUint64(&d.unknownCount),
@@ -118,6 +119,7 @@ func (d *Decoder) printPacketStats() {
 	atomic.StoreUint64(&d.rtcpCount, 0)
 	atomic.StoreUint64(&d.rtcpFailCount, 0)
 	atomic.StoreUint64(&d.dnsCount, 0)
+	atomic.StoreUint64(&d.hepCount, 0)
 	atomic.StoreUint64(&d.dupCount, 0)
 	atomic.StoreUint64(&d.fragCount, 0)
 	atomic.StoreUint64(&d.unknownCount, 0)
