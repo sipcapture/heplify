@@ -46,7 +46,9 @@ type Decoder struct {
 	payload       gopacket.Payload
 	dedupCache    *freecache.Cache
 	filter        []string
+	filterIP      []string
 	filterSrcIP   []string
+	filterDstIP   []string
 	stats
 }
 
@@ -174,7 +176,9 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.parserTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
 
 	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+	d.filterIP = strings.Split(config.Cfg.DiscardIP, ",")
 	d.filterSrcIP = strings.Split(config.Cfg.DiscardSrcIP, ",")
+	d.filterDstIP = strings.Split(config.Cfg.DiscardDstIP, ",")
 
 	if config.Cfg.Dedup {
 		d.dedupCache = freecache.NewCache(20 * 1024 * 1024) // 20 MB
@@ -341,9 +345,30 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 }
 
 func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *layers.UDP, tcp *layers.TCP, sctp *layers.SCTP, flow gopacket.Flow, ci *gopacket.CaptureInfo, IPVersion, IPProtocol uint8, sIP, dIP net.IP) {
+	if config.Cfg.DiscardIP != "" {
+		for _, v := range d.filterIP {
+			if sIP.String() == v {
+				logp.Debug("discarding source IP [%s]", sIP.String())
+				return
+			}
+			if dIP.String() == v {
+				logp.Debug("discarding destination IP [%s]", dIP.String())
+				return
+			}
+		}
+	}
 	if config.Cfg.DiscardSrcIP != "" {
 		for _, v := range d.filterSrcIP {
 			if sIP.String() == v {
+				logp.Debug("discarding source IP [%s]", sIP.String())
+				return
+			}
+		}
+	}
+	if config.Cfg.DiscardDstIP != "" {
+		for _, v := range d.filterDstIP {
+			if dIP.String() == v {
+				logp.Debug("discarding destination IP [%s]", dIP.String())
 				return
 			}
 		}
@@ -380,7 +405,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				pkt := gopacket.NewPacket(pkt.Payload, d.hperm.LayerType(), gopacket.NoCopy)
 				HPERML := pkt.Layer(d.hperm.LayerType())
 				if HPERML != nil {
-					logp.Info("Packet was successfully decoded with HPERM layer decoder.")
+					logp.Info("HPERM layer detected!")
 					HPERMpkt, _ := HPERML.(*ownlayers.HPERM)
 					//HPERMContent := HPERMpkt.LayerContents()
 					HPERMPayload := HPERMpkt.LayerPayload()
