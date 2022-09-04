@@ -348,11 +348,11 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	if config.Cfg.DiscardIP != "" {
 		for _, v := range d.filterIP {
 			if sIP.String() == v {
-				logp.Debug("discarding source IP [%s]", sIP.String())
+				logp.Debug("discarding source IP", sIP.String())
 				return
 			}
 			if dIP.String() == v {
-				logp.Debug("discarding destination IP [%s]", dIP.String())
+				logp.Debug("discarding destination IP", dIP.String())
 				return
 			}
 		}
@@ -360,7 +360,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	if config.Cfg.DiscardSrcIP != "" {
 		for _, v := range d.filterSrcIP {
 			if sIP.String() == v {
-				logp.Debug("discarding source IP [%s]", sIP.String())
+				logp.Debug("discarding source IP", sIP.String())
 				return
 			}
 		}
@@ -368,7 +368,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	if config.Cfg.DiscardDstIP != "" {
 		for _, v := range d.filterDstIP {
 			if dIP.String() == v {
-				logp.Debug("discarding destination IP [%s]", dIP.String())
+				logp.Debug("discarding destination IP", dIP.String())
 				return
 			}
 		}
@@ -398,7 +398,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(udp.DstPort)
 			pkt.Payload = udp.Payload
 			atomic.AddUint64(&d.udpCount, 1)
-			logp.Debug("payload - UDP:\n%s", string(pkt.Payload))
+			logp.Debug("payload - UDP", string(pkt.Payload))
 
 			// HPERM layer check
 			if pkt.SrcPort == 7932 || pkt.DstPort == 7932 {
@@ -453,7 +453,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
 			atomic.AddUint64(&d.tcpCount, 1)
-			logp.Debug("payload", "TCP:\n%s", pkt)
+			logp.Debug("payload", "TCP", pkt)
 
 			if config.Cfg.Reassembly {
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)

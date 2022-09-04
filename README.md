@@ -155,8 +155,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 # Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060
 ./heplify -hs 192.168.1.1:9060 -dim OPTIONS,NOTIFY
 
-# Capture SIP packet with HPERM encapsulation on port 7932 and interface eth2, send to 192.168.1.1:9060 and print info on stdout
-./heplify -i eth2 -bpf "port 7932" -hs 192.168.1.1:9060
+# Capture SIP packet with HPERM encapsulation on port 7932 and interface eth2, send to 192.168.1.1:9060 and print debug info on stdout
+./heplify -i eth2 -bpf "port 7932" -hs 192.168.1.1:9060 -l debug -e
 
 # Run heplify in "HEP Collector" mode in order to receive HEP input via TCP on port 9060 and fork (output) to two HEP servers listening on port 9063
 ./heplify -e -hs HEPServer1:9063,HEPserver2:9063 -hin tcp:1.2.3.4:9060
