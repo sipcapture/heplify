@@ -50,7 +50,6 @@ type Decoder struct {
 }
 
 type stats struct {
-	_             uint32
 	fragCount     uint64
 	dupCount      uint64
 	dnsCount      uint64
@@ -63,6 +62,7 @@ type stats struct {
 	sctpCount     uint64
 	udpCount      uint64
 	unknownCount  uint64
+	_             uint32
 }
 
 type Packet struct {
