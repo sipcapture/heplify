@@ -64,12 +64,14 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
     	Fanout worker count for af_packet (default 4)
   -hi uint
     	HEP node ID (default 2002)
+  -hin
+     HEP collector listening protocol, address and port (example: "tcp:10.10.99.10:9060")
   -hn string
     	HEP node Name
   -hp string
     	HEP node PW
   -hs string
-    	HEP server address (default "127.0.0.1:9060")
+    	HEP server destination address and port (default "127.0.0.1:9060")
   -i string
     	Listen on interface (default "any")
   -l string
@@ -148,6 +150,10 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 
 # Capture and send packets except SIP OPTIONS and NOTIFY to 192.168.1.1:9060.
 ./heplify -hs 192.168.1.1:9060 -dim OPTIONS,NOTIFY
+
+# Run heplify in "HEP Collector" mode in order to receive HEP input via TCP on port 9060 and fork (output) to two HEP servers listening on port 9063
+./heplify -e -hs HEPServer1:9063,HEPserver2:9063 -hin tcp:1.2.3.4:9060
+
 
 ```
 

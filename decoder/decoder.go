@@ -61,6 +61,7 @@ type stats struct {
 	rtcpCount     uint64
 	rtcpFailCount uint64
 	tcpCount      uint64
+	hepCount      uint64
 	sctpCount     uint64
 	udpCount      uint64
 	unknownCount  uint64
@@ -79,6 +80,51 @@ type Packet struct {
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
+}
+
+// HEP chuncks
+const (
+	Version   = 1  // Chunk 0x0001 IP protocol family (0x02=IPv4, 0x0a=IPv6)
+	Protocol  = 2  // Chunk 0x0002 IP protocol ID (0x06=TCP, 0x11=UDP)
+	IP4SrcIP  = 3  // Chunk 0x0003 IPv4 source address
+	IP4DstIP  = 4  // Chunk 0x0004 IPv4 destination address
+	IP6SrcIP  = 5  // Chunk 0x0005 IPv6 source address
+	IP6DstIP  = 6  // Chunk 0x0006 IPv6 destination address
+	SrcPort   = 7  // Chunk 0x0007 Protocol source port
+	DstPort   = 8  // Chunk 0x0008 Protocol destination port
+	Tsec      = 9  // Chunk 0x0009 Unix timestamp, seconds
+	Tmsec     = 10 // Chunk 0x000a Unix timestamp, microseconds
+	ProtoType = 11 // Chunk 0x000b Protocol type (DNS, LOG, RTCP, SIP)
+	NodeID    = 12 // Chunk 0x000c Capture client ID
+	NodePW    = 14 // Chunk 0x000e Authentication key (plain text / TLS connection)
+	Payload   = 15 // Chunk 0x000f Captured packet payload
+	CID       = 17 // Chunk 0x0011 Correlation ID
+	Vlan      = 18 // Chunk 0x0012 VLAN
+	NodeName  = 19 // Chunk 0x0013 NodeName
+)
+
+// HEP represents HEP packet
+type HEP struct {
+	Version     uint32 `protobuf:"varint,1,req,name=Version" json:"Version"`
+	Protocol    uint32 `protobuf:"varint,2,req,name=Protocol" json:"Protocol"`
+	SrcIP       string `protobuf:"bytes,3,req,name=SrcIP" json:"SrcIP"`
+	DstIP       string `protobuf:"bytes,4,req,name=DstIP" json:"DstIP"`
+	SrcPort     uint32 `protobuf:"varint,5,req,name=SrcPort" json:"SrcPort"`
+	DstPort     uint32 `protobuf:"varint,6,req,name=DstPort" json:"DstPort"`
+	Tsec        uint32 `protobuf:"varint,7,req,name=Tsec" json:"Tsec"`
+	Tmsec       uint32 `protobuf:"varint,8,req,name=Tmsec" json:"Tmsec"`
+	ProtoType   uint32 `protobuf:"varint,9,req,name=ProtoType" json:"ProtoType"`
+	NodeID      uint32 `protobuf:"varint,10,req,name=NodeID" json:"NodeID"`
+	NodePW      string `protobuf:"bytes,11,req,name=NodePW" json:"NodePW"`
+	Payload     string `protobuf:"bytes,12,req,name=Payload" json:"Payload"`
+	CID         string `protobuf:"bytes,13,req,name=CID" json:"CID"`
+	Vlan        uint32 `protobuf:"varint,14,req,name=Vlan" json:"Vlan"`
+	ProtoString string
+	Timestamp   time.Time
+	SIP         string
+	NodeName    string
+	TargetName  string
+	SID         string
 }
 
 type Context struct {
@@ -437,4 +483,15 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	} else {
 		atomic.AddUint64(&d.unknownCount, 1)
 	}
+}
+
+func (d *Decoder) ProcessHEPPacket(data []byte) {
+
+	pkt := &Packet{
+		Version: 100,
+		Payload: data,
+	}
+	atomic.AddUint64(&d.hepCount, 1)
+
+	PacketQueue <- pkt
 }
