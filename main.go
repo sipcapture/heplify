@@ -12,7 +12,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.63"
+const version = "heplify 1.64"
 
 func createFlags() {
 
@@ -64,6 +64,8 @@ func createFlags() {
 	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")
 	flag.StringVar(&config.Cfg.DiscardSrcIP, "disip", "", "Discard uninteresting SIP packets by Source IP(s)")
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
+	flag.StringVar(&config.Cfg.HepCollector, "hin", "", "HEP collector address [udp:127.0.0.1:9093]")
+	flag.BoolVar(&config.Cfg.CollectOnlySip, "collectonlysip", false, "collect only sip")
 	flag.StringVar(&config.Cfg.HepServer, "hs", "127.0.0.1:9060", "HEP server address")
 	flag.StringVar(&config.Cfg.HepNodePW, "hp", "", "HEP node PW")
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP node ID")
@@ -125,7 +127,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	for i := 0; i < worker; i++ {
-		capture, err := sniffer.New(config.Cfg.Mode, config.Cfg.Iface)
+		capture, err := sniffer.New(&config.Cfg)
 		checkCritErr(err)
 
 		defer func() {
