@@ -38,89 +38,89 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 
 ```bash
  -assembly_debug_log
-    	If true, the github.com/google/gopacket/tcpassembly library will log verbose debugging information (at least one line per packet)
+	If true, the github.com/google/gopacket/tcpassembly library will log verbose debugging information (at least one line per packet)
   -assembly_memuse_log
-    	If true, the github.com/google/gopacket/tcpassembly library will log information regarding its memory use every once in a while.
+	If true, the github.com/google/gopacket/tcpassembly library will log information regarding its memory use every once in a while.
   -b int
-    	Interface buffersize (MB) (default 32)
+	Interface buffersize (MB) (default 32)
   -d string
-    	Enable certain debug selectors [defrag,layer,payload,rtp,rtcp,sdp]
+	Enable certain debug selectors [defrag,layer,payload,rtp,rtcp,sdp]
   -dd
-    	Deduplicate packets
+	Deduplicate packets
   -di string
-    	Discard uninteresting packets by any string
+	Discard uninteresting packets by any string
   -dim string
-    	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
   -diip string
-     Discard uninteresting SIP packets by Source or Destination IP(s)
+	Discard uninteresting SIP packets by Source or Destination IP(s)
   -disip string
-    	Discard uninteresting SIP packets by Source IP(s)
+	Discard uninteresting SIP packets by Source IP(s)
   -didip string
-     Discard uninteresting SIP packets by Destination IP(s)
+	Discard uninteresting SIP packets by Destination IP(s)
   -e	
-     Log to stderr and disable syslog/file output
+	Log to stderr and disable syslog/file output
   -erspan
-    	erspan
+	erspan
   -fg uint
-    	Fanout group ID for af_packet
+	Fanout group ID for af_packet
   -fi string
-    	Filter interesting packets by any string
+	Filter interesting packets by any string
   -fw int
-    	Fanout worker count for af_packet (default 4)
+	Fanout worker count for af_packet (default 4)
   -hi uint
-    	HEP node ID (default 2002)
+	HEP node ID (default 2002)
   -hin
-     HEP collector listening protocol, address and port (example: "tcp:10.10.99.10:9060")
+	HEP collector listening protocol, address and port (example: "tcp:10.10.99.10:9060")
   -hn string
-    	HEP node Name
+	HEP node Name
   -hp string
-    	HEP node PW
+	HEP node PW
   -hs string
-    	HEP server destination address and port (default "127.0.0.1:9060")
+	HEP server destination address and port (default "127.0.0.1:9060")
   -i string
-    	Listen on interface (default "any")
+	Listen on interface (default "any")
   -l string
-    	Log level [debug, info, warning, error] (default "info")
+	Log level [debug, info, warning, error] (default "info")
   -lp int
-    	Loop count over ReadFile. Use 0 to loop forever (default 1)
+	Loop count over ReadFile. Use 0 to loop forever (default 1)
   -m string
-    	Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
+	Capture modes [SIP, SIPDNS, SIPLOG, SIPRTCP] (default "SIPRTCP")
   -n string
-    	Log filename (default "heplify.log")
+	Log filename (default "heplify.log")
   -nt string
-    	Network types are [udp, tcp, tls] (default "udp")
+	Network types are [udp, tcp, tls] (default "udp")
   -o	
-     Read packet for packet
+	Read packet for packet
   -p string
-    	Log filepath (default "./")
+	Log filepath (default "./")
   -pr string
-    	Portrange to capture SIP (default "5060-5090")
+	Portrange to capture SIP (default "5060-5090")
   -protobuf
-    	Use Protobuf on wire
+	Use Protobuf on wire
   -rf string
-    	Read pcap file
+	Read pcap file
   -rs
-    	Use packet timestamps with maximum pcap read speed
+	Use packet timestamps with maximum pcap read speed
   -rt int
-    	Pcap rotation time in minutes (default 60)
+	Pcap rotation time in minutes (default 60)
   -s int
-    	Snaplength (default 8192)
+	Snaplength (default 8192)
   -sl
-    	Log to syslog
+	Log to syslog
   -t string
-    	Capture types are [pcap, af_packet] (default "pcap")
+	Capture types are [pcap, af_packet] (default "pcap")
   -tcpassembly
-    	If true, tcpassembly will be enabled
+	If true, tcpassembly will be enabled
   -tcpsendretries uint
-    	Number of retries for sending before giving up and reconnecting (default 64)
+	Number of retries for sending before giving up and reconnecting (default 64)
   -version
-    	Show heplify version
+	Show heplify version
   -vlan
-    	vlan
+	vlan
   -wf string
-    	Path to write pcap file
+	Path to write pcap file
   -zf
-    	Enable pcap compression
+	Enable pcap compression
 ```
 
 ## Examples
