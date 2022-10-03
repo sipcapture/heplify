@@ -51,13 +51,14 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
     	Discard uninteresting packets by any string
   -dim string
     	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
-   -diip string
-        Discard uninteresting SIP packets by Source or Destination IP(s)
+  -diip string
+     Discard uninteresting SIP packets by Source or Destination IP(s)
   -disip string
     	Discard uninteresting SIP packets by Source IP(s)
   -didip string
-        Discard uninteresting SIP packets by Destination IP(s)
-  -e	Log to stderr and disable syslog/file output
+     Discard uninteresting SIP packets by Destination IP(s)
+  -e	
+     Log to stderr and disable syslog/file output
   -erspan
     	erspan
   -fg uint
@@ -88,7 +89,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
     	Log filename (default "heplify.log")
   -nt string
     	Network types are [udp, tcp, tls] (default "udp")
-  -o	Read packet for packet
+  -o	
+     Read packet for packet
   -p string
     	Log filepath (default "./")
   -pr string
@@ -119,7 +121,6 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
     	Path to write pcap file
   -zf
     	Enable pcap compression
-
 ```
 
 ## Examples
