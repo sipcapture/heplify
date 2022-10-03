@@ -348,9 +348,11 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	if config.Cfg.DiscardIP != "" {
 		for _, v := range d.filterIP {
 			if dIP.String() == v {
+				logp.Debug("discarding destination IP", dIP.String())
 				return
 			}
 			if sIP.String() == v {
+				logp.Debug("discarding source IP", sIP.String())
 				return
 			}
 		}
@@ -367,14 +369,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		for _, v := range d.filterDstIP {
 			if dIP.String() == v {
 				logp.Debug("discarding destination IP", dIP.String())
-				return
-			}
-		}
-	}
-
-	if config.Cfg.DiscardDstIP != "" {
-		for _, v := range d.filterDstIP {
-			if dIP.String() == v {
 				return
 			}
 		}
