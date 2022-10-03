@@ -53,7 +53,6 @@ type Decoder struct {
 }
 
 type stats struct {
-	_             uint32
 	fragCount     uint64
 	dupCount      uint64
 	dnsCount      uint64
@@ -66,6 +65,7 @@ type stats struct {
 	sctpCount     uint64
 	udpCount      uint64
 	unknownCount  uint64
+	_             uint32
 }
 
 type Packet struct {
@@ -347,12 +347,10 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *layers.UDP, tcp *layers.TCP, sctp *layers.SCTP, flow gopacket.Flow, ci *gopacket.CaptureInfo, IPVersion, IPProtocol uint8, sIP, dIP net.IP) {
 	if config.Cfg.DiscardIP != "" {
 		for _, v := range d.filterIP {
-			if sIP.String() == v {
-				logp.Debug("discarding source IP", sIP.String())
+			if dIP.String() == v {
 				return
 			}
-			if dIP.String() == v {
-				logp.Debug("discarding destination IP", dIP.String())
+			if sIP.String() == v {
 				return
 			}
 		}
@@ -369,6 +367,14 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		for _, v := range d.filterDstIP {
 			if dIP.String() == v {
 				logp.Debug("discarding destination IP", dIP.String())
+				return
+			}
+		}
+	}
+
+	if config.Cfg.DiscardDstIP != "" {
+		for _, v := range d.filterDstIP {
+			if dIP.String() == v {
 				return
 			}
 		}

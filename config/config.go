@@ -18,9 +18,9 @@ type Config struct {
 	DiscardSrcIP   string
 	DiscardDstIP   string
 	Zip            bool
-	HepServer      string
 	HepCollector   string
 	CollectOnlySip bool
+	HepServer      string
 	HepNodePW      string
 	HepNodeID      uint
 	HepNodeName    string
