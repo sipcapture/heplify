@@ -36,6 +36,7 @@ type Decoder struct {
 	gre           layers.GRE
 	eth           layers.Ethernet
 	vxl           ownlayers.VXLAN
+	hperm         ownlayers.HPERM
 	ip4           layers.IPv4
 	ip6           layers.IPv6
 	tcp           layers.TCP
@@ -45,12 +46,13 @@ type Decoder struct {
 	payload       gopacket.Payload
 	dedupCache    *freecache.Cache
 	filter        []string
+	filterIP      []string
 	filterSrcIP   []string
+	filterDstIP   []string
 	stats
 }
 
 type stats struct {
-	_             uint32
 	fragCount     uint64
 	dupCount      uint64
 	dnsCount      uint64
@@ -63,6 +65,7 @@ type stats struct {
 	sctpCount     uint64
 	udpCount      uint64
 	unknownCount  uint64
+	_             uint32
 }
 
 type Packet struct {
@@ -155,6 +158,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	dlp.AddDecodingLayer(&d.gre)
 	dlp.AddDecodingLayer(&d.eth)
 	dlp.AddDecodingLayer(&d.vxl)
+	//dlp.AddDecodingLayer(&d.hperm)
 	dlp.AddDecodingLayer(&d.ip4)
 	dlp.AddDecodingLayer(&d.ip6)
 	dlp.AddDecodingLayer(&d.sctp)
@@ -172,7 +176,9 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.parserTCP = gopacket.NewDecodingLayerParser(layers.LayerTypeTCP, &d.tcp)
 
 	d.filter = strings.Split(strings.ToUpper(config.Cfg.DiscardMethod), ",")
+	d.filterIP = strings.Split(config.Cfg.DiscardIP, ",")
 	d.filterSrcIP = strings.Split(config.Cfg.DiscardSrcIP, ",")
+	d.filterDstIP = strings.Split(config.Cfg.DiscardDstIP, ",")
 
 	if config.Cfg.Dedup {
 		d.dedupCache = freecache.NewCache(20 * 1024 * 1024) // 20 MB
@@ -339,9 +345,30 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 }
 
 func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *layers.UDP, tcp *layers.TCP, sctp *layers.SCTP, flow gopacket.Flow, ci *gopacket.CaptureInfo, IPVersion, IPProtocol uint8, sIP, dIP net.IP) {
+	if config.Cfg.DiscardIP != "" {
+		for _, v := range d.filterIP {
+			if dIP.String() == v {
+				logp.Debug("discarding destination IP", dIP.String())
+				return
+			}
+			if sIP.String() == v {
+				logp.Debug("discarding source IP", sIP.String())
+				return
+			}
+		}
+	}
 	if config.Cfg.DiscardSrcIP != "" {
 		for _, v := range d.filterSrcIP {
 			if sIP.String() == v {
+				logp.Debug("discarding source IP", sIP.String())
+				return
+			}
+		}
+	}
+	if config.Cfg.DiscardDstIP != "" {
+		for _, v := range d.filterDstIP {
+			if dIP.String() == v {
+				logp.Debug("discarding destination IP", dIP.String())
 				return
 			}
 		}
@@ -371,7 +398,23 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(udp.DstPort)
 			pkt.Payload = udp.Payload
 			atomic.AddUint64(&d.udpCount, 1)
-			logp.Debug("payload", "UDP:\n%s", pkt)
+			logp.Debug("payload - UDP", string(pkt.Payload))
+
+			// HPERM layer check
+			if pkt.SrcPort == 7932 || pkt.DstPort == 7932 {
+				pkt := gopacket.NewPacket(pkt.Payload, d.hperm.LayerType(), gopacket.NoCopy)
+				HPERML := pkt.Layer(d.hperm.LayerType())
+				if HPERML != nil {
+					logp.Info("HPERM layer detected!")
+					HPERMpkt, _ := HPERML.(*ownlayers.HPERM)
+					//HPERMContent := HPERMpkt.LayerContents()
+					HPERMPayload := HPERMpkt.LayerPayload()
+					//logp.Info("HPERM Content:", HPERMContent)
+					//logp.Info("Payload: ", HPERMPayload)
+					// call again the process pkt to dissect the inner layers (aka the real pkt)
+					d.Process(HPERMPayload, ci)
+				}
+			}
 
 			if config.Cfg.Mode == "SIPLOG" {
 				if udp.DstPort == 514 {
@@ -403,7 +446,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
 			atomic.AddUint64(&d.tcpCount, 1)
-			logp.Debug("payload", "TCP:\n%s", pkt)
+			logp.Debug("payload", "TCP", pkt)
 
 			if config.Cfg.Reassembly {
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)

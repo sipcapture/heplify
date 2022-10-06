@@ -14,11 +14,13 @@ type Config struct {
 	Filter         string
 	Discard        string
 	DiscardMethod  string
+	DiscardIP      string
 	DiscardSrcIP   string
+	DiscardDstIP   string
 	Zip            bool
-	HepServer      string
 	HepCollector   string
 	CollectOnlySip bool
+	HepServer      string
 	HepNodePW      string
 	HepNodeID      uint
 	HepNodeName    string
