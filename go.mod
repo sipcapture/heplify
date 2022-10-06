@@ -10,7 +10,6 @@ require (
 	github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846
 	github.com/segmentio/encoding v0.1.15
 	github.com/stretchr/testify v1.6.1
-	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	golang.org/x/net v0.0.0-20200822124328-c89045814202
 	golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6 // indirect
 )

@@ -265,7 +265,7 @@ func correlateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 				ssrcBytes, srcIP, srcPort, dstIP, dstPort, info)
 		}
 		if jsonRTCP == nil {
-			// Not RTP or broken RTP
+			// Not RTCP or broken RTCP
 			return nil, nil
 		}
 	}
