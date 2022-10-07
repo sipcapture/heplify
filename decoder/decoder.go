@@ -500,6 +500,20 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 
 func (d *Decoder) ProcessHEPPacket(data []byte) {
 
+	if config.Cfg.DiscardMethod != "" {
+		h, err := DecodeHEP(data)
+		if err == nil {
+			c := internal.ParseCSeq([]byte(h.Payload))
+			if c != nil {
+				for _, v := range d.filter {
+					if string(c) == v {
+						return
+					}
+				}
+			}
+		}
+	}
+
 	pkt := &Packet{
 		Version: 100,
 		Payload: data,
