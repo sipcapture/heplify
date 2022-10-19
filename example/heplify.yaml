@@ -9,25 +9,17 @@ replaces:
 - heplify
 provides:
 - heplify
-maintainer: "QXIP SIPCapture <support@sipcapture.org>"
+maintainer: "QXIP Sipcapture <support@sipcapture.org>"
 description: |
     HEP Capture Agent for HOMER/SIPCAPTURE
 vendor: "QXIP"
 homepage: "http://qxip.net"
 license: "AGPLv3"
-bindir: "/usr/local/bin"
-files:
-  /tmp/pkg/heplify: "/usr/local/bin/heplify"
-config_files:
-  /tmp/pkg/example/heplify.service: "/lib/systemd/system/heplify.service"
-#  /tmp/pkg/etc/heplify.toml: "/opt/heplify/heplify.toml"
-#overrides:
-#  rpm:
-#    scripts:
-#      preinstall: ./scripts/preinstall.sh
-#      postremove: ./scripts/postremove.sh
-#  deb:
-#    scripts:
-#      postinstall: ./scripts/postinstall.sh
-#      preremove: ./scripts/preremove.sh
-
+contents:
+  # Basic file that applies to all packagers
+  - src: /tmp/pkg/heplify
+    dst: /usr/local/bin/heplify
+     # Simple config file
+  - src: /tmp/pkg/example/heplify.service
+    dst: /lib/systemd/system/heplify.service
+    type: config

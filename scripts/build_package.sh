@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=$(cat $PWD/main.go | grep "const version" | grep -Po '\d.\d+')
+VERSION=$(cat $PWD/main.go | grep "const version" | grep -Po '\d.\d+.\d+')
 
 PACKAGE=${PACKAGE:-"heplify"}
 RELEASE=${VERSION:-"1.5.3"}
@@ -26,4 +26,3 @@ docker run --rm \
   -v $PWD:/tmp/pkg \
   -e VERSION="$RELEASE" \
   goreleaser/nfpm pkg --config /tmp/pkg/example/$PACKAGE.yaml --target "/tmp/pkg/$PACKAGE-$RELEASE-$ARCH.$EXT"
-
