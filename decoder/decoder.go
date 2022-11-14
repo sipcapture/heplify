@@ -35,6 +35,7 @@ type Decoder struct {
 	d1q           layers.Dot1Q
 	gre           layers.GRE
 	eth           layers.Ethernet
+	etherip       layers.EtherIP
 	vxl           ownlayers.VXLAN
 	hperm         ownlayers.HPERM
 	ip4           layers.IPv4
@@ -157,6 +158,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	dlp.AddDecodingLayer(&d.d1q)
 	dlp.AddDecodingLayer(&d.gre)
 	dlp.AddDecodingLayer(&d.eth)
+	dlp.AddDecodingLayer(&d.etherip)
 	dlp.AddDecodingLayer(&d.vxl)
 	//dlp.AddDecodingLayer(&d.hperm)
 	dlp.AddDecodingLayer(&d.ip4)
