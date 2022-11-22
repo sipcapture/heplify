@@ -89,6 +89,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Log filename (default "heplify.log")
   -nt string
 	Network types are [udp, tcp, tls] (default "udp")
+  -bpf string
+	Custom bpf filter (default "")
   -o	
 	Read packet for packet
   -p string
