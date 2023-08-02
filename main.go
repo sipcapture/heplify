@@ -139,6 +139,11 @@ func main() {
 
 		wg.Add(1)
 		go func() {
+
+			if config.Cfg.HepNodePW != "" {
+				capture.SendPing()
+			}
+
 			err = capture.Run()
 			checkCritErr(err)
 			wg.Done()
