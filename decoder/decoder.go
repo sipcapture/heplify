@@ -531,3 +531,16 @@ func (d *Decoder) ProcessHEPPacket(data []byte) {
 
 	PacketQueue <- pkt
 }
+
+func (d *Decoder) SendPingHEPPacket() {
+
+	var data = []byte{0x48, 0x45, 0x50, 0x33, 0x3, 0xa}
+	pkt := &Packet{
+		Version: 0,
+		Payload: data,
+	}
+
+	atomic.AddUint64(&d.hepCount, 1)
+
+	PacketQueue <- pkt
+}

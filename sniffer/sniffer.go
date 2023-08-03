@@ -51,11 +51,13 @@ type SnifferSetup struct {
 type MainWorker struct {
 	publisher *publish.Publisher
 	decoder   *decoder.Decoder
+	ping      *decoder.Decoder
 }
 
 type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 	OnHEPPacket(data []byte)
+	SendPingHEPPacket()
 }
 
 type stats struct {
@@ -93,6 +95,10 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 
 func (mw *MainWorker) OnHEPPacket(data []byte) {
 	mw.decoder.ProcessHEPPacket(data)
+}
+
+func (mw *MainWorker) SendPingHEPPacket() {
+	mw.decoder.SendPingHEPPacket()
 }
 
 func (sniffer *SnifferSetup) setFromConfig() error {
@@ -313,6 +319,11 @@ func New(cfgMain *config.Config) (*SnifferSetup, error) {
 	go sniffer.printStats()
 
 	return sniffer, nil
+}
+
+func (sniffer *SnifferSetup) SendPing() error {
+	sniffer.worker.SendPingHEPPacket()
+	return nil
 }
 
 func (sniffer *SnifferSetup) Run() error {

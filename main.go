@@ -12,7 +12,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.2"
+const version = "heplify 1.65.3"
 
 func createFlags() {
 
@@ -139,6 +139,11 @@ func main() {
 
 		wg.Add(1)
 		go func() {
+
+			if config.Cfg.HepNodePW != "" {
+				capture.SendPing()
+			}
+
 			err = capture.Run()
 			checkCritErr(err)
 			wg.Done()
