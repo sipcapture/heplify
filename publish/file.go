@@ -16,6 +16,15 @@ func (fo *FileOutputer) Output(msg []byte) {
 	}
 }
 
+func (fo *FileOutputer) SendPingPacket(msg []byte) {
+	h, err := DecodeHEP(msg)
+	if err == nil {
+		logp.Info("%s\n", h.String())
+	} else {
+		logp.Warn("%s", err)
+	}
+}
+
 func NewFileOutputer() (*FileOutputer, error) {
 	fo := &FileOutputer{}
 	return fo, nil

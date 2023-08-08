@@ -10,6 +10,7 @@ import (
 
 type Outputer interface {
 	Output(msg []byte)
+	SendPingPacket(msg []byte)
 }
 
 type Publisher struct {
@@ -36,6 +37,15 @@ func (pub *Publisher) output(msg []byte) {
 	pub.outputer.Output(msg)
 }
 
+func (pub *Publisher) setHEPPing(msg []byte) {
+	defer func() {
+		if err := recover(); err != nil {
+			logp.Err("recover setHEPPing %v", err)
+		}
+	}()
+	pub.outputer.SendPingPacket(msg)
+}
+
 func (pub *Publisher) Start(pq chan *decoder.Packet) {
 	for pkt := range pq {
 
@@ -45,12 +55,22 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 		if pkt.Version == 100 {
 			pub.output(pkt.Payload)
 			logp.Debug("publisher", "sent hep message from collector")
+		} else if pkt.Version == 0 {
+			//this is PING
+			msg, err := EncodeHEP(pkt)
+			if err != nil {
+				logp.Warn("%v", err)
+				continue
+			}
+			pub.setHEPPing(msg)
+			logp.Debug("publisher", "sent hep ping from collector")
 		} else {
 			msg, err := EncodeHEP(pkt)
 			if err != nil {
 				logp.Warn("%v", err)
 				continue
 			}
+
 			pub.output(msg)
 		}
 	}

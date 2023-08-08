@@ -21,6 +21,7 @@ type HEPOutputer struct {
 	hepQueue chan []byte
 	addr     []string
 	client   []HEPConn
+	msgPing  []byte
 }
 
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
@@ -57,6 +58,7 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 		return err
 	}
 	h.client[n].writer.Reset(h.client[n].conn)
+	h.ReSendPingPacket()
 	return err
 }
 
@@ -82,6 +84,25 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 
 func (h *HEPOutputer) Output(msg []byte) {
 	h.hepQueue <- msg
+}
+
+func (h *HEPOutputer) SendPingPacket(msg []byte) {
+
+	if h.msgPing == nil {
+		h.msgPing = make([]byte, len(msg))
+	}
+
+	copy(h.msgPing, msg)
+
+	h.hepQueue <- h.msgPing
+}
+
+func (h *HEPOutputer) ReSendPingPacket() {
+
+	if h.msgPing != nil {
+		logp.Debug("collector", "send ping packet")
+		h.hepQueue <- h.msgPing
+	}
 }
 
 func (h *HEPOutputer) Send(msg []byte) {
