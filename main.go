@@ -12,7 +12,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.3"
+const version = "heplify 1.65.5"
 
 func createFlags() {
 
