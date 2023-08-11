@@ -72,7 +72,7 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 			return err
 		}
 	} else if config.Cfg.Network == "tls" {
-		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: true}); err != nil {
+		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: config.Cfg.SkipVerify}); err != nil {
 			return err
 		}
 	} else {
