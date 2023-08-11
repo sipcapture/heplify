@@ -12,7 +12,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.5"
+const version = "heplify 1.65.6"
 
 func createFlags() {
 
@@ -77,6 +77,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
 	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 64, "Number of retries for sending before giving up and reconnecting")
 	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
+	flag.BoolVar(&config.Cfg.SkipVerify, "skipverify", false, "skip certifcate validation")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig

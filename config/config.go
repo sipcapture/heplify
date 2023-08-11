@@ -29,6 +29,7 @@ type Config struct {
 	Reassembly     bool
 	SendRetries    uint
 	Version        bool
+	SkipVerify     bool
 }
 
 type InterfacesConfig struct {
