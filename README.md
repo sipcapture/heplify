@@ -26,7 +26,7 @@ Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 
 ### Development build
 
-If you have Go 1.11+ installed, build the latest heplify binary by running `make`.
+If you have Go 1.18+ installed, build the latest heplify binary by running `make`.
 
 You can also build a docker image:
 
