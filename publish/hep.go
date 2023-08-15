@@ -58,7 +58,7 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 		return err
 	}
 	h.client[n].writer.Reset(h.client[n].conn)
-	h.ReSendPingPacket()
+	//h.ReSendPingPacket()
 	return err
 }
 
@@ -124,6 +124,15 @@ func (h *HEPOutputer) Send(msg []byte) {
 					logp.Err("reconnect error: %v", err)
 					return
 				} else {
+					if h.msgPing != nil {
+						logp.Debug("collector", "send ping packet after disconnect")
+						h.client[n].writer.Write(h.msgPing)
+						err = h.client[n].writer.Flush()
+						if err != nil {
+							logp.Err("Bad during resend ping packet : %v", err)
+						}
+					}
+
 					h.client[n].writer.Write(msg)
 					err = h.client[n].writer.Flush()
 					if err != nil {
