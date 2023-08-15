@@ -123,6 +123,12 @@ func (h *HEPOutputer) Send(msg []byte) {
 				if err = h.ReConnect(n); err != nil {
 					logp.Err("reconnect error: %v", err)
 					return
+				} else {
+					h.client[n].writer.Write(msg)
+					err = h.client[n].writer.Flush()
+					if err != nil {
+						logp.Err("Bad resend: %v", err)
+					}
 				}
 			}
 		}
