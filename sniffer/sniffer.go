@@ -33,9 +33,6 @@ type SnifferSetup struct {
 	isAlive          bool
 	dumpChan         chan *dump.Packet
 	mode             string
-	collectorAddress string
-	isCollector      bool
-	collectOnlySIP   bool
 	bpf              string
 	file             string
 	filter           []string
@@ -45,6 +42,13 @@ type SnifferSetup struct {
 	collectorTCPconn *net.TCPListener
 	isCollectorTcp   bool
 	DataSource       gopacket.PacketDataSource
+	//collector mode
+	collectorAddress string
+	isCollector      bool
+	collectOnlySIP   bool
+	filterIP         []string
+	filterSrcIP      []string
+	filterDstIP      []string
 	stats
 }
 
@@ -285,6 +289,9 @@ func New(cfgMain *config.Config) (*SnifferSetup, error) {
 		sniffer.collectorAddress = cfgMain.HepCollector
 		sniffer.isCollector = true
 		sniffer.collectOnlySIP = cfgMain.CollectOnlySip
+		sniffer.filterIP = strings.Split(cfgMain.DiscardIP, ",")
+		sniffer.filterSrcIP = strings.Split(cfgMain.DiscardSrcIP, ",")
+		sniffer.filterDstIP = strings.Split(cfgMain.DiscardDstIP, ",")
 	}
 
 	if sniffer.file == "" {
@@ -331,7 +338,14 @@ func (sniffer *SnifferSetup) Run() error {
 		loopCount   = 1
 		lastPktTime *time.Time
 		retError    error
+		doHepParse  bool
+		hep         *decoder.HEP
 	)
+
+	//pre parsing in collector mode
+	if sniffer.collectOnlySIP || len(sniffer.filterIP) > 0 || len(sniffer.filterSrcIP) > 0 || len(sniffer.filterDstIP) > 0 {
+		doHepParse = true
+	}
 
 LOOP:
 	for sniffer.isAlive {
@@ -370,20 +384,57 @@ LOOP:
 					//counter
 					atomic.AddUint64(&sniffer.hepUDPCount, 1)
 
-					//If we wanna filter only SIP
-					if sniffer.collectOnlySIP {
-						hep, err := decoder.DecodeHEP(message[:rlen])
+					if doHepParse {
+						hep, err = decoder.DecodeHEP(message[:rlen])
 						if err != nil {
 							logp.Err("Bad HEP!")
-						}
-						if hep.ProtoType != 1 {
-							logp.Debug("collector", "this is non sip")
 							continue
-						} else {
-							//counter
+						}
+
+						if hep.ProtoType == 1 {
 							atomic.AddUint64(&sniffer.hepSIPCount, 1)
 						}
 					}
+
+					//If we wanna filter only SIP
+					if hep != nil {
+						if sniffer.collectOnlySIP && hep.ProtoType != 1 {
+							logp.Debug("collector", "this is non sip")
+							continue
+						}
+						discardMessage := false
+						for _, v := range sniffer.filterIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterSrcIP {
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterDstIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+						}
+
+						if discardMessage {
+							continue
+						}
+					}
+
 					sniffer.worker.OnHEPPacket(message[:rlen])
 				} else {
 					//counter
