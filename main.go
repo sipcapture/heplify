@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/negbie/logp"
@@ -12,7 +14,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.10"
+const version = "heplify 1.65.11"
 
 func createFlags() {
 
@@ -79,6 +81,10 @@ func createFlags() {
 	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 0, "Number of retries for sending before giving up and reconnecting")
 	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
 	flag.BoolVar(&config.Cfg.SkipVerify, "skipverify", false, "skip certifcate validation")
+	flag.BoolVar(&config.Cfg.HEPBufferEnable, "hep-buffer", false, "enable buffer messages if connection to HEP server broken")
+	flag.StringVar(&config.Cfg.HEPBufferSize, "hep-buffer-max-size", "0", "max buffer size, can be B, MB, GB, TB. By default - unlimited")
+	flag.StringVar(&config.Cfg.HEPBufferFile, "hep-buffer-file", "HEP-Buffer.dump", "filename and location for hep-buffer file")
+
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
@@ -97,6 +103,43 @@ func createFlags() {
 	checkErr(err)
 	config.Cfg.Filter, err = strconv.Unquote(`"` + config.Cfg.Filter + `"`)
 	checkErr(err)
+}
+
+func Human2FileSize(size string) (int64, error) {
+
+	suffixes := [5]string{"B", "KB", "MB", "GB", "TB"} // Intialized with values
+	var bytesSize int64
+
+	for i, suffix := range suffixes {
+
+		if i == 0 {
+			continue
+		}
+
+		if strings.HasSuffix(size, suffix) {
+			dataBytes := strings.TrimSuffix(size, suffix)
+			baseVar, err := strconv.Atoi(dataBytes)
+			if err != nil {
+				return 0, err
+			} else {
+				bytesSize = int64(math.Pow(float64(1024), float64(i))) * int64(baseVar)
+				return int64(bytesSize), nil
+			}
+		}
+	}
+
+	if strings.HasSuffix(size, "B") {
+
+		dataBytes := strings.TrimSuffix(size, "B")
+		baseVar, err := strconv.Atoi(dataBytes)
+		if err != nil {
+			return 0, err
+		} else {
+			return int64(baseVar), nil
+		}
+	}
+
+	return bytesSize, fmt.Errorf("not found a valid suffix")
 }
 
 func checkErr(err error) {
@@ -127,6 +170,16 @@ func main() {
 	if config.Cfg.Iface.Type == "af_packet" &&
 		config.Cfg.Iface.FanoutID > 0 && config.Cfg.Iface.FanoutWorker > 1 {
 		worker = config.Cfg.Iface.FanoutWorker
+	}
+
+	if config.Cfg.HEPBufferSize != "0" && config.Cfg.HEPBufferSize != "" {
+		config.Cfg.MaxBufferSizeBytes, err = Human2FileSize(config.Cfg.HEPBufferSize)
+		if err != nil {
+			fmt.Println("couldn't convert buffer size to bytes", err)
+			os.Exit(1)
+		} else {
+			fmt.Println("Maximum HEP file size is ", config.Cfg.MaxBufferSizeBytes, "bytes. You provided: ", config.Cfg.HEPBufferSize)
+		}
 	}
 
 	var wg sync.WaitGroup

@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
+	"runtime/debug"
 	"strings"
 	"unicode"
 
@@ -58,6 +60,10 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 		return err
 	}
 	h.client[n].writer.Reset(h.client[n].conn)
+
+	if _, err := h.copyHEPFileOut(n); err != nil {
+		logp.Err("Sending HEP from file error....:", err)
+	}
 	//h.ReSendPingPacket()
 	return err
 }
@@ -137,8 +143,12 @@ func (h *HEPOutputer) Send(msg []byte) {
 					err = h.client[n].writer.Flush()
 					if err != nil {
 						logp.Err("Bad resend: %v", err)
+						h.copyHEPbufftoFile(msg)
+
 					}
 				}
+			} else {
+				h.copyHEPbufftoFile(msg)
 			}
 		}
 	}
@@ -148,6 +158,89 @@ func (h *HEPOutputer) Start() {
 	for msg := range h.hepQueue {
 		h.Send(msg)
 	}
+}
+
+func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			logp.Err("copy hep file out panic:", r, debug.Stack())
+			return
+		}
+	}()
+
+	HEPFileData, HEPFileDataerr := os.ReadFile(config.Cfg.HEPBufferFile)
+	if HEPFileDataerr != nil {
+		logp.Err("Read HEP file error", HEPFileDataerr)
+	}
+
+	if h.client[n].conn == nil {
+		logp.Err("connection is broken....")
+		return 0, fmt.Errorf("connection is broken")
+	}
+
+	//Send Logged HEP upon reconnect out to backend
+	hl, err := h.client[n].conn.Write(HEPFileData)
+	if err != nil {
+		err = h.client[n].writer.Flush()
+	}
+
+	if err != nil {
+		logp.Debug("collector", " ||-->X Send HEP from LOG error ", err)
+	} else {
+
+		fi, err := os.Stat(config.Cfg.HEPBufferFile)
+		if err != nil {
+			logp.Debug("collector", " Cannot stat HEP log file ", err)
+		}
+		if fi.Size() > 0 {
+			logp.Debug("collector", " Send HEP from LOG OK: ", hl, " bytes")
+			//Recreate file, thus cleaning the content
+			os.Create(config.Cfg.HEPBufferFile)
+		}
+	}
+
+	return hl, err
+}
+
+func (h *HEPOutputer) copyHEPbufftoFile(inbytes []byte) (int64, error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			logp.Err("copy buffer to panic: %v,\n%s", r, debug.Stack())
+			return
+		}
+	}()
+
+	destination, err := os.OpenFile(config.Cfg.HEPBufferFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Println("Open HEP file error", err)
+	}
+
+	defer destination.Close()
+
+	if config.Cfg.MaxBufferSizeBytes > 0 {
+		fi, err := destination.Stat()
+		if err != nil {
+			logp.Debug("collector", fmt.Sprintf("couldn't retrive stats from buffer file error: %v", err.Error()))
+			return 0, err
+		} else {
+			if fi.Size() >= config.Cfg.MaxBufferSizeBytes {
+				logp.Debug("collector", fmt.Sprintln("Buffer size has been excited error: Maxsize: ", config.Cfg.MaxBufferSizeBytes, " vs CurrentSize: ", fi.Size()))
+				return 0, fmt.Errorf("buffer size has been excited: %d", fi.Size())
+			}
+		}
+	}
+
+	nBytes, err := destination.Write(inbytes)
+
+	if err != nil {
+		logp.Debug("collector", "File Send HEP from buffer to file error", err)
+	} else {
+		logp.Debug("collector", " File Send HEP from buffer to file OK")
+	}
+
+	return int64(nBytes), err
 }
 
 func cutSpace(str string) string {

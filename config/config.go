@@ -7,30 +7,34 @@ import (
 var Cfg Config
 
 type Config struct {
-	Iface          *InterfacesConfig
-	Logging        *logp.Logging
-	Mode           string
-	Dedup          bool
-	Filter         string
-	Discard        string
-	DiscardMethod  string
-	DiscardIP      string
-	DiscardSrcIP   string
-	DiscardDstIP   string
-	Zip            bool
-	HepCollector   string
-	CollectOnlySip bool
-	HepServer      string
-	HepNodePW      string
-	HepNodeID      uint
-	HepNodeName    string
-	Network        string
-	Protobuf       bool
-	Reassembly     bool
-	SipAssembly    bool
-	SendRetries    uint
-	Version        bool
-	SkipVerify     bool
+	Iface              *InterfacesConfig
+	Logging            *logp.Logging
+	Mode               string
+	Dedup              bool
+	Filter             string
+	Discard            string
+	DiscardMethod      string
+	DiscardIP          string
+	DiscardSrcIP       string
+	DiscardDstIP       string
+	Zip                bool
+	HepCollector       string
+	CollectOnlySip     bool
+	HepServer          string
+	HepNodePW          string
+	HepNodeID          uint
+	HepNodeName        string
+	Network            string
+	Protobuf           bool
+	Reassembly         bool
+	SipAssembly        bool
+	SendRetries        uint
+	Version            bool
+	SkipVerify         bool
+	HEPBufferEnable    bool
+	HEPBufferSize      string
+	HEPBufferFile      string
+	MaxBufferSizeBytes int64
 }
 
 type InterfacesConfig struct {
