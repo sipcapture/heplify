@@ -172,7 +172,7 @@ func main() {
 		worker = config.Cfg.Iface.FanoutWorker
 	}
 
-	if config.Cfg.HEPBufferSize != "0" && config.Cfg.HEPBufferSize != "" {
+	if config.Cfg.HEPBufferEnable && (config.Cfg.HEPBufferSize != "0" && config.Cfg.HEPBufferSize != "") {
 		config.Cfg.MaxBufferSizeBytes, err = Human2FileSize(config.Cfg.HEPBufferSize)
 		if err != nil {
 			fmt.Println("couldn't convert buffer size to bytes", err)

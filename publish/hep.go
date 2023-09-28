@@ -61,10 +61,12 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 	}
 	h.client[n].writer.Reset(h.client[n].conn)
 
-	if _, err := h.copyHEPFileOut(n); err != nil {
-		logp.Err("Sending HEP from file error....:", err)
+	if config.Cfg.HEPBufferEnable {
+		if _, err := h.copyHEPFileOut(n); err != nil {
+			logp.Err("Sending HEP from file error: %v", err)
+		}
 	}
-	//h.ReSendPingPacket()
+
 	return err
 }
 
@@ -143,12 +145,16 @@ func (h *HEPOutputer) Send(msg []byte) {
 					err = h.client[n].writer.Flush()
 					if err != nil {
 						logp.Err("Bad resend: %v", err)
-						h.copyHEPbufftoFile(msg)
+						if config.Cfg.HEPBufferEnable {
+							h.copyHEPbufftoFile(msg)
+						}
 
 					}
 				}
 			} else {
-				h.copyHEPbufftoFile(msg)
+				if config.Cfg.HEPBufferEnable {
+					h.copyHEPbufftoFile(msg)
+				}
 			}
 		}
 	}
@@ -164,14 +170,14 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			logp.Err("copy hep file out panic:", r, debug.Stack())
+			logp.Err("copy hep file out panic: %v, %v", r, debug.Stack())
 			return
 		}
 	}()
 
 	HEPFileData, HEPFileDataerr := os.ReadFile(config.Cfg.HEPBufferFile)
 	if HEPFileDataerr != nil {
-		logp.Err("Read HEP file error", HEPFileDataerr)
+		logp.Err("Read HEP file error: %v", HEPFileDataerr)
 	}
 
 	if h.client[n].conn == nil {
