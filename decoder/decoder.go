@@ -3,12 +3,13 @@ package decoder
 import (
 	"bytes"
 	"container/list"
-	"github.com/segmentio/encoding/json"
 	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/segmentio/encoding/json"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -932,7 +933,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		case layers.LayerTypeTCP:
 			pkt.SrcPort = uint16(tcp.SrcPort)
 			pkt.DstPort = uint16(tcp.DstPort)
-			//pkt.Payload = tcp.Payload
 			atomic.AddUint64(&d.tcpCount, 1)
 			logp.Debug("payload", "TCP", pkt)
 
@@ -947,12 +947,15 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				if !checkResult || payloadList.Len() <= 0 {
 					return
 				}
-			} else {
-				payloadList.PushBack(pkt.Payload)
-			}
 
-			for elem := payloadList.Front(); elem != nil; elem = elem.Next() {
-				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, elem.Value.([]byte))
+				payloadList.PushBack(pkt.Payload)
+
+				for elem := payloadList.Front(); elem != nil; elem = elem.Next() {
+					extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, elem.Value.([]byte))
+				}
+			} else {
+				pkt.Payload = tcp.Payload
+				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 			}
 		case layers.LayerTypeSCTP:
 			pkt.SrcPort = uint16(sctp.SrcPort)
