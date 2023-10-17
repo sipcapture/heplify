@@ -175,13 +175,19 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 		}
 	}()
 
+	if _, err := os.Stat(config.Cfg.HEPBufferFile); err != nil {
+		logp.Debug("file doesn't exists", config.Cfg.HEPBufferFile)
+		return 0, fmt.Errorf("file doesn't exists")
+	}
+
 	HEPFileData, HEPFileDataerr := os.ReadFile(config.Cfg.HEPBufferFile)
 	if HEPFileDataerr != nil {
 		logp.Err("Read HEP file error: %v", HEPFileDataerr)
+		return 0, fmt.Errorf("bad read file")
 	}
 
 	if h.client[n].conn == nil {
-		logp.Err("connection is broken....")
+		logp.Err("connection is not up....")
 		return 0, fmt.Errorf("connection is broken")
 	}
 
