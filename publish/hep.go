@@ -177,7 +177,7 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 
 	if _, err := os.Stat(config.Cfg.HEPBufferFile); err != nil {
 		logp.Debug("file doesn't exists: ", config.Cfg.HEPBufferFile)
-		return 0, fmt.Errorf("file doesn't exists")
+		return 0, fmt.Errorf("file doesn't exists: ", config.Cfg.HEPBufferFile)
 	}
 
 	HEPFileData, HEPFileDataerr := os.ReadFile(config.Cfg.HEPBufferFile)
@@ -226,7 +226,8 @@ func (h *HEPOutputer) copyHEPbufftoFile(inbytes []byte) (int64, error) {
 
 	destination, err := os.OpenFile(config.Cfg.HEPBufferFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		fmt.Println("Open HEP file error", err)
+		logp.Err("open HEP file error: %v\n", err)
+		return 0, fmt.Errorf("open HEP file error: %v", err)
 	}
 
 	defer destination.Close()
@@ -247,7 +248,8 @@ func (h *HEPOutputer) copyHEPbufftoFile(inbytes []byte) (int64, error) {
 	nBytes, err := destination.Write(inbytes)
 
 	if err != nil {
-		logp.Debug("collector", "File Send HEP from buffer to file error", err)
+		logp.Err("file Send HEP from buffer to file error: %v", err.Error())
+		return 0, fmt.Errorf("file Send HEP from buffer to file error: %v", err.Error())
 	} else {
 		logp.Debug("collector", " File Send HEP from buffer to file OK")
 	}
