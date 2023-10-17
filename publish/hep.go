@@ -176,7 +176,7 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 	}()
 
 	if _, err := os.Stat(config.Cfg.HEPBufferFile); err != nil {
-		logp.Debug("file doesn't exists", config.Cfg.HEPBufferFile)
+		logp.Debug("file doesn't exists: ", config.Cfg.HEPBufferFile)
 		return 0, fmt.Errorf("file doesn't exists")
 	}
 
