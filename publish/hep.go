@@ -123,6 +123,9 @@ func (h *HEPOutputer) Send(msg []byte) {
 			var retry bool
 			if config.Cfg.SendRetries > 0 {
 				retry = (h.client[n].errCnt % config.Cfg.SendRetries) == 0
+				if config.Cfg.HEPBufferEnable {
+					h.copyHEPbufftoFile(msg)
+				}
 			} else {
 				retry = true
 			}
@@ -130,6 +133,9 @@ func (h *HEPOutputer) Send(msg []byte) {
 				h.client[n].errCnt = 0
 				if err = h.ReConnect(n); err != nil {
 					logp.Err("reconnect error: %v", err)
+					if config.Cfg.HEPBufferEnable {
+						h.copyHEPbufftoFile(msg)
+					}
 					return
 				} else {
 					if h.msgPing != nil {
@@ -148,7 +154,6 @@ func (h *HEPOutputer) Send(msg []byte) {
 						if config.Cfg.HEPBufferEnable {
 							h.copyHEPbufftoFile(msg)
 						}
-
 					}
 				}
 			} else {
@@ -223,6 +228,10 @@ func (h *HEPOutputer) copyHEPbufftoFile(inbytes []byte) (int64, error) {
 			return
 		}
 	}()
+
+	if config.Cfg.HEPBufferDebug {
+		logp.Err("adding packet to BUFFER: %s\n", string(inbytes))
+	}
 
 	destination, err := os.OpenFile(config.Cfg.HEPBufferFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {

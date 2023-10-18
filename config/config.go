@@ -31,6 +31,7 @@ type Config struct {
 	SendRetries        uint
 	Version            bool
 	SkipVerify         bool
+	HEPBufferDebug     bool
 	HEPBufferEnable    bool
 	HEPBufferSize      string
 	HEPBufferFile      string
