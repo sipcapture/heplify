@@ -83,7 +83,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.SkipVerify, "skipverify", false, "skip certifcate validation")
 	flag.BoolVar(&config.Cfg.HEPBufferEnable, "hep-buffer-activate", false, "enable buffer messages if connection to HEP server broken")
 	flag.BoolVar(&config.Cfg.HEPBufferDebug, "hep-buffer-debug", false, "enable debug buffer messages")
-	flag.StringVar(&config.Cfg.HEPBufferSize, "hep-buffer-max-size", "0", "max buffer size, can be B, MB, GB, TB. By default - unlimited")
+	flag.StringVar(&config.Cfg.HEPBufferSize, "hep-buffer-max-size", "0", "max buffer size, can be B, KB, MB, GB, TB. By default - unlimited")
 	flag.StringVar(&config.Cfg.HEPBufferFile, "hep-buffer-file", "HEP-Buffer.dump", "filename and location for hep-buffer file")
 
 	flag.Parse()
