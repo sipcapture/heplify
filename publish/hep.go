@@ -39,6 +39,12 @@ func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 		if err := h.ConnectServer(n); err != nil {
 			logp.Err("%v", err)
 			errCnt++
+		} else {
+			if config.Cfg.HEPBufferEnable {
+				if _, err := h.copyHEPFileOut(n); err != nil {
+					logp.Err("Sending HEP from file error: %v", err)
+				}
+			}
 		}
 	}
 	if errCnt == l {
