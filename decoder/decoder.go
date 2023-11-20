@@ -957,6 +957,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				pkt.Payload = tcp.Payload
 				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 			}
+
 		case layers.LayerTypeSCTP:
 			pkt.SrcPort = uint16(sctp.SrcPort)
 			pkt.DstPort = uint16(sctp.DstPort)
