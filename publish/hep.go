@@ -41,8 +41,10 @@ func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 			errCnt++
 		} else {
 			if config.Cfg.HEPBufferEnable {
-				if _, err := h.copyHEPFileOut(n); err != nil {
-					logp.Err("Sending HEP from file error: %v", err)
+				if _, err := os.Stat(config.Cfg.HEPBufferFile); err == nil {
+					if _, err := h.copyHEPFileOut(n); err != nil {
+						logp.Err("Sending HEP from file error: %v", err)
+					}
 				}
 			}
 		}
@@ -124,14 +126,10 @@ func (h *HEPOutputer) Send(msg []byte) {
 		h.client[n].writer.Write(msg)
 		err := h.client[n].writer.Flush()
 		if err != nil {
-			logp.Err("%v", err)
 			h.client[n].errCnt++
 			var retry bool
 			if config.Cfg.SendRetries > 0 {
 				retry = (h.client[n].errCnt % config.Cfg.SendRetries) == 0
-				if config.Cfg.HEPBufferEnable {
-					h.copyHEPbufftoFile(msg)
-				}
 			} else {
 				retry = true
 			}
