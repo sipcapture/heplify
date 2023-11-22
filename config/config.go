@@ -36,6 +36,7 @@ type Config struct {
 	HEPBufferSize      string
 	HEPBufferFile      string
 	MaxBufferSizeBytes int64
+	PrometheusIPPort   string
 }
 
 type InterfacesConfig struct {
