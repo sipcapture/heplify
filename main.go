@@ -11,10 +11,11 @@ import (
 
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/promstats"
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.13"
+const version = "heplify 1.65.14"
 
 func createFlags() {
 
@@ -36,7 +37,7 @@ func createFlags() {
 	)
 
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
-	flag.StringVar(&ifaceConfig.Type, "t", "pcap", "Capture types are [pcap, af_packet]")
+	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [pcap, af_packet]")
 	flag.UintVar(&ifaceConfig.FanoutID, "fg", 0, "Fanout group ID for af_packet")
 	flag.IntVar(&ifaceConfig.FanoutWorker, "fw", 4, "Fanout worker count for af_packet")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
@@ -85,7 +86,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.HEPBufferDebug, "hep-buffer-debug", false, "enable debug buffer messages")
 	flag.StringVar(&config.Cfg.HEPBufferSize, "hep-buffer-max-size", "0", "max buffer size, can be B, KB, MB, GB, TB. By default - unlimited")
 	flag.StringVar(&config.Cfg.HEPBufferFile, "hep-buffer-file", "HEP-Buffer.dump", "filename and location for hep-buffer file")
-
+	flag.StringVar(&config.Cfg.PrometheusIPPort, "prometheus", ":8090", "prometheus metrics - ip:port. By default all IPs")
 	flag.Parse()
 
 	config.Cfg.Iface = &ifaceConfig
@@ -184,6 +185,9 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+
+	go promstats.StartMetrics(&wg)
+
 	for i := 0; i < worker; i++ {
 		capture, err := sniffer.New(&config.Cfg)
 		checkCritErr(err)

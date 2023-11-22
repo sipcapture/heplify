@@ -8,8 +8,9 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/negbie/freecache v1.1.0
 	github.com/negbie/logp v0.0.0-20190313141056-04cebff7f846
+	github.com/prometheus/client_golang v1.17.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/segmentio/encoding v0.3.6
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/net v0.18.0
 )

@@ -12,6 +12,7 @@ import (
 
 	"github.com/negbie/logp"
 	"github.com/sipcapture/heplify/config"
+	"github.com/sipcapture/heplify/promstats"
 )
 
 type HEPConn struct {
@@ -81,19 +82,25 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 func (h *HEPOutputer) ConnectServer(n int) (err error) {
 	if config.Cfg.Network == "udp" {
 		if h.client[n].conn, err = net.Dial("udp", h.addr[n]); err != nil {
+			promstats.ConnectionStatus.Set(0)
 			return err
 		}
 	} else if config.Cfg.Network == "tcp" {
 		if h.client[n].conn, err = net.Dial("tcp", h.addr[n]); err != nil {
+			promstats.ConnectionStatus.Set(0)
 			return err
 		}
 	} else if config.Cfg.Network == "tls" {
 		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: config.Cfg.SkipVerify}); err != nil {
+			promstats.ConnectionStatus.Set(0)
 			return err
 		}
 	} else {
+		promstats.ConnectionStatus.Set(0)
 		return fmt.Errorf("not supported network type %s", config.Cfg.Network)
 	}
+
+	promstats.ConnectionStatus.Set(1)
 	h.client[n].writer = bufio.NewWriterSize(h.client[n].conn, 8192)
 	return err
 }
@@ -203,9 +210,11 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 	//Send Logged HEP upon reconnect out to backend
 	hl, err := h.client[n].conn.Write(HEPFileData)
 	if err != nil {
-		err = h.client[n].writer.Flush()
+		promstats.HepFileFlushesError.Inc()
+		return 0, fmt.Errorf("bad write to socket")
 	}
 
+	err = h.client[n].writer.Flush()
 	if err != nil {
 		logp.Debug("collector", " ||-->X Send HEP from LOG error ", err)
 	} else {
@@ -216,6 +225,7 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 		}
 		if fi.Size() > 0 {
 			logp.Debug("collector", " Send HEP from LOG OK: ", hl, " bytes")
+			promstats.HepFileFlushesSuccess.Inc()
 			//Recreate file, thus cleaning the content
 			os.Create(config.Cfg.HEPBufferFile)
 		}
@@ -266,6 +276,8 @@ func (h *HEPOutputer) copyHEPbufftoFile(inbytes []byte) (int64, error) {
 	} else {
 		logp.Debug("collector", " File Send HEP from buffer to file OK")
 	}
+
+	go promstats.HepBytesInFile.Add(float64(nBytes))
 
 	return int64(nBytes), err
 }

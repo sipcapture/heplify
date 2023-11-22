@@ -23,6 +23,7 @@ import (
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder"
 	"github.com/sipcapture/heplify/dump"
+	"github.com/sipcapture/heplify/promstats"
 	"github.com/sipcapture/heplify/publish"
 )
 
@@ -262,7 +263,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			sniffer.isCollectorTcp = true
 
 			if err != nil {
-				defer sniffer.collectorUDPconn.Close()
+				defer sniffer.collectorTCPconn.Close()
 				return fmt.Errorf("couldn't start collector server: %v", err)
 			}
 
@@ -365,6 +366,9 @@ LOOP:
 						logp.Err("Error accepting tcp connection: ", err.Error())
 						continue
 					}
+
+					promstats.ConnectedClients.Inc()
+
 					// Handle connections in a new goroutine.
 					go sniffer.handleRequestExtended(conn)
 				}
@@ -383,6 +387,9 @@ LOOP:
 				if bytes.HasPrefix(message, []byte{0x48, 0x45, 0x50, 0x33}) {
 					//counter
 					atomic.AddUint64(&sniffer.hepUDPCount, 1)
+
+					//Prometheus
+					promstats.ClientLastMetricTimestamp.SetToCurrentTime()
 
 					if doHepParse {
 						hep, err = decoder.DecodeHEP(message[:rlen])
@@ -710,6 +717,9 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 			}
 
 			if bytes.HasPrefix(dataHeader, []byte{0x48, 0x45, 0x50, 0x33}) {
+
+				//Prometheus
+				promstats.ClientLastMetricTimestamp.SetToCurrentTime()
 
 				length := binary.BigEndian.Uint16(dataHeader[4:6])
 
