@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/negbie/logp"
@@ -102,6 +103,24 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 
 	promstats.ConnectionStatus.Set(1)
 	h.client[n].writer = bufio.NewWriterSize(h.client[n].conn, 8192)
+
+	//Tcp Keep Alive
+	if config.Cfg.Network == "tcp" || config.Cfg.Network == "tls" {
+		// Keep Alive
+		if config.Cfg.KeepAlive > 0 {
+
+			var tcpCon *net.TCPConn
+			if config.Cfg.Network == "tls" {
+				tcpCon = h.client[n].conn.(*tls.Conn).NetConn().(*net.TCPConn)
+			} else {
+				tcpCon = h.client[n].conn.(*net.TCPConn)
+			}
+
+			tcpCon.SetKeepAlive(true)
+			tcpCon.SetKeepAlivePeriod(time.Second * time.Duration(config.Cfg.KeepAlive))
+		}
+	}
+
 	return err
 }
 
@@ -193,7 +212,7 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 
 	if _, err := os.Stat(config.Cfg.HEPBufferFile); err != nil {
 		logp.Debug("file doesn't exists: ", config.Cfg.HEPBufferFile)
-		return 0, fmt.Errorf("file doesn't exists: ", config.Cfg.HEPBufferFile)
+		return 1, nil
 	}
 
 	HEPFileData, HEPFileDataerr := os.ReadFile(config.Cfg.HEPBufferFile)

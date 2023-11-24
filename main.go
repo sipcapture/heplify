@@ -15,7 +15,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.14"
+const version = "heplify 1.65.15"
 
 func createFlags() {
 
@@ -46,6 +46,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
 	flag.BoolVar(&config.Cfg.SipAssembly, "sipassembly", false, "If true, sipassembly will be enabled")
 	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 0, "Number of retries for sending before giving up and reconnecting")
+	flag.UintVar(&config.Cfg.KeepAlive, "keepalive", 5, "keep alive internal - 5 seconds by default. 0 - disable")
 	flag.BoolVar(&config.Cfg.Version, "version", false, "Show heplify version")
 	flag.BoolVar(&config.Cfg.Protobuf, "protobuf", false, "Use Protobuf on wire")
 	flag.BoolVar(&config.Cfg.SkipVerify, "skipverify", false, "skip certifcate validation")
