@@ -29,6 +29,7 @@ type Config struct {
 	Reassembly         bool
 	SipAssembly        bool
 	SendRetries        uint
+	KeepAlive          uint
 	Version            bool
 	SkipVerify         bool
 	HEPBufferDebug     bool
