@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
-	"github.com/negbie/logp"
+	// "github.com/negbie/logp"
 	"github.com/sipcapture/heplify/protos"
 )
 
