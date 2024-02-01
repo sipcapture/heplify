@@ -94,7 +94,6 @@ func (s *tcpStream) run() {
 			}
 			// Collect data.
 			data = append(data, reassembly.Bytes...)
-			logp.Info("data=", data)
 		}
 
 		// Skip if empty.
