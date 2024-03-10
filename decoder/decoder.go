@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"container/list"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/segmentio/encoding/json"
 
 	"github.com/google/gopacket"
@@ -24,7 +27,10 @@ import (
 	"github.com/sipcapture/heplify/protos"
 )
 
-var PacketQueue = make(chan *Packet, 20000)
+var (
+	PacketQueue = make(chan *Packet, 20000)
+	scriptCache = fastcache.New(32 * 1024 * 1024)
+)
 
 type CachePayload struct {
 	SrcIP         net.IP `json:"src_ip" default:""`
@@ -1073,4 +1079,15 @@ func (d *Decoder) SendPingHEPPacket() {
 	atomic.AddUint64(&d.hepCount, 1)
 
 	PacketQueue <- pkt
+}
+
+func stb(s string) []byte {
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	var res []byte
+
+	bh := (*reflect.SliceHeader)((unsafe.Pointer(&res)))
+	bh.Data = sh.Data
+	bh.Len = sh.Len
+	bh.Cap = sh.Len
+	return res
 }

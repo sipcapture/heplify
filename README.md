@@ -28,6 +28,35 @@ Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 
 If you have Go 1.18+ installed, build the latest heplify binary by running `make`.
 
+Now you should install LUA Jit:
+
+* Compile from sources:  
+  
+  Install luajit dev libary
+  
+  `apt-get install libluajit-5.1-dev`
+  
+  or 
+  
+  `yum install luajit-devel`
+
+  or for macOS
+
+  ```sh
+  # Assuming brew installs to /usr/local/
+  brew install lua@5.1 luajit
+  ln -s /usr/local/lib/pkgconfig/luajit.pc /usr/local/lib/pkgconfig/luajit-5.1.pc
+  export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+  ```
+  
+  [install](https://golang.org/doc/install) Go 1.11+
+
+  `go build cmd/heplify/heplify.go`
+  
+  
+
+
+
 You can also build a docker image:
 
 ```bash

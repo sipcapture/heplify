@@ -3,6 +3,7 @@ module github.com/sipcapture/heplify
 go 1.15
 
 require (
+	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/gopacket v1.1.19
@@ -11,6 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.17.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/segmentio/encoding v0.3.6
+	github.com/sipcapture/golua v0.0.0-20200610090950-538d24098d76 // indirect
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/net v0.18.0
 )
