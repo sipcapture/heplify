@@ -8,9 +8,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -28,49 +26,27 @@ func NewScriptEngine() (ScriptEngine, error) {
 	return NewLuaEngine()
 }
 
-func scanCode() ([]string, *bytes.Buffer, error) {
-	var files []string
+func scanCode() (string, *bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 
-	path := config.Cfg.ScriptFolder
+	file := config.Cfg.ScriptFile
 
-	if path != "" {
-		dir, err := ioutil.ReadDir(path)
+	if file != "" {
+		f, err := os.Open(file)
 		if err != nil {
-			return nil, nil, err
+			return file, nil, err
 		}
-
-		for _, file := range dir {
-			if !file.IsDir() {
-				n := file.Name()
-				p := filepath.Join(path, n)
-				if strings.HasSuffix(n, ".lua") {
-					f, err := os.Open(p)
-					if err != nil {
-						return nil, nil, err
-					}
-					_, err = io.Copy(buf, f)
-					if err != nil {
-						return nil, nil, err
-					}
-					err = f.Close()
-					if err != nil {
-						return nil, nil, err
-					}
-				} else if strings.HasSuffix(n, ".expr") {
-					s, err := ioutil.ReadFile(p)
-					if err != nil {
-						return nil, nil, err
-					}
-					if len(s) > 4 {
-						files = append(files, string(s))
-					}
-				}
-			}
+		_, err = io.Copy(buf, f)
+		if err != nil {
+			return file, nil, err
+		}
+		err = f.Close()
+		if err != nil {
+			return file, nil, err
 		}
 	}
 
-	return files, buf, nil
+	return file, buf, nil
 }
 
 func extractFunc(r io.Reader) []string {

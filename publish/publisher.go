@@ -9,6 +9,8 @@ import (
 	"github.com/sipcapture/heplify/decoder"
 )
 
+var scriptEnable bool
+
 type Outputer interface {
 	Output(msg []byte)
 	SendPingPacket(msg []byte)
@@ -26,12 +28,13 @@ func NewPublisher(out Outputer) *Publisher {
 		pubCount: 0,
 	}
 
-	if config.Cfg.ScriptEnable {
+	if config.Cfg.ScriptFile != "" {
 		var err error
 		p.script, err = decoder.NewScriptEngine()
 		if err != nil {
 			logp.Err("%v, please fix and run killall -HUP heplify", err)
 		} else {
+			scriptEnable = true
 			defer p.script.Close()
 		}
 	}
@@ -80,7 +83,7 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 			logp.Debug("publisher", "sent hep ping from collector")
 		} else {
 
-			if pub.script != nil && config.Cfg.ScriptEnable {
+			if scriptEnable {
 				for _, v := range config.Cfg.ScriptHEPFilter {
 					if int(pkt.ProtoType) == v {
 						if err = pub.script.Run(pkt); err != nil {

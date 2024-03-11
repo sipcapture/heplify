@@ -18,20 +18,6 @@ type LuaEngine struct {
 	LuaEngine *lua.State
 }
 
-func (d *LuaEngine) GetHEPStruct() interface{} {
-	if (*d.pkt) == nil {
-		return ""
-	}
-	return (*d.pkt)
-}
-
-/*
-func (d *LuaEngine) GetSIPStruct() interface{} {
-
-	return (*d.pkt).SIP
-}
-*/
-
 func (d *LuaEngine) GetHEPProtoType() uint32 {
 	return (*d.pkt).GetProtoType()
 }
@@ -73,23 +59,6 @@ func (d *LuaEngine) SetRawMessage(value string) {
 	pkt.Payload = []byte(value)
 }
 
-func (d *LuaEngine) SetCustomSIPHeader(m *map[string]string) {
-	/*if (*d.pkt).SIP == nil {
-		logp.Err("can't set custom SIP header if SIP struct is nil, please check for nil in lua script")
-		return
-	}
-	pkt := *d.pkt
-
-	if pkt.SIP.CustomHeader == nil {
-		pkt.SIP.CustomHeader = make(map[string]string)
-	}
-
-	for k, v := range *m {
-		pkt.SIP.CustomHeader[k] = v
-	}
-	*/
-}
-
 func (d *LuaEngine) SetHEPField(field string, value string) {
 	if (*d.pkt) == nil {
 		logp.Err("can't set HEP field if HEP struct is nil, please check for nil in lua script")
@@ -121,75 +90,6 @@ func (d *LuaEngine) SetHEPField(field string, value string) {
 	}
 }
 
-func (d *LuaEngine) SetSIPProfile(p string) {
-	/*pkt := *d.pkt
-	if strings.HasPrefix(p, "c") || strings.HasPrefix(p, "C") {
-		pkt.SIP.Profile = "call"
-	} else if strings.HasPrefix(p, "r") || strings.HasPrefix(p, "R") {
-		pkt.SIP.Profile = "registration"
-	} else {
-		pkt.SIP.Profile = "default"
-	}
-	*/
-}
-
-func (d *LuaEngine) SetSIPHeader(header string, value string) {
-
-	/*
-		if (*d.pkt).SIP == nil {
-			logp.Err("can't set SIP header if SIP struct is nil, please check for nil in lua script")
-			return
-		}
-		pkt := *d.pkt
-
-		switch header {
-		case "FromUser", "from_user":
-			pkt.SIP.FromUser = value
-		case "FromHost", "from_domain":
-			pkt.SIP.FromHost = value
-		case "FromTag", "from_tag":
-			pkt.SIP.FromTag = value
-		case "ToUser", "to_user":
-			pkt.SIP.ToUser = value
-		case "ToHost", "to_domain":
-			pkt.SIP.ToHost = value
-		case "ToTag", "to_tag":
-			pkt.SIP.ToTag = value
-		case "URIUser", "ruri_user":
-			pkt.SIP.URIUser = value
-		case "URIHost", "ruri_domain":
-			pkt.SIP.URIHost = value
-		case "CallID":
-			pkt.SIP.CallID = value
-		case "Method":
-			pkt.SIP.FirstMethod = value
-		case "ContactUser", "contact_user":
-			pkt.SIP.ContactUser = value
-		case "ContactHost", "contact_domain":
-			pkt.SIP.ContactHost = value
-		case "AuthUser", "auth_user":
-			pkt.SIP.AuthUser = value
-		case "UserAgent", "user_agent":
-			pkt.SIP.UserAgent = value
-		case "Server":
-			pkt.SIP.Server = value
-		case "PaiUser", "pid_user":
-			pkt.SIP.PaiUser = value
-		case "PaiHost", "pid_domain":
-			pkt.SIP.PaiHost = value
-		case "ViaOne", "via":
-			pkt.SIP.ViaOne = value
-		case "XCallID", "callid_aleg":
-			pkt.SIP.XCallID = value
-		default:
-			if pkt.SIP.CustomHeader == nil {
-				pkt.SIP.CustomHeader = make(map[string]string)
-			}
-			pkt.SIP.CustomHeader[header] = value
-		}
-	*/
-}
-
 func (d *LuaEngine) Logp(level string, message string, data interface{}) {
 	if level == "ERROR" {
 		logp.Err("[script] %s: %v", message, data)
@@ -211,8 +111,6 @@ func NewLuaEngine() (*LuaEngine, error) {
 	d.LuaEngine.OpenLibs()
 
 	luar.Register(d.LuaEngine, "", luar.Map{
-		"GetHEPStruct": d.GetHEPStruct,
-		//"GetSIPStruct":       d.GetSIPStruct,
 		"GetHEPProtoType":    d.GetHEPProtoType,
 		"GetHEPSrcIP":        d.GetHEPSrcIP,
 		"GetHEPSrcPort":      d.GetHEPSrcPort,
@@ -222,10 +120,7 @@ func NewLuaEngine() (*LuaEngine, error) {
 		"GetHEPTimeUseconds": d.GetHEPTimeUseconds,
 		"GetRawMessage":      d.GetRawMessage,
 		"SetRawMessage":      d.SetRawMessage,
-		"SetCustomSIPHeader": d.SetCustomSIPHeader,
 		"SetHEPField":        d.SetHEPField,
-		"SetSIPProfile":      d.SetSIPProfile,
-		"SetSIPHeader":       d.SetSIPHeader,
 		"HashTable":          HashTable,
 		"HashString":         HashString,
 		"Logp":               d.Logp,
@@ -234,18 +129,25 @@ func NewLuaEngine() (*LuaEngine, error) {
 
 	_, code, err := scanCode()
 	if err != nil {
+		logp.Err("Error in scan script: %v", err)
 		return nil, err
 	}
 
+	logp.Debug("script", "load lua script: %v", code.String())
+
 	err = d.LuaEngine.DoString(code.String())
 	if err != nil {
+		logp.Err("Error in lua script: %v", err)
 		return nil, err
 	}
 
 	d.functions = extractFunc(code)
 	if len(d.functions) < 1 {
+		logp.Err("no function name found in lua scripts: %v", err)
 		return nil, fmt.Errorf("no function name found in lua scripts")
 	}
+
+	//	d.functions = append(d.functions, code.String())
 
 	return d, nil
 }
@@ -254,8 +156,10 @@ func NewLuaEngine() (*LuaEngine, error) {
 func (d *LuaEngine) Run(pkt *Packet) error {
 	/* preload */
 	d.pkt = &pkt
+	logp.Debug("data file", "DATA %s", pkt.GetPayload())
 
 	for _, v := range d.functions {
+		logp.Debug("script", "run function %s", v)
 		err := d.LuaEngine.DoString(v)
 		if err != nil {
 			return err
