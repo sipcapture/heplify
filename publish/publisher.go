@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/negbie/logp"
+	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder"
 )
 
@@ -16,6 +17,7 @@ type Outputer interface {
 type Publisher struct {
 	pubCount uint64
 	outputer Outputer
+	script   decoder.ScriptEngine
 }
 
 func NewPublisher(out Outputer) *Publisher {
@@ -23,6 +25,17 @@ func NewPublisher(out Outputer) *Publisher {
 		outputer: out,
 		pubCount: 0,
 	}
+
+	if config.Cfg.ScriptEnable {
+		var err error
+		p.script, err = decoder.NewScriptEngine()
+		if err != nil {
+			logp.Err("%v, please fix and run killall -HUP heplify", err)
+		} else {
+			defer p.script.Close()
+		}
+	}
+
 	go p.Start(decoder.PacketQueue)
 	go p.printStats()
 	return p
@@ -50,6 +63,7 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 	for pkt := range pq {
 
 		atomic.AddUint64(&pub.pubCount, 1)
+		var err error
 
 		//Version == 100 just for forwarding...
 		if pkt.Version == 100 {
@@ -65,6 +79,23 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 			pub.setHEPPing(msg)
 			logp.Debug("publisher", "sent hep ping from collector")
 		} else {
+
+			if pub.script != nil && config.Cfg.ScriptEnable {
+				for _, v := range config.Cfg.ScriptHEPFilter {
+					if int(pkt.ProtoType) == v {
+						if err = pub.script.Run(pkt); err != nil {
+							logp.Err("%v", err)
+						}
+						break
+					}
+				}
+
+				if pkt == nil || pkt.ProtoType == 1 && pkt.Payload == nil {
+					logp.Warn("nil struct after script processing")
+					continue
+				}
+			}
+
 			msg, err := EncodeHEP(pkt)
 			if err != nil {
 				logp.Warn("%v", err)

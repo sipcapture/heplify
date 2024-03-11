@@ -19,7 +19,7 @@ import (
 
 // ScriptEngine interface
 type ScriptEngine interface {
-	Run(hep *HEP) error
+	Run(pkt *Packet) error
 	Close()
 }
 
