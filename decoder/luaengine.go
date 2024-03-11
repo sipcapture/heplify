@@ -110,7 +110,7 @@ func NewLuaEngine() (*LuaEngine, error) {
 	d.LuaEngine = lua.NewState()
 	d.LuaEngine.OpenLibs()
 
-	luar.Register(d.LuaEngine, "", luar.Map{
+	/* luar.Register(d.LuaEngine, "", luar.Map{
 		"GetHEPProtoType":    d.GetHEPProtoType,
 		"GetHEPSrcIP":        d.GetHEPSrcIP,
 		"GetHEPSrcPort":      d.GetHEPSrcPort,
@@ -126,7 +126,12 @@ func NewLuaEngine() (*LuaEngine, error) {
 		"Logp":               d.Logp,
 		"Print":              fmt.Println,
 	})
+	*/
 
+	luar.Register(d.LuaEngine, "", luar.Map{
+		"Logp":  d.Logp,
+		"Print": fmt.Println,
+	})
 	_, code, err := scanCode()
 	if err != nil {
 		logp.Err("Error in scan script: %v", err)
