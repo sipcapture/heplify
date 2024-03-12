@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"container/list"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/segmentio/encoding/json"
 
 	"github.com/google/gopacket"
@@ -24,7 +27,10 @@ import (
 	"github.com/sipcapture/heplify/protos"
 )
 
-var PacketQueue = make(chan *Packet, 20000)
+var (
+	PacketQueue = make(chan *Packet, 20000)
+	scriptCache = fastcache.New(32 * 1024 * 1024)
+)
 
 type CachePayload struct {
 	SrcIP         net.IP `json:"src_ip" default:""`
@@ -1073,4 +1079,94 @@ func (d *Decoder) SendPingHEPPacket() {
 	atomic.AddUint64(&d.hepCount, 1)
 
 	PacketQueue <- pkt
+}
+
+func stb(s string) []byte {
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	var res []byte
+
+	bh := (*reflect.SliceHeader)((unsafe.Pointer(&res)))
+	bh.Data = sh.Data
+	bh.Len = sh.Len
+	bh.Cap = sh.Len
+	return res
+}
+
+// Packet
+func (pkt *Packet) GetVersion() uint32 {
+	if pkt != nil {
+		return uint32(pkt.Version)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetProtocol() uint32 {
+	if pkt != nil {
+		return uint32(pkt.Protocol)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetSrcIP() string {
+	if pkt != nil {
+		return pkt.SrcIP.String()
+	}
+	return ""
+}
+
+func (pkt *Packet) GetDstIP() string {
+	if pkt != nil {
+		return pkt.DstIP.String()
+	}
+	return ""
+}
+
+func (pkt *Packet) GetSrcPort() uint16 {
+	if pkt != nil {
+		return pkt.SrcPort
+	}
+
+	return 0
+}
+
+func (pkt *Packet) GetDstPort() uint16 {
+	if pkt != nil {
+		return pkt.DstPort
+	}
+	return 0
+}
+
+func (pkt *Packet) GetTsec() uint32 {
+	if pkt != nil {
+		return pkt.Tsec
+	}
+	return 0
+}
+
+func (pkt *Packet) GetTmsec() uint32 {
+	if pkt != nil {
+		return pkt.Tmsec
+	}
+	return 0
+}
+
+func (pkt *Packet) GetProtoType() uint32 {
+	if pkt != nil {
+		return uint32(pkt.ProtoType)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetPayload() string {
+	if pkt != nil {
+		return string(pkt.Payload)
+	}
+	return ""
+}
+
+func (pkt *Packet) GetCID() string {
+	if pkt != nil {
+		return string(pkt.CID)
+	}
+	return ""
 }

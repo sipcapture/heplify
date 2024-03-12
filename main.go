@@ -15,7 +15,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.16"
+const version = "heplify 1.66.1"
 
 func createFlags() {
 
@@ -34,6 +34,7 @@ func createFlags() {
 		sys         bool
 		fNum        int
 		fSize       uint64
+		hepfilter   string
 	)
 
 	//long
@@ -60,6 +61,10 @@ func createFlags() {
 	flag.BoolVar(&ifaceConfig.WithErspan, "erspan", false, "erspan")
 	flag.IntVar(&fNum, "fnum", 7, "The total num of log files to keep")
 	flag.Uint64Var(&fSize, "fsize", 10*1024*1024, "The rotate size per log file based on byte")
+	//scripts
+	flag.StringVar(&config.Cfg.ScriptFile, "script-file", "", "Script file to execute on each packet")
+	flag.StringVar(&hepfilter, "script-hep-filter", "1", "HEP filter for script, comma separated list of HEP types")
+
 	//short
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
 	flag.StringVar(&config.Cfg.HepCollector, "hin", "", "HEP collector address [udp:127.0.0.1:9093]")
@@ -92,6 +97,17 @@ func createFlags() {
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [pcap, af_packet]")
 	flag.Parse()
+
+	if hepfilter != "" {
+		hepfilter = strings.Replace(hepfilter, " ", "", -1)
+		for _, val := range strings.Split(hepfilter, ",") {
+			intVal, err := strconv.Atoi(val)
+			if err != nil {
+				continue
+			}
+			config.Cfg.ScriptHEPFilter = append(config.Cfg.ScriptHEPFilter, intVal)
+		}
+	}
 
 	config.Cfg.Iface = &ifaceConfig
 	logp.ToStderr = &std

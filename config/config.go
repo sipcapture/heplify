@@ -31,6 +31,8 @@ type Config struct {
 	SendRetries        uint
 	KeepAlive          uint
 	Version            bool
+	ScriptFile         string
+	ScriptHEPFilter    []int
 	SkipVerify         bool
 	HEPBufferDebug     bool
 	HEPBufferEnable    bool
