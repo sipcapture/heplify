@@ -458,7 +458,14 @@ LOOP:
 			}
 
 			if err == io.EOF {
+
 				logp.Debug("sniffer", "End of file")
+
+				if sniffer.config.EOFExit {
+					sniffer.Close()
+					os.Exit(0)
+				}
+
 				loopCount++
 				if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
 					// Give the publish goroutine 200 ms to flush

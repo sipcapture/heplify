@@ -82,6 +82,7 @@ func createFlags() {
 	flag.IntVar(&ifaceConfig.RotationTime, "rt", 60, "Pcap rotation time in minutes")
 	flag.BoolVar(&config.Cfg.Zip, "zf", false, "Enable pcap compression")
 	flag.IntVar(&ifaceConfig.Loop, "lp", 1, "Loop count over ReadFile. Use 0 to loop forever")
+	flag.BoolVar(&ifaceConfig.EOFExit, "eof-exit", false, "Exit on EOF of ReadFile")
 	flag.BoolVar(&ifaceConfig.ReadSpeed, "rs", false, "Use packet timestamps with maximum pcap read speed")
 	flag.StringVar(&ifaceConfig.PortRange, "pr", "5060-5090", "Portrange to capture SIP")
 	flag.BoolVar(&sys, "sl", false, "Log to syslog")
