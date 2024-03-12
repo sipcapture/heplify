@@ -5,7 +5,7 @@ function checkRAW()
 
     Logp("DEBUG", "protoType", protoType)
 
-    -- Check if we have SIP type 
+    -- Check if we have SIP type
     if protoType ~= 1 then
         return
     end
@@ -14,12 +14,8 @@ function checkRAW()
     local raw = GetRawMessage()
     Logp("DEBUG", "raw", raw)
 
-    local _, _, name, value = string.find(raw, "(Call-ID:)%s*:%s*(.+)")
-    --- local name, value = raw:match("(CSeq):%s+(.-)\n")
-
-    -- do something with the raw message
-    Logp("DEBUG", "name", name)
-    Logp("DEBUG", "value", value)
+    -- local _, _, name, value = string.find(raw, "(Call-ID:)%s*:%s*(.+)")
+    -- local name, value = raw:match("(CSeq):%s+(.-)\n")
 
     -- Set the raw message back
     SetRawMessage(raw)
@@ -48,7 +44,6 @@ function checkHEP()
         Logp("ERROR", "replace to new src IP:", new_ip)
     end
 
-
     local dst_ip = GetHEPDstIP()
 
     -- a struct can be nil so better check it
@@ -65,7 +60,6 @@ function checkHEP()
 
     -- ports
 
-
     local src_port = GetHEPSrcPort()
 
     if src_port == 5060 then
@@ -74,7 +68,6 @@ function checkHEP()
         SetHEPField("SrcPort", new_src_port)
         Logp("ERROR", "set new port ", new_src_port)
     end
-
 
     local dst_port = GetHEPDstPort()
 
