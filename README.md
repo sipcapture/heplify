@@ -152,6 +152,11 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Path to write pcap file
   -zf
 	Enable pcap compression
+  -script-file string
+    	LUA script file path to execute on each packet
+  -script-hep-filter string
+    	HEP Type filter for LUA script, comma separated list (default "1")
+
 ```
 
 ## Examples
