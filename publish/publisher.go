@@ -35,7 +35,7 @@ func NewPublisher(out Outputer) *Publisher {
 			logp.Err("%v, please fix and run killall -HUP heplify", err)
 		} else {
 			scriptEnable = true
-			defer p.script.Close()
+			//defer p.script.Close()
 		}
 	}
 

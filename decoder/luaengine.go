@@ -72,13 +72,13 @@ func (d *LuaEngine) SetHEPField(field string, value string) {
 			pkt.ProtoType = byte(i)
 		}
 	case "SrcIP":
-		pkt.SrcIP = net.ParseIP(value)
+		pkt.SrcIP = net.ParseIP(value).To4()
 	case "SrcPort":
 		if i, err := strconv.Atoi(value); err == nil {
 			pkt.SrcPort = uint16(i)
 		}
 	case "DstIP":
-		pkt.DstIP = net.ParseIP(value)
+		pkt.DstIP = net.ParseIP(value).To4()
 	case "DstPort":
 		if i, err := strconv.Atoi(value); err == nil {
 			pkt.DstPort = uint16(i)
@@ -110,7 +110,7 @@ func NewLuaEngine() (*LuaEngine, error) {
 	d.LuaEngine = lua.NewState()
 	d.LuaEngine.OpenLibs()
 
-	/* luar.Register(d.LuaEngine, "", luar.Map{
+	luar.Register(d.LuaEngine, "", luar.Map{
 		"GetHEPProtoType":    d.GetHEPProtoType,
 		"GetHEPSrcIP":        d.GetHEPSrcIP,
 		"GetHEPSrcPort":      d.GetHEPSrcPort,
@@ -126,19 +126,12 @@ func NewLuaEngine() (*LuaEngine, error) {
 		"Logp":               d.Logp,
 		"Print":              fmt.Println,
 	})
-	*/
 
-	luar.Register(d.LuaEngine, "", luar.Map{
-		"Logp":  d.Logp,
-		"Print": fmt.Println,
-	})
 	_, code, err := scanCode()
 	if err != nil {
 		logp.Err("Error in scan script: %v", err)
 		return nil, err
 	}
-
-	logp.Debug("script", "load lua script: %v", code.String())
 
 	err = d.LuaEngine.DoString(code.String())
 	if err != nil {
@@ -152,8 +145,6 @@ func NewLuaEngine() (*LuaEngine, error) {
 		return nil, fmt.Errorf("no function name found in lua scripts")
 	}
 
-	//	d.functions = append(d.functions, code.String())
-
 	return d, nil
 }
 
@@ -161,10 +152,7 @@ func NewLuaEngine() (*LuaEngine, error) {
 func (d *LuaEngine) Run(pkt *Packet) error {
 	/* preload */
 	d.pkt = &pkt
-	logp.Debug("data file", "DATA %s", pkt.GetPayload())
-
 	for _, v := range d.functions {
-		logp.Debug("script", "run function %s", v)
 		err := d.LuaEngine.DoString(v)
 		if err != nil {
 			return err

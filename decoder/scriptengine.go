@@ -90,7 +90,7 @@ func HashString(algo, s string) string {
 
 // HashTable is a simple kv store
 func HashTable(op, key, val string) string {
-	switch op {
+	/*switch op {
 	case "get":
 		if res := scriptCache.Get(nil, stb(key)); res != nil {
 			return string(res)
@@ -100,5 +100,6 @@ func HashTable(op, key, val string) string {
 	case "del":
 		scriptCache.Del(stb(key))
 	}
+	*/
 	return ""
 }
