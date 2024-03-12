@@ -15,7 +15,7 @@ import (
 	"github.com/sipcapture/heplify/sniffer"
 )
 
-const version = "heplify 1.65.15"
+const version = "heplify 1.65.16"
 
 func createFlags() {
 
@@ -53,7 +53,7 @@ func createFlags() {
 	flag.BoolVar(&config.Cfg.SkipVerify, "skipverify", false, "skip certifcate validation")
 	flag.BoolVar(&config.Cfg.Dedup, "dd", false, "Deduplicate packets")
 	flag.StringVar(&config.Cfg.Discard, "di", "", "Discard uninteresting packets by any string")
-	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]")
+	flag.StringVar(&config.Cfg.DiscardMethod, "dim", "", "Discard uninteresting SIP packets by Method [OPTIONS,NOTIFY]")
 	flag.StringVar(&config.Cfg.DiscardIP, "diip", "", "Discard uninteresting SIP packets by Source or Destination IP(s)")
 	flag.StringVar(&config.Cfg.DiscardSrcIP, "disip", "", "Discard uninteresting SIP packets by Source IP(s)")
 	flag.StringVar(&config.Cfg.DiscardDstIP, "didip", "", "Discard uninteresting SIP packets by Destination IP(s)")

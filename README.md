@@ -79,7 +79,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -di string
 	Discard uninteresting packets by any string
   -dim string
-	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+	Discard uninteresting SIP packets by Method [OPTIONS,NOTIFY]
   -diip string
 	Discard uninteresting SIP packets by Source or Destination IP(s)
   -disip string
