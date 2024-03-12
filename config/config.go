@@ -56,6 +56,7 @@ type InterfacesConfig struct {
 	ReadSpeed    bool   `config:"top_speed"`
 	OneAtATime   bool   `config:"one_at_a_time"`
 	Loop         int    `config:"loop"`
+	EOFExit      bool   `config:"eof_exit"`
 	FanoutID     uint   `config:"fanout_id"`
 	FanoutWorker int    `config:"fanout_worker"`
 	CustomBPF    string `config:"custom_bpf"`
