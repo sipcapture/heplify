@@ -130,6 +130,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Use Protobuf on wire
   -rf string
 	Read pcap file
+   -exit-eof
+        Exit once done reading pcap file
   -rs
 	Use packet timestamps with maximum pcap read speed
   -rt int
