@@ -2,7 +2,7 @@
 
 <img src="https://github.com/sipcapture/heplify/assets/1423657/7a36896d-0bd3-4cf3-9525-0513e67aee46">
 
-This is a fork of [heplify](https://github.com/sipcapture/heplify) - captagents little brother, optimized for speed and simplicity. It's a single binary which you can run
+This is a **fork** of [heplify](https://github.com/sipcapture/heplify) - captagents little brother, optimized for speed and simplicity. It's a single binary which you can run
 on Linux, ARM, MIPS, Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify is able to send
 SIP, correlated RTCP, RTCPXR, DNS, Logs into homer.
 It's able to handle fragmented and duplicate packets out of the box.  
