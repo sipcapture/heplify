@@ -74,7 +74,7 @@ func createFlags() {
 	//
 	flag.UintVar(&config.Cfg.HepNodeID, "hi", 2002, "HEP node ID")
 	flag.StringVar(&config.Cfg.HepNodeName, "hn", "", "HEP node Name")
-	flag.StringVar(&config.Cfg.Network, "nt", "udp", "Network types are [udp, tcp, tls]")
+	flag.StringVar(&config.Cfg.Network, "nt", "mtls", "Network types are [udp, tcp, tls, mtls]")
 	flag.UintVar(&ifaceConfig.FanoutID, "fg", 0, "Fanout group ID for af_packet")
 	flag.IntVar(&ifaceConfig.FanoutWorker, "fw", 4, "Fanout worker count for af_packet")
 	flag.StringVar(&ifaceConfig.ReadFile, "rf", "", "Read pcap file")
