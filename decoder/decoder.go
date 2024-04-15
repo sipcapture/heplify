@@ -2,10 +2,17 @@ package decoder
 
 import (
 	"bytes"
+	"container/list"
 	"net"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
+
+	"github.com/VictoriaMetrics/fastcache"
+	"github.com/segmentio/encoding/json"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -20,7 +27,23 @@ import (
 	"github.com/sipcapture/heplify/protos"
 )
 
-var PacketQueue = make(chan *Packet, 20000)
+var (
+	PacketQueue = make(chan *Packet, 20000)
+	scriptCache = fastcache.New(32 * 1024 * 1024)
+)
+
+type CachePayload struct {
+	SrcIP         net.IP `json:"src_ip" default:""`
+	SrcPort       uint16 `json:"src_port"`
+	DstIP         net.IP `json:"dst_ip"`
+	DstPort       uint16 `json:"dst_port"`
+	AckNumber     uint32 `json:"ack_number"`
+	SeqNumber     uint32 `json:"seq_number"`
+	NextSeqNumber uint32 `json:"next_seq_number"`
+	RemainLength  int    `json:"remain_length" default:"-1"`
+	FrameCount    int    `json:"frame_count" default:"0"`
+	Payload       []byte `json:"payload"`
+}
 
 type Decoder struct {
 	asm           *tcpassembly.Assembler
@@ -35,6 +58,7 @@ type Decoder struct {
 	d1q           layers.Dot1Q
 	gre           layers.GRE
 	eth           layers.Ethernet
+	etherip       layers.EtherIP
 	vxl           ownlayers.VXLAN
 	hperm         ownlayers.HPERM
 	ip4           layers.IPv4
@@ -49,6 +73,8 @@ type Decoder struct {
 	filterIP      []string
 	filterSrcIP   []string
 	filterDstIP   []string
+	cachePayload  *freecache.Cache
+	lastStatTime  time.Time
 	stats
 }
 
@@ -157,6 +183,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	dlp.AddDecodingLayer(&d.d1q)
 	dlp.AddDecodingLayer(&d.gre)
 	dlp.AddDecodingLayer(&d.eth)
+	dlp.AddDecodingLayer(&d.etherip)
 	dlp.AddDecodingLayer(&d.vxl)
 	//dlp.AddDecodingLayer(&d.hperm)
 	dlp.AddDecodingLayer(&d.ip4)
@@ -180,6 +207,8 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	d.filterSrcIP = strings.Split(config.Cfg.DiscardSrcIP, ",")
 	d.filterDstIP = strings.Split(config.Cfg.DiscardDstIP, ",")
 
+	d.cachePayload = freecache.NewCache(1024 * 1024 * 1024)
+	d.lastStatTime = time.Now()
 	if config.Cfg.Dedup {
 		d.dedupCache = freecache.NewCache(20 * 1024 * 1024) // 20 MB
 	}
@@ -344,6 +373,464 @@ func (d *Decoder) Process(data []byte, ci *gopacket.CaptureInfo) {
 	}
 }
 
+var SIP_REQUEST_METHOD = []string{
+	"INVITE",
+	"REGISTER",
+	"ACK",
+	"BYE",
+	"CANCEL",
+	"OPTIONS",
+	"PUBLISH",
+	"INFO",
+	"PRACK",
+	"SUBSCRIBE",
+	"NOTIFY",
+	"UPDATE",
+	"MESSAGE",
+	"REFER",
+}
+
+var SIP_RESPONSE_TEXT = []string{
+	"OK",
+	"TRYING",
+	"GIVING A TRY",
+	"CANCEL",
+	"CANCELING",
+	"RINGING",
+	"REQUEST TERMINATED",
+	"SESSION PROGRESS",
+	"UNAUTHORIZED",
+	"BUSY HERE",
+	"TEMPORARILY UNAVAILABLE",
+	"CALL DOES NOT EXIST",
+	"LOOP DETECTED",
+	"ADDRESS INCOMPLETE",
+	"NOT ACCEPTABLE HERE",
+	"INTERNAL SERVER ERROR",
+	"DECLINE",
+	"DOES NOT EXIST ANYWHERE",
+	"REG NOT FOUND",
+	"NOT ACCEPTABLE",
+	"NOT FOUND",
+	"CALL LEG/TRANSACTION DOES NOT EXIST",
+	"UNHANDLED BY DIALOG USAGES",
+	"ACCEPTED",
+	"REQUEST TIMEOUT",
+	"BAD REQUEST",
+	"FORBIDDEN",
+	"INVALID CSEQ",
+	"REQUEST CANCELLED",
+	"DEFAULT STATUS MESSAGE",
+	"OVERLAPPING REQUESTS",
+	"REQUEST PENDING",
+	"PAYMENT REQUIRED",
+	"UNSUPPORTED MEDIA TYPE",
+	"GATEWAY TIME-OUT",
+	"MOVED TEMPORARILY",
+	"CALL IS BEING TERMINATED",
+	"TOO MANY HOPS",
+	"BAD GATEWAY",
+	"NOT IMPLEMENTED",
+	"SESSION TERMINATED",
+	"CALL/TRANSACTION DOES NOT EXIST",
+	"PRECONDITION FAILURE",
+	"BAD SESSION DESCRIPTION",
+	"NEXT SERVICE  TEMPORARILY UNAVAILABLE",
+}
+
+func startLineRequest(val string) int {
+	upperVal := strings.ToUpper(val)
+	indexEnd := strings.Index(upperVal, " SIP/2.0")
+	if indexEnd <= 0 {
+		return -1
+	}
+
+	if indexEnd != len(upperVal)-len(" SIP/2.0") {
+		return -1
+	}
+
+	indexStart := -1
+	for index := range SIP_REQUEST_METHOD {
+		indexStart = strings.Index(upperVal, SIP_REQUEST_METHOD[index])
+		if indexStart >= 0 {
+			break
+		}
+	}
+
+	if indexStart < 0 {
+		return -1
+	}
+
+	upperVal = upperVal[indexStart:]
+	parts := strings.SplitN(upperVal, " ", 3)
+	if len(parts) != 3 {
+		return -1
+	}
+
+	for index := range parts {
+		if len(parts[index]) <= 0 {
+			return -1
+		}
+	}
+
+	if len(parts[1]) < 8 || !strings.Contains(parts[1], "SIP:") {
+		return -1
+	}
+
+	if !strings.EqualFold(parts[2], "SIP/2.0") {
+		return -1
+	}
+
+	for index := range SIP_REQUEST_METHOD {
+		if strings.EqualFold(parts[0], SIP_REQUEST_METHOD[index]) {
+			return indexStart
+		}
+	}
+
+	return -1
+}
+
+func startLineResponse(val string) int {
+	upperVal := strings.ToUpper(val)
+	indexStart := strings.Index(upperVal, "SIP/2.0 ")
+	if indexStart < 0 {
+		return -1
+	}
+
+	upperVal = upperVal[indexStart:]
+
+	parts := strings.SplitN(upperVal, " ", 3)
+	if len(parts) != 3 {
+		return -1
+	}
+
+	if !strings.EqualFold(parts[0], "SIP/2.0") {
+		return -1
+	}
+
+	responseCode, err := strconv.Atoi(parts[1])
+	if err != nil || responseCode <= 0 {
+		return -1
+	}
+
+	if len(strings.TrimSpace(parts[2])) <= 0 {
+		return indexStart
+	}
+
+	for index := range SIP_RESPONSE_TEXT {
+		if strings.EqualFold(parts[2], SIP_RESPONSE_TEXT[index]) {
+			return indexStart
+		}
+	}
+
+	logp.Warn("startLineResponse missed response text val = %s", val)
+	return indexStart
+}
+
+func (d *Decoder) addCachePayload(cachePayload *CachePayload) (result bool) {
+	if len(cachePayload.Payload) <= 0 {
+		return true
+	}
+
+	cacheData, _ := json.Marshal(cachePayload)
+	cacheKeyBuffer := bytes.Buffer{}
+	cacheKeyBuffer.WriteString(cachePayload.SrcIP.String())
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.SrcPort), 10))
+	cacheKeyBuffer.WriteString(cachePayload.DstIP.String())
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.DstPort), 10))
+	//cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.AckNumber), 10))
+	cacheKeyBuffer.WriteString("last")
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.NextSeqNumber), 10))
+	d.cachePayload.Set(cacheKeyBuffer.Bytes(), cacheData, 30)
+
+	cacheKeyBuffer.Reset()
+	cacheKeyBuffer.WriteString(cachePayload.SrcIP.String())
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.SrcPort), 10))
+	cacheKeyBuffer.WriteString(cachePayload.DstIP.String())
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.DstPort), 10))
+	//cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.AckNumber), 10))
+	cacheKeyBuffer.WriteString("next")
+	cacheKeyBuffer.WriteString(strconv.FormatUint(uint64(cachePayload.SeqNumber), 10))
+	err := d.cachePayload.Set(cacheKeyBuffer.Bytes(), cacheData, 30)
+	if err != nil {
+		logp.Err("addCachePayload err = %v, payload = [%s]", err, string(cachePayload.Payload))
+
+		logp.Err("addCachePayload err = %v src_ip = %v, src_port = %d, dst_ip = %v, "+
+			"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d, payload = [%s]",
+			err, cachePayload.SrcIP, cachePayload.SrcPort, cachePayload.DstIP, cachePayload.DstPort, cachePayload.AckNumber,
+			cachePayload.SeqNumber, cachePayload.NextSeqNumber, cachePayload.FrameCount, cachePayload.Payload)
+		return false
+	}
+
+	return true
+}
+
+func (d *Decoder) checkTransport(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, tcp *layers.TCP) (result bool, payLoadList *list.List) {
+	ackNumber := tcp.Ack
+	seqNumber := tcp.Seq
+	payload := tcp.Payload
+	cwr := tcp.CWR
+	ece := tcp.ECE
+	ns := tcp.NS
+	checkSum := tcp.Checksum
+	window := tcp.Window
+
+	payloadList := list.New()
+	payloadLen := len(payload)
+	if payloadLen <= 0 {
+		return false, payloadList
+	}
+
+	timeDelay := time.Now().Sub(d.lastStatTime).Milliseconds()
+	if timeDelay > 60*1000 {
+		logp.Info("checkTransport expired_count = %d, miss_count = %d, entry_count = %d, "+
+			"cwr = %t, ece = %t, ns = %t, check_sum = %d, window = %d",
+			d.cachePayload.ExpiredCount(), d.cachePayload.MissCount(), d.cachePayload.EntryCount(),
+			cwr, ece, ns, checkSum, window)
+		d.lastStatTime = time.Now()
+	}
+
+	nextCacheBuffer := bytes.Buffer{}
+	nextCacheBuffer.WriteString(srcIP.String())
+	nextCacheBuffer.WriteString(strconv.FormatUint(uint64(srcPort), 10))
+	nextCacheBuffer.WriteString(dstIP.String())
+	nextCacheBuffer.WriteString(strconv.FormatUint(uint64(dstPort), 10))
+	//nextCacheBuffer.WriteString(strconv.FormatUint(uint64(ackNumber), 10))
+	nextCacheBuffer.WriteString("next")
+	nextCacheBuffer.WriteString(strconv.FormatUint(uint64(seqNumber)+uint64(payloadLen), 10))
+
+	lastCacheBuffer := bytes.Buffer{}
+	lastCacheBuffer.WriteString(srcIP.String())
+	lastCacheBuffer.WriteString(strconv.FormatUint(uint64(srcPort), 10))
+	lastCacheBuffer.WriteString(dstIP.String())
+	lastCacheBuffer.WriteString(strconv.FormatUint(uint64(dstPort), 10))
+	//lastCacheBuffer.WriteString(strconv.FormatUint(uint64(ackNumber), 10))
+	lastCacheBuffer.WriteString("last")
+	lastCacheBuffer.WriteString(strconv.FormatUint(uint64(seqNumber), 10))
+
+	nextCachePayload := CachePayload{}
+	nextPayloadBytes, err := d.cachePayload.Get(nextCacheBuffer.Bytes())
+	if err == nil && len(nextPayloadBytes) > 0 {
+		if !d.cachePayload.Del(nextCacheBuffer.Bytes()) {
+			logp.Err("checkTransport del next cache failed")
+		}
+		err = json.Unmarshal(nextPayloadBytes, &nextCachePayload)
+		if err != nil {
+			logp.Err("checkTransport unmarshal next cache err = %v", err)
+		}
+	}
+
+	lastCachePayload := CachePayload{}
+	var lastPayloadBytes []byte
+	lastPayloadBytes, err = d.cachePayload.Get(lastCacheBuffer.Bytes())
+	if err == nil && len(lastPayloadBytes) > 0 {
+		if !d.cachePayload.Del(lastCacheBuffer.Bytes()) {
+			logp.Err("checkTransport del last cache failed")
+		}
+		err = json.Unmarshal(lastPayloadBytes, &lastCachePayload)
+		if err != nil {
+			logp.Err("checkTransport unmarshal last cache err = %v", err)
+
+		}
+	}
+
+	if len(nextPayloadBytes) <= 0 && len(lastPayloadBytes) <= 0 && payloadLen < 10 {
+		return false, payloadList
+	}
+
+	byteBuffer := bytes.Buffer{}
+	processCachePayload := CachePayload{}
+	if len(lastCachePayload.Payload) > 0 {
+		if seqNumber == lastCachePayload.NextSeqNumber {
+			byteBuffer.Write(lastCachePayload.Payload)
+		} else {
+			if lastCachePayload.SeqNumber != seqNumber ||
+				lastCachePayload.NextSeqNumber != (seqNumber+uint32(payloadLen)) ||
+				!bytes.Equal(lastCachePayload.Payload, payload) {
+				logp.Err("checkTransport retransmission payload src_ip = %v, src_port = %d, dst_ip = %v, "+
+					"dst_port = %d, last_ack_number = %d, ack_number = %d, last_seq_number = %d, last_next_seq_number = %d, "+
+					"seq_number = %d, next_seq_number = %d, last_frame_count = %d",
+					srcIP, srcPort, dstIP, dstPort, lastCachePayload.AckNumber, ackNumber, lastCachePayload.SeqNumber,
+					lastCachePayload.NextSeqNumber, seqNumber, seqNumber+uint32(payloadLen), lastCachePayload.FrameCount)
+				logp.Err("checkTransport retransmission last = [%s], current = [%s]", string(lastCachePayload.Payload), string(payload))
+			}
+		}
+		processCachePayload.SeqNumber = lastCachePayload.SeqNumber
+	} else {
+		processCachePayload.SeqNumber = seqNumber
+	}
+	byteBuffer.Write(payload)
+	if len(nextCachePayload.Payload) > 0 {
+		if (seqNumber + uint32(payloadLen)) == nextCachePayload.SeqNumber {
+			byteBuffer.Write(nextCachePayload.Payload)
+		} else {
+			if nextCachePayload.SeqNumber != seqNumber ||
+				nextCachePayload.NextSeqNumber != (seqNumber+uint32(payloadLen)) ||
+				!bytes.Equal(nextCachePayload.Payload, payload) {
+				logp.Err("checkTransport retransmission payload src_ip = %v, src_port = %d, dst_ip = %v, "+
+					"dst_port = %d, next_ack_number = %d, ack_number = %d, next_seq_number = %d, next_next_seq_number = %d, "+
+					"seq_number = %d, next_seq_number = %d, next_frame_count = %d",
+					srcIP, srcPort, dstIP, dstPort, nextCachePayload.AckNumber, ackNumber, nextCachePayload.SeqNumber,
+					nextCachePayload.NextSeqNumber, seqNumber, seqNumber+uint32(payloadLen), nextCachePayload.FrameCount)
+				logp.Err("checkTransport retransmission next = [%s], current = [%s]", string(nextCachePayload.Payload), string(payload))
+			}
+		}
+
+		processCachePayload.NextSeqNumber = nextCachePayload.NextSeqNumber
+	} else {
+		processCachePayload.NextSeqNumber = seqNumber + uint32(payloadLen)
+	}
+
+	processCachePayload.SrcIP = srcIP
+	processCachePayload.SrcPort = srcPort
+	processCachePayload.DstIP = dstIP
+	processCachePayload.DstPort = dstPort
+	processCachePayload.AckNumber = ackNumber
+	processCachePayload.FrameCount = lastCachePayload.FrameCount + nextCachePayload.FrameCount + 1
+
+	if len(lastCachePayload.Payload) > 0 && len(nextCachePayload.Payload) > 0 {
+		logp.Info("checkTransport combine last and next payload src_ip = %v, src_port = %d, dst_ip = %v, "+
+			"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+			srcIP, srcPort, dstIP, dstPort, ackNumber, processCachePayload.SeqNumber,
+			processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+		logp.Info("checkTransport combine last and next last = [%s], current = [%s], next = [%s]",
+			string(lastCachePayload.Payload), string(payload), string(nextCachePayload.Payload))
+	}
+
+	currentPayLoad := byteBuffer.Bytes()
+	processCacheByteBuffer := bytes.Buffer{}
+	processCount := 0
+	for {
+		if len(currentPayLoad) <= 0 {
+			break
+		}
+
+		processCount++
+		if processCount > 30 {
+			logp.Err("checkTransport invalid process src_ip = %v, src_port = %d, dst_ip = %v, "+
+				"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+				srcIP, srcPort, dstIP, dstPort, ackNumber, processCachePayload.SeqNumber,
+				processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+			logp.Err("checkTransport invalid process full_payload = [%s], current_payload = [%s]",
+				string(byteBuffer.Bytes()), string(currentPayLoad))
+			break
+		}
+
+		posHeaderEnd := bytes.Index(currentPayLoad, []byte("\r\n\r\n"))
+		if posHeaderEnd < 0 {
+			processCacheByteBuffer.Write(currentPayLoad)
+			break
+		}
+
+		if posHeaderEnd == 0 && bytes.Index(currentPayLoad, []byte("\r\n\r\n\r\n\r\n")) == 0 {
+			currentPayLoad = currentPayLoad[4:]
+			continue
+		}
+
+		// Split in headers and content
+		headers := currentPayLoad[:posHeaderEnd+4] // keep separator
+		content := currentPayLoad[posHeaderEnd+4:] // strip separator
+		currentContentLen := len(content)
+
+		headerLines := bytes.Split(headers, []byte("\r\n"))
+		headerPos := 0
+		for indexHeader := 0; indexHeader < len(headerLines); indexHeader++ {
+			headerLine := string(headerLines[indexHeader])
+			indexStartLine := startLineRequest(headerLine)
+			if indexStartLine < 0 {
+				indexStartLine = startLineResponse(headerLine)
+			}
+
+			if indexStartLine >= 0 {
+				headerPos += indexStartLine
+				break
+			}
+
+			if strings.Contains(headerLine, "SIP/2.0 200 OK") {
+				logp.Err("checkTransport invalid header line src_ip = %v, src_port = %d, dst_ip = %v, "+
+					"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+					srcIP, srcPort, dstIP, dstPort, ackNumber, processCachePayload.SeqNumber,
+					processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+				logp.Err("checkTransport invalid header line full_payload = [%s], current_payload = [%s]",
+					string(byteBuffer.Bytes()), string(currentPayLoad))
+			}
+
+			if indexHeader == len(headerLines)-1 {
+				headerPos += len(headerLine)
+			} else {
+				headerPos += len(headerLine) + 2
+			}
+		}
+		if headerPos > 0 {
+			if headerPos > len(headers) {
+				headerPos = len(headers)
+			}
+
+			processCacheByteBuffer.Write(headers[:headerPos])
+			if headerPos >= len(headers) {
+				currentPayLoad = content
+				continue
+			}
+			headers = headers[headerPos:]
+		}
+
+		callID, err := getHeaderValue(callIdHeaderNames, headers)
+		if err != nil || len(callID) <= 0 {
+			logp.Err("checkTransport no call_id err = %s, src_ip = %v, src_port = %d, dst_ip = %v, "+
+				"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+				err.Error(), srcIP, srcPort, dstIP, dstPort, ackNumber, processCachePayload.SeqNumber,
+				processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+			logp.Err("checkTransport no call_id full_payload = [%s], current_payload = [%s]",
+				string(byteBuffer.Bytes()), string(currentPayLoad))
+			currentPayLoad = content
+			continue
+		}
+
+		contentLength := -1
+		contentLengthValue, err := getHeaderValue(contentLengthHeaderNames, headers)
+		if err == nil && len(contentLengthValue) > 0 {
+			contentLength, _ = strconv.Atoi(strings.TrimSpace(string(contentLengthValue)))
+		}
+		if contentLength < 0 {
+			logp.Err("checkTransport invalid content_length src_ip = %v, src_port = %d, dst_ip = %v, "+
+				"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+				srcIP, srcPort, dstIP, dstPort, ackNumber, processCachePayload.SeqNumber,
+				processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+			logp.Err("checkTransport invalid content_length full_payload = [%s], current_payload = [%s]",
+				string(byteBuffer.Bytes()), string(currentPayLoad))
+			currentPayLoad = content
+			continue
+		}
+
+		if contentLength > currentContentLen {
+			processCacheByteBuffer.Write(headers)
+			processCacheByteBuffer.Write(content)
+			currentPayLoad = nil
+			break
+		}
+
+		sipPayloadBuffer := bytes.Buffer{}
+		sipPayloadBuffer.Write(headers)
+		sipPayloadBuffer.Write(content[:contentLength])
+		payloadList.PushBack(sipPayloadBuffer.Bytes())
+		currentPayLoad = content[contentLength:]
+
+		if contentLength < currentContentLen {
+			logp.Info("checkTransport multi payload content_length = %d, current_content_len = %d, call_id = %s, src_ip = %v, src_port = %d, dst_ip = %v, "+
+				"dst_port = %d, ack_number = %d, seq_number = %d, next_seq_number = %d, frame_count = %d",
+				contentLength, currentContentLen, string(callID), srcIP, srcPort, dstIP, dstPort, ackNumber,
+				processCachePayload.SeqNumber, processCachePayload.NextSeqNumber, processCachePayload.FrameCount)
+			logp.Info("checkTransport multi payload content_length full_payload = [%s], current_payload = [%s]",
+				string(byteBuffer.Bytes()), string(currentPayLoad))
+		}
+	}
+
+	processCachePayload.Payload = processCacheByteBuffer.Bytes()
+	d.addCachePayload(&processCachePayload)
+
+	return true, payloadList
+}
+
 func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *layers.UDP, tcp *layers.TCP, sctp *layers.SCTP, flow gopacket.Flow, ci *gopacket.CaptureInfo, IPVersion, IPProtocol uint8, sIP, dIP net.IP) {
 	if config.Cfg.DiscardIP != "" {
 		for _, v := range d.filterIP {
@@ -383,6 +870,7 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		Tmsec:    uint32(ci.Timestamp.Nanosecond() / 1000),
 	}
 
+	var payloadList *list.List
 	for _, layerType := range *foundLayerTypes {
 		switch layerType {
 		case layers.LayerTypeDot1Q:
@@ -444,7 +932,6 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 		case layers.LayerTypeTCP:
 			pkt.SrcPort = uint16(tcp.SrcPort)
 			pkt.DstPort = uint16(tcp.DstPort)
-			pkt.Payload = tcp.Payload
 			atomic.AddUint64(&d.tcpCount, 1)
 			logp.Debug("payload", "TCP", pkt)
 
@@ -452,7 +939,23 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 				d.asm.AssembleWithTimestamp(flow, tcp, ci.Timestamp)
 				return
 			}
-			extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+
+			if config.Cfg.SipAssembly {
+				var checkResult bool
+				checkResult, payloadList = d.checkTransport(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, tcp)
+				if !checkResult || payloadList.Len() <= 0 {
+					return
+				}
+
+				payloadList.PushBack(pkt.Payload)
+
+				for elem := payloadList.Front(); elem != nil; elem = elem.Next() {
+					extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, elem.Value.([]byte))
+				}
+			} else {
+				pkt.Payload = tcp.Payload
+				extractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+			}
 
 		case layers.LayerTypeSCTP:
 			pkt.SrcPort = uint16(sctp.SrcPort)
@@ -480,21 +983,56 @@ func (d *Decoder) processTransport(foundLayerTypes *[]gopacket.LayerType, udp *l
 	}
 
 	var cPos int
-	if cPos = bytes.Index(pkt.Payload, []byte("CSeq")); cPos > -1 {
-		pkt.ProtoType = 1
-	} else if cPos = bytes.Index(pkt.Payload, []byte("Cseq")); cPos > -1 {
-		pkt.ProtoType = 1
-	}
-	if cPos > 16 {
-		if s := bytes.Index(pkt.Payload[:cPos], []byte("Sip0")); s > -1 {
-			pkt.Payload = pkt.Payload[s+4:]
-		}
-	}
+	if payloadList != nil && payloadList.Len() > 0 {
+		for elem := payloadList.Front(); elem != nil; elem = elem.Next() {
+			pkt2 := &Packet{
+				Version:   pkt.Version,
+				Protocol:  pkt.Protocol,
+				SrcIP:     pkt.SrcIP,
+				DstIP:     pkt.DstIP,
+				SrcPort:   pkt.SrcPort,
+				DstPort:   pkt.DstPort,
+				Tsec:      pkt.Tsec,
+				Tmsec:     pkt.Tmsec,
+				ProtoType: pkt.ProtoType,
+				CID:       pkt.CID,
+				Vlan:      pkt.Vlan,
+			}
+			pkt2.Payload = elem.Value.([]byte)
+			if cPos = bytes.Index(pkt2.Payload, []byte("CSeq")); cPos > -1 {
+				pkt2.ProtoType = 1
+			} else if cPos = bytes.Index(pkt2.Payload, []byte("Cseq")); cPos > -1 {
+				pkt2.ProtoType = 1
+			}
+			if cPos > 16 {
+				if s := bytes.Index(pkt2.Payload[:cPos], []byte("Sip0")); s > -1 {
+					pkt2.Payload = pkt2.Payload[s+4:]
+				}
+			}
 
-	if pkt.ProtoType > 0 && pkt.Payload != nil {
-		PacketQueue <- pkt
+			if pkt2.ProtoType > 0 && pkt2.Payload != nil {
+				PacketQueue <- pkt2
+			} else {
+				atomic.AddUint64(&d.unknownCount, 1)
+			}
+		}
 	} else {
-		atomic.AddUint64(&d.unknownCount, 1)
+		if cPos = bytes.Index(pkt.Payload, []byte("CSeq")); cPos > -1 {
+			pkt.ProtoType = 1
+		} else if cPos = bytes.Index(pkt.Payload, []byte("Cseq")); cPos > -1 {
+			pkt.ProtoType = 1
+		}
+		if cPos > 16 {
+			if s := bytes.Index(pkt.Payload[:cPos], []byte("Sip0")); s > -1 {
+				pkt.Payload = pkt.Payload[s+4:]
+			}
+		}
+
+		if pkt.ProtoType > 0 && pkt.Payload != nil {
+			PacketQueue <- pkt
+		} else {
+			atomic.AddUint64(&d.unknownCount, 1)
+		}
 	}
 }
 
@@ -521,4 +1059,107 @@ func (d *Decoder) ProcessHEPPacket(data []byte) {
 	atomic.AddUint64(&d.hepCount, 1)
 
 	PacketQueue <- pkt
+}
+
+func (d *Decoder) SendPingHEPPacket() {
+
+	var data = []byte{0x48, 0x45, 0x50, 0x33, 0x3, 0xa}
+	pkt := &Packet{
+		Version: 0,
+		Payload: data,
+	}
+
+	atomic.AddUint64(&d.hepCount, 1)
+
+	PacketQueue <- pkt
+}
+
+func stb(s string) []byte {
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	var res []byte
+
+	bh := (*reflect.SliceHeader)((unsafe.Pointer(&res)))
+	bh.Data = sh.Data
+	bh.Len = sh.Len
+	bh.Cap = sh.Len
+	return res
+}
+
+// Packet
+func (pkt *Packet) GetVersion() uint32 {
+	if pkt != nil {
+		return uint32(pkt.Version)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetProtocol() uint32 {
+	if pkt != nil {
+		return uint32(pkt.Protocol)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetSrcIP() string {
+	if pkt != nil {
+		return pkt.SrcIP.String()
+	}
+	return ""
+}
+
+func (pkt *Packet) GetDstIP() string {
+	if pkt != nil {
+		return pkt.DstIP.String()
+	}
+	return ""
+}
+
+func (pkt *Packet) GetSrcPort() uint16 {
+	if pkt != nil {
+		return pkt.SrcPort
+	}
+
+	return 0
+}
+
+func (pkt *Packet) GetDstPort() uint16 {
+	if pkt != nil {
+		return pkt.DstPort
+	}
+	return 0
+}
+
+func (pkt *Packet) GetTsec() uint32 {
+	if pkt != nil {
+		return pkt.Tsec
+	}
+	return 0
+}
+
+func (pkt *Packet) GetTmsec() uint32 {
+	if pkt != nil {
+		return pkt.Tmsec
+	}
+	return 0
+}
+
+func (pkt *Packet) GetProtoType() uint32 {
+	if pkt != nil {
+		return uint32(pkt.ProtoType)
+	}
+	return 0
+}
+
+func (pkt *Packet) GetPayload() string {
+	if pkt != nil {
+		return string(pkt.Payload)
+	}
+	return ""
+}
+
+func (pkt *Packet) GetCID() string {
+	if pkt != nil {
+		return string(pkt.CID)
+	}
+	return ""
 }

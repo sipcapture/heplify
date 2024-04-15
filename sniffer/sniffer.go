@@ -23,6 +23,7 @@ import (
 	"github.com/sipcapture/heplify/config"
 	"github.com/sipcapture/heplify/decoder"
 	"github.com/sipcapture/heplify/dump"
+	"github.com/sipcapture/heplify/promstats"
 	"github.com/sipcapture/heplify/publish"
 )
 
@@ -33,9 +34,6 @@ type SnifferSetup struct {
 	isAlive          bool
 	dumpChan         chan *dump.Packet
 	mode             string
-	collectorAddress string
-	isCollector      bool
-	collectOnlySIP   bool
 	bpf              string
 	file             string
 	filter           []string
@@ -45,17 +43,26 @@ type SnifferSetup struct {
 	collectorTCPconn *net.TCPListener
 	isCollectorTcp   bool
 	DataSource       gopacket.PacketDataSource
+	//collector mode
+	collectorAddress string
+	isCollector      bool
+	collectOnlySIP   bool
+	filterIP         []string
+	filterSrcIP      []string
+	filterDstIP      []string
 	stats
 }
 
 type MainWorker struct {
 	publisher *publish.Publisher
 	decoder   *decoder.Decoder
+	ping      *decoder.Decoder
 }
 
 type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 	OnHEPPacket(data []byte)
+	SendPingHEPPacket()
 }
 
 type stats struct {
@@ -93,6 +100,10 @@ func (mw *MainWorker) OnPacket(data []byte, ci *gopacket.CaptureInfo) {
 
 func (mw *MainWorker) OnHEPPacket(data []byte) {
 	mw.decoder.ProcessHEPPacket(data)
+}
+
+func (mw *MainWorker) SendPingHEPPacket() {
+	mw.decoder.SendPingHEPPacket()
 }
 
 func (sniffer *SnifferSetup) setFromConfig() error {
@@ -252,7 +263,7 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			sniffer.isCollectorTcp = true
 
 			if err != nil {
-				defer sniffer.collectorUDPconn.Close()
+				defer sniffer.collectorTCPconn.Close()
 				return fmt.Errorf("couldn't start collector server: %v", err)
 			}
 
@@ -279,6 +290,9 @@ func New(cfgMain *config.Config) (*SnifferSetup, error) {
 		sniffer.collectorAddress = cfgMain.HepCollector
 		sniffer.isCollector = true
 		sniffer.collectOnlySIP = cfgMain.CollectOnlySip
+		sniffer.filterIP = strings.Split(cfgMain.DiscardIP, ",")
+		sniffer.filterSrcIP = strings.Split(cfgMain.DiscardSrcIP, ",")
+		sniffer.filterDstIP = strings.Split(cfgMain.DiscardDstIP, ",")
 	}
 
 	if sniffer.file == "" {
@@ -315,12 +329,24 @@ func New(cfgMain *config.Config) (*SnifferSetup, error) {
 	return sniffer, nil
 }
 
+func (sniffer *SnifferSetup) SendPing() error {
+	sniffer.worker.SendPingHEPPacket()
+	return nil
+}
+
 func (sniffer *SnifferSetup) Run() error {
 	var (
 		loopCount   = 1
 		lastPktTime *time.Time
 		retError    error
+		doHepParse  bool
+		hep         *decoder.HEP
 	)
+
+	//pre parsing in collector mode
+	if sniffer.collectOnlySIP || len(sniffer.filterIP) > 0 || len(sniffer.filterSrcIP) > 0 || len(sniffer.filterDstIP) > 0 {
+		doHepParse = true
+	}
 
 LOOP:
 	for sniffer.isAlive {
@@ -340,6 +366,9 @@ LOOP:
 						logp.Err("Error accepting tcp connection: ", err.Error())
 						continue
 					}
+
+					promstats.ConnectedClients.Inc()
+
 					// Handle connections in a new goroutine.
 					go sniffer.handleRequestExtended(conn)
 				}
@@ -359,20 +388,60 @@ LOOP:
 					//counter
 					atomic.AddUint64(&sniffer.hepUDPCount, 1)
 
-					//If we wanna filter only SIP
-					if sniffer.collectOnlySIP {
-						hep, err := decoder.DecodeHEP(message[:rlen])
+					//Prometheus
+					promstats.ClientLastMetricTimestamp.SetToCurrentTime()
+
+					if doHepParse {
+						hep, err = decoder.DecodeHEP(message[:rlen])
 						if err != nil {
 							logp.Err("Bad HEP!")
-						}
-						if hep.ProtoType != 1 {
-							logp.Debug("collector", "this is non sip")
 							continue
-						} else {
-							//counter
+						}
+
+						if hep.ProtoType == 1 {
 							atomic.AddUint64(&sniffer.hepSIPCount, 1)
 						}
 					}
+
+					//If we wanna filter only SIP
+					if hep != nil {
+						if sniffer.collectOnlySIP && hep.ProtoType != 1 {
+							logp.Debug("collector", "this is non sip")
+							continue
+						}
+						discardMessage := false
+						for _, v := range sniffer.filterIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterSrcIP {
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterDstIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+						}
+
+						if discardMessage {
+							continue
+						}
+					}
+
 					sniffer.worker.OnHEPPacket(message[:rlen])
 				} else {
 					//counter
@@ -389,7 +458,14 @@ LOOP:
 			}
 
 			if err == io.EOF {
+
 				logp.Debug("sniffer", "End of file")
+
+				if sniffer.config.EOFExit {
+					sniffer.Close()
+					os.Exit(0)
+				}
+
 				loopCount++
 				if sniffer.config.Loop > 0 && loopCount > sniffer.config.Loop {
 					// Give the publish goroutine 200 ms to flush
@@ -648,6 +724,9 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 			}
 
 			if bytes.HasPrefix(dataHeader, []byte{0x48, 0x45, 0x50, 0x33}) {
+
+				//Prometheus
+				promstats.ClientLastMetricTimestamp.SetToCurrentTime()
 
 				length := binary.BigEndian.Uint16(dataHeader[4:6])
 

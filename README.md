@@ -1,4 +1,9 @@
-<img src="https://user-images.githubusercontent.com/20154956/33374900-42c9253a-d508-11e7-8a9e-ea73a515a514.png">
+<a href="https://sipcapture.org"><img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" width=200/></a>
+
+<img src="https://github.com/sipcapture/heplify/assets/1423657/7a36896d-0bd3-4cf3-9525-0513e67aee46">
+
+<img src="https://img.shields.io/docker/pulls/sipcapture/heplify">
+
 heplify is captagents little brother, optimized for speed and simplicity. It's a single binary which you can run
 on Linux, ARM, MIPS, Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify is able to send
 SIP, correlated RTCP, RTCPXR, DNS, Logs into homer.
@@ -26,7 +31,36 @@ Download [heplify.exe](https://github.com/sipcapture/heplify/releases)
 
 ### Development build
 
-If you have Go 1.11+ installed, build the latest heplify binary by running `make`.
+If you have Go 1.18+ installed, build the latest heplify binary by running `make`.
+
+Now you should install LUA Jit:
+
+* Compile from sources:  
+  
+  Install luajit dev libary
+  
+  `apt-get install libluajit-5.1-dev`
+  
+  or 
+  
+  `yum install luajit-devel`
+
+  or for macOS
+
+  ```sh
+  # Assuming brew installs to /usr/local/
+  brew install lua@5.1 luajit
+  ln -s /usr/local/lib/pkgconfig/luajit.pc /usr/local/lib/pkgconfig/luajit-5.1.pc
+  export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig/
+  ```
+  
+  [install](https://golang.org/doc/install) Go 1.11+
+
+  `go build cmd/heplify/heplify.go`
+  
+  
+
+
 
 You can also build a docker image:
 
@@ -50,7 +84,7 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
   -di string
 	Discard uninteresting packets by any string
   -dim string
-	Discard uninteresting SIP packets by CSeq [OPTIONS,NOTIFY]
+	Discard uninteresting SIP packets by Method [OPTIONS,NOTIFY]
   -diip string
 	Discard uninteresting SIP packets by Source or Destination IP(s)
   -disip string
@@ -59,6 +93,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Discard uninteresting SIP packets by Destination IP(s)
   -e	
 	Log to stderr and disable syslog/file output
+  -eof-exit
+        Exit once done reading pcap file
   -erspan
 	erspan
   -fg uint
@@ -89,6 +125,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Log filename (default "heplify.log")
   -nt string
 	Network types are [udp, tcp, tls] (default "udp")
+  -bpf string
+	Custom bpf filter (default "")
   -o	
 	Read packet for packet
   -p string
@@ -121,6 +159,11 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Path to write pcap file
   -zf
 	Enable pcap compression
+  -script-file string
+    	LUA script file path to execute on each packet
+  -script-hep-filter string
+    	HEP Type filter for LUA script, comma separated list (default "1")
+
 ```
 
 ## Examples
@@ -158,6 +201,9 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 
 # Capture SIP packet with HPERM encapsulation on port 7932 and interface eth2, send to 192.168.1.1:9060 and print debug info on stdout
 ./heplify -i eth2 -bpf "port 7932" -hs 192.168.1.1:9060 -l debug -e
+
+# Capture SIP packet with VXLAN encapsulation on port 4789 and interface eth0, send to 192.168.1.1:9060 and print debug info on stdout
+./heplify -i eth0 -bpf "port 4789" -hs 192.168.1.1:9060 -l debug -e
 
 # Run heplify in "HEP Collector" mode in order to receive HEP input via TCP on port 9060 and fork (output) to two HEP servers listening on port 9063
 ./heplify -e -hs HEPServer1:9063,HEPserver2:9063 -hin tcp:1.2.3.4:9060

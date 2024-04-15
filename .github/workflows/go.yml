@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master, main ]
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
 
   build:
@@ -16,10 +19,57 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.17
+        go-version: 1.21
         
     - name: Libraries
-      run: sudo apt-get install -y libpcap-dev
+      run: sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+      
+    - name: LuaJIT
+      run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
       
     - name: Build
       run: go build -ldflags "-s -w"  -o heplify *.go
+
+  docker-push:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v3
+    - id: tag_bump
+      name: Bump version and push tag
+      uses: anothrNick/github-tag-action@1.53.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DEFAULT_BUMP: none
+        BRANCH: master
+          
+    - name: Log in to the Container registry
+      uses: docker/login-action@v2.1.0
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v4.1.1
+      with:
+        images: |
+          ghcr.io/${{ github.repository }}
+        tags: |
+          latest
+          ${{ steps.tag_bump.outputs.tag }}
+          
+    - name: Build and push
+      uses: docker/build-push-action@v3.2.0
+      with:
+        context: .
+        file: ./docker/heplify/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
