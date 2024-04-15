@@ -93,6 +93,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Discard uninteresting SIP packets by Destination IP(s)
   -e	
 	Log to stderr and disable syslog/file output
+  -eof-exit
+        Exit once done reading pcap file
   -erspan
 	erspan
   -fg uint
@@ -135,8 +137,6 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Use Protobuf on wire
   -rf string
 	Read pcap file
-   -exit-eof
-        Exit once done reading pcap file
   -rs
 	Use packet timestamps with maximum pcap read speed
   -rt int
