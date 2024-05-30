@@ -25,7 +25,7 @@ jobs:
       run: sudo apt-get install -y libpcap-dev libluajit-5.1-dev
       
     - name: LuaJIT
-      run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
+      run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && git checkout v2.1 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
       
     - name: Build
       run: go build -ldflags "-s -w"  -o heplify *.go
