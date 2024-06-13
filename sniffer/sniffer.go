@@ -63,6 +63,7 @@ type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 	OnHEPPacket(data []byte)
 	SendPingHEPPacket()
+	SendExitHEPPacket()
 }
 
 type stats struct {
@@ -104,6 +105,10 @@ func (mw *MainWorker) OnHEPPacket(data []byte) {
 
 func (mw *MainWorker) SendPingHEPPacket() {
 	mw.decoder.SendPingHEPPacket()
+}
+
+func (mw *MainWorker) SendExitHEPPacket() {
+	mw.decoder.SendExitHEPPacket()
 }
 
 func (sniffer *SnifferSetup) setFromConfig() error {
@@ -334,6 +339,11 @@ func (sniffer *SnifferSetup) SendPing() error {
 	return nil
 }
 
+func (sniffer *SnifferSetup) SendExitPacket() error {
+	sniffer.worker.SendExitHEPPacket()
+	return nil
+}
+
 func (sniffer *SnifferSetup) Run() error {
 	var (
 		loopCount   = 1
@@ -462,6 +472,11 @@ LOOP:
 				logp.Debug("sniffer", "End of file")
 
 				if sniffer.config.EOFExit {
+					logp.Info("EOFExit enabled.Prepare exit...")
+					sniffer.worker.SendExitHEPPacket()
+					config.WgExitGroup.Add(1)
+					config.WgExitGroup.Wait()
+					logp.Info("Sent all packets, exiting...")
 					sniffer.Close()
 					os.Exit(0)
 				}

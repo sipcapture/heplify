@@ -81,6 +81,15 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 			}
 			pub.setHEPPing(msg)
 			logp.Debug("publisher", "sent hep ping from collector")
+		} else if pkt.Version == 255 {
+			//this is EXIT
+			logp.Info("received exit signal")
+			if config.Cfg.Iface.EOFExit {
+				logp.Info("exiting...")
+				config.WgExitGroup.Done()
+				return
+			}
+			break
 		} else {
 
 			if scriptEnable {

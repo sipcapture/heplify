@@ -1,10 +1,14 @@
 package config
 
 import (
+	"sync"
+
 	"github.com/negbie/logp"
 )
 
 var Cfg Config
+
+var WgExitGroup sync.WaitGroup
 
 type Config struct {
 	Iface              *InterfacesConfig
