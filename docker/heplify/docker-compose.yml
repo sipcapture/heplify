@@ -1,6 +1,14 @@
 version: '2'
 services:
   heplify:
-    image: "sipcapture/heplify:master"
-    command: "./heplify -t af_packet -e"
-    container_name: "heplify"
+      image: sipcapture/heplify:latest
+      user: 1000:1000
+      cap_add:
+        - CAP_NET_ADMIN
+        - CAP_NET_RAW
+      profiles:
+        - homer
+      command:
+        ./heplify -e -hs ${HOMER_DST}:9060 -m SIP -dd -zf -l info
+      network_mode: host
+      restart: unless-stopped
