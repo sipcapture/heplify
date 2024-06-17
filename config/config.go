@@ -65,3 +65,11 @@ type InterfacesConfig struct {
 	FanoutWorker int    `config:"fanout_worker"`
 	CustomBPF    string `config:"custom_bpf"`
 }
+
+var Mcfg MtlsConfig
+
+type MtlsConfig struct {
+	Crtpath   string
+	Chainpath string
+	KeyPath   string
+}

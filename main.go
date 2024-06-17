@@ -97,6 +97,11 @@ func createFlags() {
 	flag.IntVar(&ifaceConfig.Snaplen, "s", 8192, "Snaplength")
 	flag.StringVar(&ifaceConfig.Device, "i", "any", "Listen on interface")
 	flag.StringVar(&ifaceConfig.Type, "t", "af_packet", "Capture types are [pcap, af_packet]")
+	//mtls
+	flag.StringVar(&config.Mcfg.Crtpath, "crt-path", "./cert.pem", "Heplify agent mTLS certificate")
+	flag.StringVar(&config.Mcfg.KeyPath, "crtkey-path", "./key.pem", "Heplify agent mTLS key")
+	flag.StringVar(&config.Mcfg.Chainpath, "chain-path", "./chain.pem", "Heplify server mTLS cert chain")
+
 	flag.Parse()
 
 	if hepfilter != "" {
