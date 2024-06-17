@@ -103,7 +103,6 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("Cert: ", agentCert)
 		}
 
 		if serverChain == "" {
@@ -111,7 +110,6 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("Chain: ", serverChain)
 		}
 
 		agCert, err := tls.X509KeyPair([]byte(agentCert), []byte(agentKey))
