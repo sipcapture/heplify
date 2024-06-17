@@ -98,6 +98,22 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 			return err
 		}
 	} else if config.Cfg.Network == "mtls" {
+		if agentCert == "" {
+			agentCert, err = loadFile(config.Mcfg.Crtpath)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Cert: ", agentCert)
+		}
+
+		if serverChain == "" {
+			serverChain, err = loadFile(config.Mcfg.Chainpath)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Chain: ", serverChain)
+		}
+
 		agCert, err := tls.X509KeyPair([]byte(agentCert), []byte(agentKey))
 		if err != nil {
 			panic(err)
