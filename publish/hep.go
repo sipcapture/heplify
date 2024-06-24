@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -149,6 +150,12 @@ func (h *HEPOutputer) ReSendPingPacket() {
 
 func (h *HEPOutputer) Send(msg []byte) {
 	for n := range h.addr {
+
+		if h.client[n].conn == nil || h.client[n].writer == nil {
+			logp.Debug("connection is not up, index: ", strconv.Itoa(n))
+			continue
+		}
+
 		h.client[n].writer.Write(msg)
 		err := h.client[n].writer.Flush()
 		if err != nil {
