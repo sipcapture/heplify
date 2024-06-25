@@ -13,6 +13,6 @@ require (
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/segmentio/encoding v0.3.6
 	github.com/sipcapture/golua v0.0.0-20200610090950-538d24098d76 // indirect
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/net v0.18.0
 )

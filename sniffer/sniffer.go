@@ -373,7 +373,7 @@ LOOP:
 					// Listen for an incoming connection.
 					conn, err := sniffer.collectorTCPconn.Accept()
 					if err != nil {
-						logp.Err("Error accepting tcp connection: ", err.Error())
+						logp.Err("Error accepting tcp connection: %s", err.Error())
 						continue
 					}
 
@@ -714,7 +714,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 		// Read the incoming connection into the buffer.
 		n, err := conn.Read(message)
 		if err != nil {
-			logp.Err("closed tcp connection [1]:", err.Error())
+			logp.Err("closed tcp connection [1]: %s", err.Error())
 			break
 		}
 
@@ -728,7 +728,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 			n, err := bufferPool.Read(dataHeader)
 			if err != nil {
 				if err.Error() != "EOF" {
-					logp.Err("error during read buffer: ", err)
+					logp.Err("error during read buffer: %s", err.Error())
 				}
 				break
 			}
@@ -776,7 +776,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 						// Read the incoming connection into the buffer.
 						n, err := conn.Read(message)
 						if err != nil {
-							logp.Err("closed tcp connection [2]:", err.Error())
+							logp.Err("closed tcp connection [2]: %s", err.Error())
 							bufferPool.Reset()
 							break
 						}
