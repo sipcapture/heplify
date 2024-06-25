@@ -60,12 +60,27 @@ Now you should install LUA Jit:
   
   
 
-
+### Docker
 
 You can also build a docker image:
 
 ```bash
 docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfile .
+```
+
+You can use the image using docker compose: 
+
+```
+  heplify:
+    image: sipcapture/heplify:latest
+    user: 1000:1000
+    cap_add:
+      - CAP_NET_ADMIN
+      - CAP_NET_RAW
+    command:
+      ./heplify -e -hs ${HOMER_DST}:9060 -m SIP -dd -zf -l info
+    network_mode: host
+    restart: unless-stopped
 ```
 
 ## Usage
