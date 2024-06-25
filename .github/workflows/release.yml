@@ -1,0 +1,71 @@
+name: Release Binary/Images
+
+on:
+  release:
+    types: [created, published]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5.0.1
+      with:
+        go-version: 1.21
+        
+    - name: Libraries
+      run: sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+      
+    - name: LuaJIT
+      run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && git checkout v2.1 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
+      
+    - name: Build
+      run: go build -ldflags "-s -w"  -o heplify *.go
+
+    - name: Upload
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: 'heplify'
+
+  docker-push:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4          
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3.2.0
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5.5.1
+      with:
+        images: |
+          ghcr.io/${{ github.repository }}
+        tags: |
+          latest
+          ${{ github.ref_name }}
+          
+    - name: Build and push
+      uses: docker/build-push-action@v5.4.0
+      with:
+        context: .
+        file: ./docker/heplify/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
