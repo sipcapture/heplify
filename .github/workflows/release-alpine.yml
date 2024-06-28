@@ -18,6 +18,7 @@ jobs:
       uses: jirutka/setup-alpine@v1
       with:
         arch: x86_64
+        id: alpine-root
         packages: >
           build-base
           pkgconf
@@ -39,5 +40,7 @@ jobs:
       shell: alpine.sh {0}
 
     - name: Build
-      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o /home/runner/work/heplify .
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o heplify .
       shell: alpine.sh {0}
+
+    - run: ls -alF ${{ steps.alpine-root.outputs.root-path }}/heplify
