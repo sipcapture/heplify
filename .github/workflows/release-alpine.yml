@@ -52,6 +52,7 @@ jobs:
       shell: alpine.sh {0}
 
     - name: Package for ${{ matrix.arch }}
+      if: ${{ matrix.arch != 'aarch64' }}
       run: ./scripts/build_package.sh
       env:
         ARCH: ${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
