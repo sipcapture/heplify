@@ -44,11 +44,11 @@ jobs:
       shell: alpine.sh {0}
 
     - name: Build ${{ matrix.arch }}
-      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  heplify-${{ matrix.arch }} .
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }} .
       shell: alpine.sh {0}
 
     - name: Try to run the binary ${{ matrix.arch }}
-      run: ./heplify-${{ matrix.arch }} -h
+      run: ./heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }} -h
       shell: alpine.sh {0}
 
     - name: Upload ${{ matrix.arch }}
@@ -57,7 +57,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        args: 'heplify-${{ matrix.arch }}'
+        args: heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
         
   docker-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
