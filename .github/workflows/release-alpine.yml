@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  CROSS_SYSROOT: /mnt/alpine
 
 jobs:
 
@@ -29,7 +28,6 @@ jobs:
           ca-certificates 
           git
           go
-        volumes: ${{ steps.alpine-target.outputs.root-path }}:${{ env.CROSS_SYSROOT }}
 
     - name: Install LuaJit 2.1
       run: |
