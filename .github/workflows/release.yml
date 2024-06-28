@@ -26,8 +26,8 @@ jobs:
       run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && git checkout v2.1 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install && sudo ldconfig
       
     - name: Build
-      #run: go build -ldflags "-s -w"  -o heplify *.go
-      run: CGO_ENABLED=1 GOOS=linux CGO_LDFLAGS="-lm -ldl" go build -a -ldflags '-extldflags "-static"' -tags netgo -installsuffix netgo -o heplify *.go
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o heplify .
+      # run: CGO_ENABLED=1 GOOS=linux CGO_LDFLAGS="-lm -ldl" go build -a -ldflags '-extldflags "-static"' -tags netgo -installsuffix netgo -o heplify *.go
 
     - name: Upload
       uses: skx/github-action-publish-binaries@master
