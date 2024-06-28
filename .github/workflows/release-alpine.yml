@@ -59,7 +59,7 @@ jobs:
       with:
         args: heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
         
-  docker-push:
+  docker-ghcr-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: build
@@ -75,7 +75,7 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-
+        
     - name: Docker meta
       id: meta
       uses: docker/metadata-action@v5.5.1
@@ -91,6 +91,42 @@ jobs:
       with:
         context: .
         file: ./docker/heplify/Dockerfile
-        push: ${{ github.event_name != 'pull_request' }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        
+  docker-dockerhub-push:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4          
+    - name: Login to DockerHub
+      if: ${{ steps.checkdocker.outputs.secretspresent }}
+      uses: docker/login-action@v3.2.0
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}  
+        
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5.5.1
+      with:
+        images: |
+          qxip/heplify
+        tags: |
+          latest
+          ${{ github.ref_name }}
+          
+    - name: Build and push
+      uses: docker/build-push-action@v5.4.0
+      with:
+        context: .
+        file: ./docker/heplify/Dockerfile
+        push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
