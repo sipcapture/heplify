@@ -2,8 +2,8 @@ name: Release Binary/Images (alpine)
 
 on:
   workflow_dispatch:
-#  release:
-#    types: [created, published]
+  release:
+    types: [created]
 
 env:
   REGISTRY: ghcr.io
