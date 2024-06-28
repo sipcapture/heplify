@@ -1,8 +1,9 @@
-name: Release Binary/Images
+name: Release Binary/Images (old)
 
 on:
-  release:
-    types: [created, published]
+  workflow_dispatch:
+#  release:
+#    types: [created, published]
 
 env:
   REGISTRY: ghcr.io
