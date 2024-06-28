@@ -40,7 +40,7 @@ jobs:
       shell: alpine.sh {0}
 
     - name: Build
-      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o heplify .
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  ${{ steps.alpine-root.outputs.root-path }}/heplify .
       shell: alpine.sh {0}
 
     - run: ls -alF ${{ steps.alpine-root.outputs.root-path }}/heplify
