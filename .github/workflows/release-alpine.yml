@@ -13,12 +13,15 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Alpine Linux for x86_64 (build arch)
       uses: jirutka/setup-alpine@v1
       with:
-        arch: x86_64
+        arch: ${{ matrix.arch }}
         id: alpine-root
         packages: >
           build-base
@@ -32,7 +35,7 @@ jobs:
           go
           sudo
 
-    - name: Install LuaJit 2.1
+    - name: Install LuaJit 2.1 ${{ matrix.arch }}
       run: |
         git clone https://luajit.org/git/luajit-2.0.git \
         && cd luajit-2.0 \
@@ -40,21 +43,21 @@ jobs:
         && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
       shell: alpine.sh {0}
 
-    - name: Build
-      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  heplify .
+    - name: Build ${{ matrix.arch }}
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  heplify-${{ matrix.arch }} .
       shell: alpine.sh {0}
 
-    - name: Try to run the binary
-      run: ./heplify -h
+    - name: Try to run the binary ${{ matrix.arch }}
+      run: ./heplify-${{ matrix.arch }} -h
       shell: alpine.sh {0}
 
-    - name: Upload
+    - name: Upload ${{ matrix.arch }}
       if: ${{ github.event_name != 'workflow_dispatch' }}
       uses: skx/github-action-publish-binaries@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        args: 'heplify'
+        args: 'heplify-${{ matrix.arch }}'
         
   docker-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
