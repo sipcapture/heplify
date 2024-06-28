@@ -51,13 +51,18 @@ jobs:
       run: ./heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }} -h
       shell: alpine.sh {0}
 
-    - name: Upload ${{ matrix.arch }}
+    - name: Package for ${{ matrix.arch }}
+      run: ./scripts/build_package.sh
+      env:
+        ARCH: ${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
+
+    - name: Upload Artifacts for ${{ matrix.arch }}
       if: ${{ github.event_name != 'workflow_dispatch' }}
       uses: skx/github-action-publish-binaries@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        args: heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }}
+        args: 'heplify*'
         
   docker-ghcr-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
