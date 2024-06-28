@@ -1,0 +1,45 @@
+name: Release Binary/Images (alpine)
+
+on:
+  workflow_dispatch:
+#  release:
+#    types: [created, published]
+
+env:
+  REGISTRY: ghcr.io
+  CROSS_SYSROOT: /mnt/alpine
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Alpine Linux for x86_64 (build arch)
+      uses: jirutka/setup-alpine@v1
+      with:
+        arch: x86_64
+        packages: >
+          build-base
+          pkgconf
+          linux-headers
+          musl-dev 
+          gcc 
+          libpcap-dev 
+          ca-certificates 
+          git
+          go
+        volumes: ${{ steps.alpine-target.outputs.root-path }}:${{ env.CROSS_SYSROOT }}
+      shell-name: alpine.sh
+
+    - name: Install LuaJit 2.1
+      run: |
+        git clone https://luajit.org/git/luajit-2.0.git \
+        && cd luajit-2.0 \
+        && git checkout v2.1 \
+        && make CCOPT="-static -fPIC" BUILDMODE="static" && make install
+      shell: alpine.sh {0}
+
+    - name: Build
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o /home/runner/work/heplify .
+      shell: alpine.sh {0}
