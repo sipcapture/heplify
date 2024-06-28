@@ -28,13 +28,14 @@ jobs:
           ca-certificates 
           git
           go
+          sudo
 
     - name: Install LuaJit 2.1
       run: |
         git clone https://luajit.org/git/luajit-2.0.git \
         && cd luajit-2.0 \
         && git checkout v2.1 \
-        && make CCOPT="-static -fPIC" BUILDMODE="static" && make install
+        && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
       shell: alpine.sh {0}
 
     - name: Build
