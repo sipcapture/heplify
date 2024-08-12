@@ -149,7 +149,6 @@ func (h *HEPOutputer) ReSendPingPacket() {
 }
 
 func (h *HEPOutputer) Send(msg []byte) {
-	onceSent := false
 	for n := range h.addr {
 
 		if h.client[n].conn == nil || h.client[n].writer == nil {
@@ -171,7 +170,7 @@ func (h *HEPOutputer) Send(msg []byte) {
 				h.client[n].errCnt = 0
 				if err = h.ReConnect(n); err != nil {
 					logp.Err("reconnect error: %v", err)
-					if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
+					if config.Cfg.HEPBufferEnable {
 						h.copyHEPbufftoFile(msg)
 					}
 				} else {
@@ -188,18 +187,16 @@ func (h *HEPOutputer) Send(msg []byte) {
 					err = h.client[n].writer.Flush()
 					if err != nil {
 						logp.Err("Bad resend: %v", err)
-						if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
+						if config.Cfg.HEPBufferEnable {
 							h.copyHEPbufftoFile(msg)
 						}
 					}
 				}
 			} else {
-				if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
+				if config.Cfg.HEPBufferEnable {
 					h.copyHEPbufftoFile(msg)
 				}
 			}
-		} else {
-			onceSent = true
 		}
 	}
 }
