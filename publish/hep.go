@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -153,7 +152,7 @@ func (h *HEPOutputer) Send(msg []byte) {
 	for n := range h.addr {
 
 		if h.client[n].conn == nil || h.client[n].writer == nil {
-			logp.Debug("connection is not up, index: ", strconv.Itoa(n))
+			logp.Debug("connection is not up", fmt.Sprintf("index: %d, Len: %d, once: %v", n, len(h.addr), onceSent))
 			if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
 				h.copyHEPbufftoFile(msg)
 			}
