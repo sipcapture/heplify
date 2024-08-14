@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -152,13 +151,16 @@ func (h *HEPOutputer) Send(msg []byte) {
 	onceSent := false
 	for n := range h.addr {
 
+		var err error
+
 		if h.client[n].conn == nil || h.client[n].writer == nil {
-			logp.Debug("connection is not up, index: ", strconv.Itoa(n))
-			continue
+			logp.Debug("connection is not up", fmt.Sprintf("index: %d, Len: %d, once: %v", n, len(h.addr), onceSent))
+			err = fmt.Errorf("connection is broken")
+		} else {
+			h.client[n].writer.Write(msg)
+			err = h.client[n].writer.Flush()
 		}
 
-		h.client[n].writer.Write(msg)
-		err := h.client[n].writer.Flush()
 		if err != nil {
 			h.client[n].errCnt++
 			var retry bool
