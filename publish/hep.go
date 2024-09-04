@@ -3,6 +3,7 @@ package publish
 import (
 	"bufio"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -93,6 +94,39 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 		}
 	} else if config.Cfg.Network == "tls" {
 		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: config.Cfg.SkipVerify}); err != nil {
+			promstats.ConnectionStatus.Set(0)
+			return err
+		}
+	} else if config.Cfg.Network == "mtls" {
+		if agentCert == "" {
+			agentCert, err = loadFile(config.Mcfg.Crtpath)
+			if err != nil {
+				panic(err)
+			}
+		}
+		if serverChain == "" {
+			serverChain, err = loadFile(config.Mcfg.Chainpath)
+			if err != nil {
+				panic(err)
+			}
+		}
+		if agentKey == "" {
+			serverChain, err = loadFile(config.Mcfg.Keypath)
+			if err != nil {
+				panic(err)
+			}
+		}
+		agCert, err := tls.X509KeyPair([]byte(agentCert), []byte(agentKey))
+		if err != nil {
+			panic(err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM([]byte(serverChain))
+		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{
+			InsecureSkipVerify: false,
+			RootCAs:            caCertPool,
+			Certificates:       []tls.Certificate{agCert},
+		}); err != nil {
 			promstats.ConnectionStatus.Set(0)
 			return err
 		}

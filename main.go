@@ -64,6 +64,10 @@ func createFlags() {
 	//scripts
 	flag.StringVar(&config.Cfg.ScriptFile, "script-file", "", "Script file to execute on each packet")
 	flag.StringVar(&hepfilter, "script-hep-filter", "1", "HEP filter for script, comma separated list of HEP types")
+	//mtls
+	flag.StringVar(&config.Mcfg.Crtpath, "crt-path", "./cert.pem", "Heplify agent mTLS certificate")
+	flag.StringVar(&config.Mcfg.Keypath, "key-path", "./key.pem", "Heplify agent mTLS key")
+	flag.StringVar(&config.Mcfg.Chainpath, "chain-path", "./chain.pem", "Heplify server mTLS cert chain")
 
 	//short
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
