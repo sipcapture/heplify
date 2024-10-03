@@ -79,7 +79,7 @@ jobs:
         USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
 
     - name: upload deb packagecloud
-      if: ${{ steps.checkpackagecloud.outputs.secretspresent }}
+      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent == 'true' }}
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.deb
@@ -90,7 +90,7 @@ jobs:
       continue-on-error: true
 
     - name: upload rpm packagecloud
-      if: ${{ steps.checkpackagecloud.outputs.secretspresent }}
+      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent == 'true' }}
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.rpm
