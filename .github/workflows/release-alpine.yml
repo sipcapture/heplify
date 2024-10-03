@@ -79,7 +79,7 @@ jobs:
         USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
 
     - name: upload deb packagecloud
-      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent }}
+      if: ${{ (matrix.arch != 'aarch64') && (steps.checkpackagecloud.outputs.secretspresent) }}
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.deb
@@ -87,9 +87,10 @@ jobs:
         PACKAGECLOUD-DISTRIB: any/any
         PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      continue-on-error: true
 
     - name: upload rpm packagecloud
-      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent }}
+      if: ${{ (matrix.arch != 'aarch64') && (steps.checkpackagecloud.outputs.secretspresent) }}
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.rpm
@@ -97,6 +98,7 @@ jobs:
         PACKAGECLOUD-DISTRIB: rpm_any/rpm_any
         PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      continue-on-error: true
         
   docker-ghcr-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
