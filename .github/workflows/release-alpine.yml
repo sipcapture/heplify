@@ -74,9 +74,9 @@ jobs:
         else
           echo "secretspresent=true" >> $GITHUB_OUTPUT
         fi
-        env:
-          SECRET: ${{ secrets.PACKAGECLOUD_TOKEN }}
-          USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
+      env:
+        SECRET: ${{ secrets.PACKAGECLOUD_TOKEN }}
+        USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
 
     - name: upload deb packagecloud
       if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent }}
@@ -152,9 +152,9 @@ jobs:
         else
           echo "secretspresent=true" >> $GITHUB_OUTPUT
         fi
-        env:
-          SECRET: ${{ secrets.DOCKERHUB_TOKEN }}
-          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      env:
+        SECRET: ${{ secrets.DOCKERHUB_TOKEN }}
+        USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
      
     - uses: actions/checkout@v4          
     - name: Login to DockerHub
