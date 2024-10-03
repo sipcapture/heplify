@@ -83,7 +83,7 @@ jobs:
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.deb
-        PACKAGECLOUD-REPO: siptest
+        PACKAGECLOUD-REPO: sipcapture
         PACKAGECLOUD-DISTRIB: any/any
         PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
@@ -94,7 +94,7 @@ jobs:
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.rpm
-        PACKAGECLOUD-REPO: siptest
+        PACKAGECLOUD-REPO: sipcapture
         PACKAGECLOUD-DISTRIB: rpm_any/rpm_any
         PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
@@ -171,7 +171,7 @@ jobs:
       uses: docker/metadata-action@v5.5.1
       with:
         images: |
-          raobilal28/heplify
+          qxip/heplify
         tags: |
           latest
           ${{ github.ref_name }}
