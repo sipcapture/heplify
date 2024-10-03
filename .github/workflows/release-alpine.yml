@@ -83,9 +83,9 @@ jobs:
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.deb
-        PACKAGECLOUD-USERNAME: raobilal28
         PACKAGECLOUD-REPO: siptest
         PACKAGECLOUD-DISTRIB: any/any
+        PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
 
     - name: upload rpm packagecloud
@@ -93,9 +93,9 @@ jobs:
       uses: danielmundi/upload-packagecloud@v1
       with: 
         PACKAGE-NAME: heplify-*-amd64.rpm
-        PACKAGECLOUD-USERNAME: raobilal28
         PACKAGECLOUD-REPO: siptest
         PACKAGECLOUD-DISTRIB: rpm_any/rpm_any
+        PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
         PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
         
   docker-ghcr-push:
