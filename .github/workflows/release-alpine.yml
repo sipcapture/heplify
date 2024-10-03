@@ -64,6 +64,26 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         args: 'heplify*'
+
+    - name: upload deb packagecloud
+      if: ${{ matrix.arch != 'aarch64' }}
+      uses: danielmundi/upload-packagecloud@v1
+      with: 
+        PACKAGE-NAME: heplify-*-amd64.deb
+        PACKAGECLOUD-USERNAME: qxip
+        PACKAGECLOUD-REPO: sipcapture
+        PACKAGECLOUD-DISTRIB: any/any
+        PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+
+    - name: upload rpm packagecloud
+      if: ${{ matrix.arch != 'aarch64' }}
+      uses: danielmundi/upload-packagecloud@v1
+      with: 
+        PACKAGE-NAME: heplify-*-amd64.rpm
+        PACKAGECLOUD-USERNAME: qxip
+        PACKAGECLOUD-REPO: sipcapture
+        PACKAGECLOUD-DISTRIB: rpm_any/rpm_any
+        PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
         
   docker-ghcr-push:
     if: ${{ github.event_name != 'workflow_dispatch' }}
