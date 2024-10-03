@@ -69,7 +69,7 @@ jobs:
       id: checkpackagecloud
       shell: bash
       run: |
-        if [ "$SECRET" == "" ] && [ "$USERNAME" =="" ]; then
+        if [ "$SECRET" == "" ] || [ "$USERNAME" =="" ]; then
           echo "secretspresent=false" >> $GITHUB_OUTPUT
         else
           echo "secretspresent=true" >> $GITHUB_OUTPUT
@@ -147,7 +147,7 @@ jobs:
       id: checkdocker
       shell: bash
       run: |
-        if [ "$SECRET" == "" ] && [ "$USERNAME" =="" ]; then
+        if [ "$SECRET" == "" ] || [ "$USERNAME" =="" ]; then
           echo "secretspresent=false" >> $GITHUB_OUTPUT
         else
           echo "secretspresent=true" >> $GITHUB_OUTPUT
