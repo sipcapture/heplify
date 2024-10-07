@@ -1074,6 +1074,17 @@ func (d *Decoder) SendPingHEPPacket() {
 	PacketQueue <- pkt
 }
 
+func (d *Decoder) SendExitHEPPacket() {
+
+	var data = []byte{0x48, 0x45, 0x50, 0x33, 0x3, 0xa}
+	pkt := &Packet{
+		Version: 255,
+		Payload: data,
+	}
+
+	PacketQueue <- pkt
+}
+
 func stb(s string) []byte {
 	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	var res []byte

@@ -63,6 +63,7 @@ type Worker interface {
 	OnPacket(data []byte, ci *gopacket.CaptureInfo)
 	OnHEPPacket(data []byte)
 	SendPingHEPPacket()
+	SendExitHEPPacket()
 }
 
 type stats struct {
@@ -104,6 +105,10 @@ func (mw *MainWorker) OnHEPPacket(data []byte) {
 
 func (mw *MainWorker) SendPingHEPPacket() {
 	mw.decoder.SendPingHEPPacket()
+}
+
+func (mw *MainWorker) SendExitHEPPacket() {
+	mw.decoder.SendExitHEPPacket()
 }
 
 func (sniffer *SnifferSetup) setFromConfig() error {
@@ -334,6 +339,11 @@ func (sniffer *SnifferSetup) SendPing() error {
 	return nil
 }
 
+func (sniffer *SnifferSetup) SendExitPacket() error {
+	sniffer.worker.SendExitHEPPacket()
+	return nil
+}
+
 func (sniffer *SnifferSetup) Run() error {
 	var (
 		loopCount   = 1
@@ -363,7 +373,7 @@ LOOP:
 					// Listen for an incoming connection.
 					conn, err := sniffer.collectorTCPconn.Accept()
 					if err != nil {
-						logp.Err("Error accepting tcp connection: ", err.Error())
+						logp.Err("Error accepting tcp connection: %s", err.Error())
 						continue
 					}
 
@@ -462,6 +472,11 @@ LOOP:
 				logp.Debug("sniffer", "End of file")
 
 				if sniffer.config.EOFExit {
+					logp.Info("EOFExit enabled.Prepare exit...")
+					sniffer.worker.SendExitHEPPacket()
+					config.WgExitGroup.Add(1)
+					config.WgExitGroup.Wait()
+					logp.Info("Sent all packets, exiting...")
 					sniffer.Close()
 					os.Exit(0)
 				}
@@ -699,7 +714,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 		// Read the incoming connection into the buffer.
 		n, err := conn.Read(message)
 		if err != nil {
-			logp.Err("closed tcp connection [1]:", err.Error())
+			logp.Err("Incoming tcp connection closed during read with error [1]: %s", err.Error())
 			break
 		}
 
@@ -713,7 +728,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 			n, err := bufferPool.Read(dataHeader)
 			if err != nil {
 				if err.Error() != "EOF" {
-					logp.Err("error during read buffer: ", err)
+					logp.Err("error during read buffer: %s", err.Error())
 				}
 				break
 			}
@@ -761,7 +776,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 						// Read the incoming connection into the buffer.
 						n, err := conn.Read(message)
 						if err != nil {
-							logp.Err("closed tcp connection [2]:", err.Error())
+							logp.Err("Incoming tcp connection closed during direct read from buffer with error [2]: %s", err.Error())
 							bufferPool.Reset()
 							break
 						}

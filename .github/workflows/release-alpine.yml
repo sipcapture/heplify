@@ -1,0 +1,186 @@
+name: Release Binary/Images (alpine)
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  CROSS_SYSROOT: /mnt/alpine
+  
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Alpine Linux for x86_64 (build arch)
+      uses: jirutka/setup-alpine@v1
+      with:
+        arch: ${{ matrix.arch }}
+        id: alpine-root
+        packages: >
+          build-base
+          pkgconf
+          linux-headers
+          musl-dev 
+          gcc 
+          libpcap-dev 
+          ca-certificates 
+          git
+          go
+          sudo
+
+    - name: Install LuaJit 2.1 ${{ matrix.arch }}
+      run: |
+        git clone https://luajit.org/git/luajit-2.0.git \
+        && cd luajit-2.0 \
+        && git checkout v2.1 \
+        && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install
+      shell: alpine.sh {0}
+
+    - name: Build ${{ matrix.arch }}
+      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o  heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }} .
+      shell: alpine.sh {0}
+
+    - name: Try to run the binary ${{ matrix.arch }}
+      run: ./heplify${{ matrix.arch == 'aarch64' && '-arm64' || '' }} -h
+      shell: alpine.sh {0}
+
+    - name: Package for ${{ matrix.arch }}
+      if: ${{ matrix.arch != 'aarch64' }}
+      run: ./scripts/build_package.sh
+      env:
+        ARCH: ${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
+
+    - name: Upload Artifacts for ${{ matrix.arch }}
+      if: ${{ github.event_name != 'workflow_dispatch' }}
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: 'heplify*'
+
+    - name: Check PACKAGECLOUD secret presence
+      id: checkpackagecloud
+      shell: bash
+      run: |
+        if [ "$SECRET" == "" ] || [ "$USERNAME" == "" ]; then
+          echo "secretspresent=false" >> $GITHUB_OUTPUT
+        else
+          echo "secretspresent=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        SECRET: ${{ secrets.PACKAGECLOUD_TOKEN }}
+        USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
+
+    - name: upload deb packagecloud
+      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent == 'true' }}
+      uses: danielmundi/upload-packagecloud@v1
+      with: 
+        PACKAGE-NAME: heplify-*-amd64.deb
+        PACKAGECLOUD-REPO: sipcapture
+        PACKAGECLOUD-DISTRIB: any/any
+        PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
+        PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      continue-on-error: true
+
+    - name: upload rpm packagecloud
+      if: ${{ matrix.arch != 'aarch64' && steps.checkpackagecloud.outputs.secretspresent == 'true' }}
+      uses: danielmundi/upload-packagecloud@v1
+      with: 
+        PACKAGE-NAME: heplify-*-amd64.rpm
+        PACKAGECLOUD-REPO: sipcapture
+        PACKAGECLOUD-DISTRIB: rpm_any/rpm_any
+        PACKAGECLOUD-USERNAME: ${{ secrets.PACKAGECLOUD_USERNAME }}
+        PACKAGECLOUD-TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+      continue-on-error: true
+        
+  docker-ghcr-push:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4          
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3.2.0
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5.5.1
+      with:
+        images: |
+          ghcr.io/${{ github.repository }}
+        tags: |
+          latest
+          ${{ github.ref_name }}
+          
+    - name: Build and push
+      uses: docker/build-push-action@v5.4.0
+      with:
+        context: .
+        file: ./docker/heplify/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        
+  docker-dockerhub-push:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+      contents: read
+    
+    steps:
+    - name: Check Docker secret presence
+      id: checkdocker
+      shell: bash
+      run: |
+        if [ "$SECRET" == "" ] || [ "$USERNAME" == "" ]; then
+          echo "secretspresent=false" >> $GITHUB_OUTPUT
+        else
+          echo "secretspresent=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        SECRET: ${{ secrets.DOCKERHUB_TOKEN }}
+        USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+     
+    - uses: actions/checkout@v4          
+    - name: Login to DockerHub
+      if: ${{ steps.checkdocker.outputs.secretspresent == 'true' }}
+      uses: docker/login-action@v3.2.0
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}  
+        
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5.5.1
+      with:
+        images: |
+          qxip/heplify
+        tags: |
+          latest
+          ${{ github.ref_name }}
+          
+    - name: Build and push
+      uses: docker/build-push-action@v5.4.0
+      with:
+        context: .
+        file: ./docker/heplify/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}

@@ -60,12 +60,27 @@ Now you should install LUA Jit:
   
   
 
-
+### Docker
 
 You can also build a docker image:
 
 ```bash
 docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfile .
+```
+
+You can use the image using docker compose: 
+
+```
+  heplify:
+    image: sipcapture/heplify:latest
+    user: 1000:1000
+    cap_add:
+      - CAP_NET_ADMIN
+      - CAP_NET_RAW
+    command:
+      ./heplify -e -hs ${HOMER_DST}:9060 -m SIP -dd -zf -l info
+    network_mode: host
+    restart: unless-stopped
 ```
 
 ## Usage
@@ -77,20 +92,24 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	If true, the github.com/google/gopacket/tcpassembly library will log information regarding its memory use every once in a while.
   -b int
 	Interface buffersize (MB) (default 32)
+  -bpf string
+        Custom BPF to capture packets
+  -collectonlysip
+        collect only sip
   -d string
 	Enable certain debug selectors [defrag,layer,payload,rtp,rtcp,sdp]
   -dd
 	Deduplicate packets
   -di string
 	Discard uninteresting packets by any string
-  -dim string
-	Discard uninteresting SIP packets by Method [OPTIONS,NOTIFY]
-  -diip string
-	Discard uninteresting SIP packets by Source or Destination IP(s)
-  -disip string
-	Discard uninteresting SIP packets by Source IP(s)
   -didip string
 	Discard uninteresting SIP packets by Destination IP(s)
+  -diip string
+	Discard uninteresting SIP packets by Source or Destination IP(s)
+  -dim string
+	Discard uninteresting SIP packets by Method [OPTIONS,NOTIFY]
+  -disip string
+	Discard uninteresting SIP packets by Source IP(s)
   -e	
 	Log to stderr and disable syslog/file output
   -eof-exit
@@ -101,8 +120,20 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Fanout group ID for af_packet
   -fi string
 	Filter interesting packets by any string
+  -fnum int
+        The total num of log files to keep (default 7)
+  -fsize uint
+        The rotate size per log file based on byte (default 10485760)
   -fw int
 	Fanout worker count for af_packet (default 4)
+  -hep-buffer-activate
+        enable buffer messages if connection to HEP server broken
+  -hep-buffer-debug
+        enable debug buffer messages
+  -hep-buffer-file string
+        filename and location for hep-buffer file (default "HEP-Buffer.dump")
+  -hep-buffer-max-size string
+        max buffer size, can be B, KB, MB, GB, TB. By default - unlimited (default "0")
   -hi uint
 	HEP node ID (default 2002)
   -hin
@@ -115,6 +146,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	HEP server destination address and port (default "127.0.0.1:9060")
   -i string
 	Listen on interface (default "any")
+  -keepalive uint
+        keep alive internal - 5 seconds by default. 0 - disable (default 5)
   -l string
 	Log level [debug, info, warning, error] (default "info")
   -lp int
@@ -133,6 +166,8 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Log filepath (default "./")
   -pr string
 	Portrange to capture SIP (default "5060-5090")
+  -prometheus string
+        prometheus metrics - ip:port. By default all IPs (default ":8090")
   -protobuf
 	Use Protobuf on wire
   -rf string
@@ -143,6 +178,14 @@ docker build --no-cache -t sipcapture/heplify:latest -f docker/heplify/Dockerfil
 	Pcap rotation time in minutes (default 60)
   -s int
 	Snaplength (default 8192)
+  -script-file string
+        Script file to execute on each packet
+  -script-hep-filter string
+        HEP filter for script, comma separated list of HEP types (default "1")
+  -sipassembly
+        If true, sipassembly will be enabled
+  -skipverify
+        skip certifcate validation
   -sl
 	Log to syslog
   -t string
