@@ -13,5 +13,5 @@ FROM alpine:3.19
 RUN apk --no-cache add ca-certificates tzdata libcap
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /heplify/heplify .
-RUN /usr/sbin/setcap cap_net_raw,cap_net_admin=eip heplify
+RUN /usr/sbin/setcap cap_bpf,cap_net_raw,cap_net_admin=eip heplify
 CMD ["./heplify", "-h"]
