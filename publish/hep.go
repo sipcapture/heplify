@@ -72,6 +72,9 @@ func (h *HEPOutputer) ReConnect(n int) (err error) {
 	}
 	h.client[n].writer.Reset(h.client[n].conn)
 
+	//send ping packet on reconnect
+	h.ReSendPingPacket()
+
 	if config.Cfg.HEPBufferEnable {
 		if _, err := h.copyHEPFileOut(n); err != nil {
 			logp.Err("Sending HEP from file error: %v", err)
