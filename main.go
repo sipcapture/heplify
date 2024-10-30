@@ -44,6 +44,7 @@ func createFlags() {
 	flag.StringVar(&config.Cfg.HEPBufferFile, "hep-buffer-file", "HEP-Buffer.dump", "filename and location for hep-buffer file")
 	flag.StringVar(&config.Cfg.PrometheusIPPort, "prometheus", ":8090", "prometheus metrics - ip:port. By default all IPs")
 	flag.BoolVar(&config.Cfg.CollectOnlySip, "collectonlysip", false, "collect only sip")
+	flag.BoolVar(&config.Cfg.ReplaceToken, "replacetoken", false, "replace token for collector")
 	flag.BoolVar(&config.Cfg.Reassembly, "tcpassembly", false, "If true, tcpassembly will be enabled")
 	flag.BoolVar(&config.Cfg.SipAssembly, "sipassembly", false, "If true, sipassembly will be enabled")
 	flag.UintVar(&config.Cfg.SendRetries, "tcpsendretries", 0, "Number of retries for sending before giving up and reconnecting")

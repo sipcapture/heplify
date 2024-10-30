@@ -70,6 +70,21 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 
 		//Version == 100 just for forwarding...
 		if pkt.Version == 100 {
+
+			if config.Cfg.ReplaceToken {
+				msg, err := DecodeHEP(pkt.Payload)
+				if err == nil {
+					msg.NodePW = config.Cfg.HepNodePW
+					pkt.Payload, err = msg.Marshal()
+					if err != nil {
+						pub.output(pkt.Payload)
+					}
+				} else {
+					logp.Warn("Bad HEP: %v", err)
+				}
+				continue
+			}
+
 			pub.output(pkt.Payload)
 			logp.Debug("publisher", "sent hep message from collector")
 		} else if pkt.Version == 0 {
