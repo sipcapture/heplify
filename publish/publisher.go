@@ -76,8 +76,10 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 				if err == nil {
 					msg.NodePW = config.Cfg.HepNodePW
 					pkt.Payload, err = msg.Marshal()
-					if err != nil {
+					if err == nil {
 						pub.output(pkt.Payload)
+					} else {
+						logp.Warn("Bad HEP marshal: %v", err)
 					}
 				} else {
 					logp.Warn("Bad HEP: %v", err)
