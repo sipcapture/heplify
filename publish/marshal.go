@@ -183,13 +183,6 @@ func (h *HepMsg) MarshalTo(dAtA []byte) (int, error) {
 		i += copy(dAtA[i:], h.NodePW)
 	}
 
-	if h.Payload != nil {
-		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x0f})
-		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.Payload)))
-		i += 2
-		i += copy(dAtA[i:], h.Payload)
-	}
-
 	if h.CID != nil {
 		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x11})
 		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.CID)))
@@ -206,6 +199,13 @@ func (h *HepMsg) MarshalTo(dAtA []byte) (int, error) {
 		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.NodeName)))
 		i += 2
 		i += copy(dAtA[i:], h.NodeName)
+	}
+
+	if h.Payload != nil {
+		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x0f})
+		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.Payload)))
+		i += 2
+		i += copy(dAtA[i:], h.Payload)
 	}
 
 	return i, nil
@@ -230,9 +230,7 @@ func (h *HepMsg) Size() (n int) {
 	if h.NodePW != "" {
 		n += 4 + 2 + len(h.NodePW) // len(vendor) + len(chunk) + len(NodePW)
 	}
-	if h.Payload != nil {
-		n += 4 + 2 + len(h.Payload) // len(vendor) + len(chunk) + len(Payload)
-	}
+
 	if h.CID != nil {
 		n += 4 + 2 + len(h.CID) // len(vendor) + len(chunk) + len(CID)
 	}
@@ -240,6 +238,11 @@ func (h *HepMsg) Size() (n int) {
 	if h.NodeName != "" {
 		n += 4 + 2 + len(h.NodeName) // len(vendor) + len(chunk) + len(NodeName)
 	}
+
+	if h.Payload != nil {
+		n += 4 + 2 + len(h.Payload) // len(vendor) + len(chunk) + len(Payload)
+	}
+
 	return n
 }
 

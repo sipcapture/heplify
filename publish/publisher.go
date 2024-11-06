@@ -72,12 +72,12 @@ func (pub *Publisher) Start(pq chan *decoder.Packet) {
 		if pkt.Version == 100 {
 
 			if config.Cfg.ReplaceToken {
-				msg, err := DecodeHEP(pkt.Payload)
+				tmpver, err := DecodeHEP(pkt.Payload)
 				if err == nil {
-					msg.NodePW = config.Cfg.HepNodePW
-					pkt.Payload, err = msg.Marshal()
+					tmpver.NodePW = config.Cfg.HepNodePW
+					forwardMsg, err := tmpver.Marshal()
 					if err == nil {
-						pub.output(pkt.Payload)
+						pub.output(forwardMsg)
 					} else {
 						logp.Warn("Bad HEP marshal: %v", err)
 					}
