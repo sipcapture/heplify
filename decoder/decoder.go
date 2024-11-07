@@ -107,6 +107,9 @@ type Packet struct {
 	Payload   []byte
 	CID       []byte
 	Vlan      uint16
+	Mos       uint16
+	TCPFlag   uint8
+	IPTos     uint8
 }
 
 // HEP chuncks

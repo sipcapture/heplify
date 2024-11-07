@@ -31,6 +31,10 @@ const (
 	CID       = 17 // Chunk 0x0011 Correlation ID
 	Vlan      = 18 // Chunk 0x0012 VLAN
 	NodeName  = 19 // Chunk 0x0013 NodeName
+	TCPFlag   = 23 // Chunk 0x0017 TCP Flags
+	IPTos     = 24 // Chunk 0x0018 IP TOS
+	Mos       = 32 // Chunk 0x0020 MOS
+
 )
 
 // HepMsg represents a parsed HEP packet
@@ -50,6 +54,9 @@ type HepMsg struct {
 	CID       []byte
 	Vlan      uint16
 	NodeName  string
+	Mos       uint16
+	TCPFlag   uint8
+	IPTos     uint8
 }
 
 // EncodeHEP creates the HEP Packet which
@@ -72,6 +79,9 @@ func EncodeHEP(h *decoder.Packet) (hepMsg []byte, err error) {
 			CID:       h.CID,
 			Vlan:      h.Vlan,
 			NodeName:  config.Cfg.HepNodeName,
+			Mos:       h.Mos,
+			TCPFlag:   h.TCPFlag,
+			IPTos:     h.IPTos,
 		}
 		hepMsg, err = hep.Marshal()
 	} else {
@@ -201,6 +211,24 @@ func (h *HepMsg) MarshalTo(dAtA []byte) (int, error) {
 		i += copy(dAtA[i:], h.NodeName)
 	}
 
+	if h.TCPFlag > 0 {
+		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x17, 0x00, 0x07})
+		dAtA[i] = h.TCPFlag
+		i++
+	}
+
+	if h.IPTos > 0 {
+		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x18, 0x00, 0x07})
+		dAtA[i] = h.IPTos
+		i++
+	}
+
+	if h.Mos > 0 {
+		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x20, 0x00, 0x08})
+		binary.BigEndian.PutUint16(dAtA[i:], h.Mos)
+		i += 2
+	}
+
 	if h.Payload != nil {
 		i += copy(dAtA[i:], []byte{0x00, 0x00, 0x00, 0x0f})
 		binary.BigEndian.PutUint16(dAtA[i:], 6+uint16(len(h.Payload)))
@@ -237,6 +265,18 @@ func (h *HepMsg) Size() (n int) {
 	n += 4 + 2 + 2 // len(vendor) + len(chunk) + len(Vlan)
 	if h.NodeName != "" {
 		n += 4 + 2 + len(h.NodeName) // len(vendor) + len(chunk) + len(NodeName)
+	}
+
+	if h.TCPFlag > 0 {
+		n += 4 + 2 + 1 // len(vendor) + len(chunk) + len(TCPFlag)
+	}
+
+	if h.IPTos > 0 {
+		n += 4 + 2 + 1 // len(vendor) + len(chunk) + len(IPTos)
+	}
+
+	if h.Mos > 0 {
+		n += 4 + 2 + 2 // len(vendor) + len(chunk) + len(Mos)
 	}
 
 	if h.Payload != nil {
@@ -328,6 +368,12 @@ func (h *HepMsg) parseHEP(packet []byte) error {
 			h.CID = chunkBody
 		case Vlan:
 			h.Vlan = binary.BigEndian.Uint16(chunkBody)
+		case Mos:
+			h.Mos = binary.BigEndian.Uint16(chunkBody)
+		case TCPFlag:
+			h.TCPFlag = chunkBody[0]
+		case IPTos:
+			h.IPTos = chunkBody[0]
 		case NodeName:
 			h.NodeName = string(chunkBody)
 		default:
@@ -354,7 +400,10 @@ func (h *HepMsg) String() string {
 		`NodeID:` + fmt.Sprintf("%v", h.NodeID) + `,`,
 		`NodePW:` + fmt.Sprintf("%s", h.NodePW) + `,`,
 		`CID:` + fmt.Sprintf("%s", h.CID) + `,`,
-		`Vlan:` + fmt.Sprintf("%v", h.Vlan),
+		`Vlan:` + fmt.Sprintf("%v", h.Vlan) + `,`,
+		`Mos:` + fmt.Sprintf("%v", h.Mos) + `,`,
+		`IPTos:` + fmt.Sprintf("%v", h.IPTos) + `,`,
+		`TCPFlags:` + fmt.Sprintf("%v", h.TCPFlag),
 		`}`,
 	}, "")
 	return s + " with Payload:\n" + fmt.Sprintf("%s", string(h.Payload))
