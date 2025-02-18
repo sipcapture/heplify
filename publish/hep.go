@@ -43,6 +43,8 @@ func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 			errCnt++
 		} else {
 			if config.Cfg.HEPBufferEnable {
+				//send ping packet on reconnect
+				h.ReSendPingPacket()
 				if _, err := os.Stat(config.Cfg.HEPBufferFile); err == nil {
 					if _, err := h.copyHEPFileOut(n); err != nil {
 						logp.Err("Sending HEP from file error: %v", err)
