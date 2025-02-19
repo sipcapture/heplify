@@ -28,6 +28,21 @@ type HEPOutputer struct {
 	msgPing  []byte
 }
 
+func writeAndFlush(client *HEPConn, data []byte, action string) (int, error) {
+	hl, err := client.conn.Write(data)
+	if err != nil {
+		promstats.HepFileFlushesError.Inc()
+		return 0, fmt.Errorf("error writing to socket during %s: %w", action, err)
+	}
+
+	if err := client.writer.Flush(); err != nil {
+		promstats.HepFileFlushesError.Inc()
+		return 0, fmt.Errorf("error flushing writer during %s: %w", action, err)
+	}
+
+	return hl, nil
+}
+
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 	a := strings.Split(cutSpace(serverAddr), ",")
 	l := len(a)
@@ -43,8 +58,9 @@ func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 			errCnt++
 		} else {
 			if config.Cfg.HEPBufferEnable {
-				//send ping packet on reconnect
-				h.ReSendPingPacket()
+				logp.Debug("collector", "send ping packet after disconnect")
+				h.client[n].writer.Write(h.msgPing)
+				err = h.client[n].writer.Flush()
 				if _, err := os.Stat(config.Cfg.HEPBufferFile); err == nil {
 					if _, err := h.copyHEPFileOut(n); err != nil {
 						logp.Err("Sending HEP from file error: %v", err)
@@ -192,10 +208,9 @@ func (h *HEPOutputer) Send(msg []byte) {
 						}
 					}
 
-					h.client[n].writer.Write(msg)
-					err = h.client[n].writer.Flush()
+					_, err := writeAndFlush(&h.client[n], msg, "Bad resend")
 					if err != nil {
-						logp.Err("Bad resend: %v", err)
+						logp.Err(err.Error())
 						if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
 							h.copyHEPbufftoFile(msg)
 						}
@@ -243,11 +258,15 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 		return 0, fmt.Errorf("Connection is broken")
 	}
 
-	//Send Logged HEP upon reconnect out to backend
-	hl, err := h.client[n].conn.Write(HEPFileData)
+	hl, err := writeAndFlush(&h.client[n], h.msgPing, "ping operation")
 	if err != nil {
-		promstats.HepFileFlushesError.Inc()
-		return 0, fmt.Errorf("Bad write to socket")
+		return 0, err
+	}
+
+	// Send Logged HEP upon reconnect
+	hl, err = writeAndFlush(&h.client[n], HEPFileData, "HEP reconnect")
+	if err != nil {
+		return 0, err
 	}
 
 	err = h.client[n].writer.Flush()
