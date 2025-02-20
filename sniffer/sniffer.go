@@ -663,6 +663,7 @@ func (sniffer *SnifferSetup) handleRequestSimple(conn net.Conn) {
 		_, err := conn.Read(message)
 		if err != nil {
 			fmt.Println("Error reading:", err.Error())
+			conn.Close() // Ensure the connection is closed
 			break
 		}
 
@@ -680,6 +681,7 @@ func (sniffer *SnifferSetup) handleRequestSimple(conn net.Conn) {
 			_, err := conn.Read(data)
 			if err != nil {
 				fmt.Println("Error reading:", err.Error())
+				conn.Close() // Ensure the connection is closed
 				break
 			}
 
@@ -721,6 +723,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 		n, err := conn.Read(message)
 		if err != nil {
 			logp.Err("Incoming tcp connection closed during read with error [1]: %s", err.Error())
+			conn.Close() // Ensure the connection is closed
 			break
 		}
 
@@ -784,6 +787,7 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 						if err != nil {
 							logp.Err("Incoming tcp connection closed during direct read from buffer with error [2]: %s", err.Error())
 							bufferPool.Reset()
+							conn.Close() // Ensure the connection is closed
 							break
 						}
 

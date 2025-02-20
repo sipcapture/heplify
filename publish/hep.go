@@ -59,8 +59,10 @@ func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
 		} else {
 			if config.Cfg.HEPBufferEnable {
 				logp.Debug("collector", "send ping packet after disconnect")
-				h.client[n].writer.Write(h.msgPing)
-				err = h.client[n].writer.Flush()
+				_, err := writeAndFlush(&h.client[n], h.msgPing, "ping operation establish connection")
+				if err != nil {
+					return nil, err
+				}
 				if _, err := os.Stat(config.Cfg.HEPBufferFile); err == nil {
 					if _, err := h.copyHEPFileOut(n); err != nil {
 						logp.Err("Sending HEP from file error: %v", err)
@@ -179,8 +181,10 @@ func (h *HEPOutputer) Send(msg []byte) {
 			logp.Debug("Connection is not up", fmt.Sprintf("index: %d, Len: %d, once: %v", n, len(h.addr), onceSent))
 			err = fmt.Errorf("connection is broken")
 		} else {
-			h.client[n].writer.Write(msg)
-			err = h.client[n].writer.Flush()
+			_, err := writeAndFlush(&h.client[n], msg, "sending message")
+			if err != nil {
+				logp.Err("Failed to send message: %s", err.Error())
+			}
 		}
 
 		if err != nil {
@@ -201,10 +205,9 @@ func (h *HEPOutputer) Send(msg []byte) {
 				} else {
 					if h.msgPing != nil {
 						logp.Debug("collector", "send ping packet after disconnect")
-						h.client[n].writer.Write(h.msgPing)
-						err = h.client[n].writer.Flush()
+						_, err := writeAndFlush(&h.client[n], h.msgPing, "Error during resend ping packet")
 						if err != nil {
-							logp.Err("Bad during resend ping packet : %v", err)
+							logp.Err("Error sending ping packet: %s", err.Error())
 						}
 					}
 
