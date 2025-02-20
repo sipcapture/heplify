@@ -269,6 +269,7 @@ func (h *HEPOutputer) copyHEPFileOut(n int) (int, error) {
 	// Send Logged HEP upon reconnect
 	hl, err = writeAndFlush(&h.client[n], HEPFileData, "HEP reconnect")
 	if err != nil {
+		promstats.HepFileFlushesError.Inc()
 		return 0, err
 	}
 
