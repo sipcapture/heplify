@@ -374,6 +374,12 @@ LOOP:
 					conn, err := sniffer.collectorTCPconn.Accept()
 					if err != nil {
 						logp.Err("Error accepting tcp connection: %s", err.Error())
+						// Close connection if it exists
+						if conn != nil {
+							conn.Close()
+						}
+						// Add delay before next attempt
+						time.Sleep(time.Second)
 						continue
 					}
 
