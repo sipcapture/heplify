@@ -374,6 +374,12 @@ LOOP:
 					conn, err := sniffer.collectorTCPconn.Accept()
 					if err != nil {
 						logp.Err("Error accepting tcp connection: %s", err.Error())
+						// Close connection if it exists
+						if conn != nil {
+							conn.Close()
+						}
+						// Add delay before next attempt
+						time.Sleep(time.Second)
 						continue
 					}
 
@@ -657,6 +663,9 @@ func (sniffer *SnifferSetup) handleRequestSimple(conn net.Conn) {
 		_, err := conn.Read(message)
 		if err != nil {
 			fmt.Println("Error reading:", err.Error())
+			if conn != nil {
+				conn.Close() // Ensure the connection is closed
+			}
 			break
 		}
 
@@ -674,6 +683,9 @@ func (sniffer *SnifferSetup) handleRequestSimple(conn net.Conn) {
 			_, err := conn.Read(data)
 			if err != nil {
 				fmt.Println("Error reading:", err.Error())
+				if conn != nil {
+					conn.Close() // Ensure the connection is closed
+				}
 				break
 			}
 
@@ -715,6 +727,9 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 		n, err := conn.Read(message)
 		if err != nil {
 			logp.Err("Incoming tcp connection closed during read with error [1]: %s", err.Error())
+			if conn != nil {
+				conn.Close() // Ensure the connection is closed
+			}
 			break
 		}
 
@@ -778,6 +793,9 @@ func (sniffer *SnifferSetup) handleRequestExtended(conn net.Conn) {
 						if err != nil {
 							logp.Err("Incoming tcp connection closed during direct read from buffer with error [2]: %s", err.Error())
 							bufferPool.Reset()
+							if conn != nil {
+								conn.Close() // Ensure the connection is closed
+							}
 							break
 						}
 
