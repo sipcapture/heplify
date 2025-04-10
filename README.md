@@ -1,6 +1,6 @@
 <a href="https://sipcapture.org"><img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" width=200/></a>
 
-<img src="https://github.com/sipcapture/heplify/assets/1423657/7a36896d-0bd3-4cf3-9525-0513e67aee46">
+<img src="https://github.com/user-attachments/assets/53cedef3-ba54-466b-a7e8-ac38fe75850c">
 
 <img src="https://img.shields.io/docker/pulls/sipcapture/heplify">
 
