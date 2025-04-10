@@ -1,6 +1,6 @@
 module github.com/sipcapture/heplify
 
-go 1.15
+go 1.23
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
