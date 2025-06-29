@@ -137,7 +137,7 @@ You can use the image using docker compose:
   -hi uint
 	HEP node ID (default 2002)
   -hin
-	HEP collector listening protocol, address and port (example: "tcp:10.10.99.10:9060")
+	HEP collector listening protocol, address and port (example: "tcp:10.10.99.10:9060", "udp:10.10.99.10:9060", "http2:10.10.99.10:8080")
   -hn string
 	HEP node Name
   -hp string
@@ -207,7 +207,34 @@ You can use the image using docker compose:
   -script-hep-filter string
     	HEP Type filter for LUA script, comma separated list (default "1")
 
+## HTTP/2 Collector Support
+
+Heplify supports receiving HEP3 packets via HTTP/2 protocol in collector mode. This allows sending HEP3 data through HTTP/2 connections.
+
+### Run HTTP/2 collector
+
+```bash
+# Run HTTP/2 collector on port 8080
+./heplify -hin http2://:8080
+
+# With SIP-only filtering
+./heplify -hin http2://:8080 -collectonlysip
+
+# With IP address filtering
+./heplify -hin http2://:8080 -diip "192.168.1.1,10.0.0.1"
 ```
+
+### Send data via HTTP/2
+
+```bash
+# Using curl
+curl -X POST http://localhost:8080/hep \
+  -H "Content-Type: application/octet-stream" \
+  --http2 \
+  --data-binary "$HEP3_DATA"
+```
+
+Detailed documentation for HTTP/2 support is available in [examples/HTTP2_README.md](examples/HTTP2_README.md).
 
 ## Examples
 

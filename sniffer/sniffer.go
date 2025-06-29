@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,24 +26,28 @@ import (
 	"github.com/sipcapture/heplify/dump"
 	"github.com/sipcapture/heplify/promstats"
 	"github.com/sipcapture/heplify/publish"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type SnifferSetup struct {
-	pcapHandle       *pcap.Handle
-	afpacketHandle   *afpacketHandle
-	config           *config.InterfacesConfig
-	isAlive          bool
-	dumpChan         chan *dump.Packet
-	mode             string
-	bpf              string
-	file             string
-	filter           []string
-	discard          []string
-	worker           Worker
-	collectorUDPconn *net.UDPConn
-	collectorTCPconn *net.TCPListener
-	isCollectorTcp   bool
-	DataSource       gopacket.PacketDataSource
+	pcapHandle         *pcap.Handle
+	afpacketHandle     *afpacketHandle
+	config             *config.InterfacesConfig
+	isAlive            bool
+	dumpChan           chan *dump.Packet
+	mode               string
+	bpf                string
+	file               string
+	filter             []string
+	discard            []string
+	worker             Worker
+	collectorUDPconn   *net.UDPConn
+	collectorTCPconn   *net.TCPListener
+	collectorHTTP2conn *net.TCPListener
+	isCollectorTcp     bool
+	isCollectorHTTP2   bool
+	DataSource         gopacket.PacketDataSource
 	//collector mode
 	collectorAddress string
 	isCollector      bool
@@ -228,18 +233,23 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 
 	case "collector":
 
-		if !strings.HasPrefix(sniffer.collectorAddress, "udp:") && !strings.HasPrefix(sniffer.collectorAddress, "tcp:") {
-			return fmt.Errorf("collector support only udp and tcp right now ")
+		if !strings.HasPrefix(sniffer.collectorAddress, "udp:") && !strings.HasPrefix(sniffer.collectorAddress, "tcp:") && !strings.HasPrefix(sniffer.collectorAddress, "http2:") {
+			return fmt.Errorf("collector support only udp, tcp and http2 right now ")
 		}
 
-		//host
-		hostAdress := sniffer.collectorAddress[4:]
+		var hostAdress string
+		if strings.HasPrefix(sniffer.collectorAddress, "http2:") {
+			hostAdress = sniffer.collectorAddress[6:]
+			hostAdress = strings.TrimPrefix(hostAdress, "//")
+		} else {
+			hostAdress = sniffer.collectorAddress[4:]
+		}
 
 		if strings.HasPrefix(sniffer.collectorAddress, "udp:") {
 
 			laddr, err := net.ResolveUDPAddr("udp", hostAdress)
 			if nil != err {
-				logp.Err("ResolveTCPAddr error: %v\n", err)
+				logp.Err("ResolveUDPAddr error: %v\n", err)
 				return err
 			}
 			sniffer.collectorUDPconn, err = net.ListenUDP("udp", laddr)
@@ -250,6 +260,96 @@ func (sniffer *SnifferSetup) setFromConfig() error {
 			}
 
 			logp.Info("collector udp server listening %s\n", sniffer.collectorUDPconn.LocalAddr().String())
+		} else if strings.HasPrefix(sniffer.collectorAddress, "http2:") {
+			// HTTP/2 (h2c) collector
+			sniffer.isCollectorHTTP2 = true
+
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					logp.Err("Error reading HTTP/2 request body: %s", err.Error())
+					http.Error(w, "Bad Request", http.StatusBadRequest)
+					return
+				}
+				defer r.Body.Close()
+
+				logp.Debug("collector", "received HTTP/2 request with %d bytes", len(body))
+
+				if bytes.HasPrefix(body, []byte{0x48, 0x45, 0x50, 0x33}) {
+					atomic.AddUint64(&sniffer.hepTcpCount, 1)
+					promstats.ClientLastMetricTimestamp.SetToCurrentTime()
+					var hep *decoder.HEP
+					var err error
+					if sniffer.collectOnlySIP || len(sniffer.filterIP) > 0 || len(sniffer.filterSrcIP) > 0 || len(sniffer.filterDstIP) > 0 {
+						hep, err = decoder.DecodeHEP(body)
+						if err != nil {
+							logp.Err("Bad HEP in HTTP/2 request!")
+							http.Error(w, "Bad HEP Data", http.StatusBadRequest)
+							return
+						}
+						if hep.ProtoType == 1 {
+							atomic.AddUint64(&sniffer.hepSIPCount, 1)
+						}
+					}
+					if hep != nil {
+						if sniffer.collectOnlySIP && hep.ProtoType != 1 {
+							logp.Debug("collector", "this is non sip")
+							w.WriteHeader(http.StatusOK)
+							return
+						}
+						discardMessage := false
+						for _, v := range sniffer.filterIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterSrcIP {
+							if hep.SrcIP == v {
+								logp.Debug("collector discarding source IP", hep.SrcIP)
+								discardMessage = true
+								break
+							}
+						}
+						for _, v := range sniffer.filterDstIP {
+							if hep.DstIP == v {
+								logp.Debug("collector discarding destination IP", hep.DstIP)
+								discardMessage = true
+								break
+							}
+						}
+						if discardMessage {
+							w.WriteHeader(http.StatusOK)
+							return
+						}
+					}
+					sniffer.worker.OnHEPPacket(body)
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("OK"))
+				} else {
+					atomic.AddUint64(&sniffer.unknownCount, 1)
+					http.Error(w, "Not HEP3 Data", http.StatusBadRequest)
+				}
+			})
+
+			server := &http.Server{
+				Addr:    hostAdress,
+				Handler: h2c.NewHandler(handler, &http2.Server{}),
+			}
+
+			go func() {
+				logp.Info("collector http2 server listening %s\n", hostAdress)
+				if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					logp.Err("collector http2 server error: %v", err)
+				}
+			}()
+
 		} else {
 
 			// listen workers
@@ -368,7 +468,11 @@ LOOP:
 
 		if sniffer.isCollector {
 
-			if sniffer.isCollectorTcp {
+			if sniffer.isCollectorHTTP2 {
+				// HTTP/2 server is already running in setFromConfig
+				// Just wait for the main loop to continue
+				select {}
+			} else if sniffer.isCollectorTcp {
 				for {
 					// Listen for an incoming connection.
 					conn, err := sniffer.collectorTCPconn.Accept()
@@ -565,7 +669,9 @@ func (sniffer *SnifferSetup) Close() error {
 	case "af_packet":
 		sniffer.afpacketHandle.Close()
 	case "collector":
-		if sniffer.isCollectorTcp {
+		if sniffer.isCollectorHTTP2 {
+			sniffer.collectorHTTP2conn.Close()
+		} else if sniffer.isCollectorTcp {
 			sniffer.collectorTCPconn.Close()
 		} else {
 			sniffer.collectorUDPconn.Close()

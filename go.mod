@@ -1,6 +1,8 @@
 module github.com/sipcapture/heplify
 
-go 1.20
+go 1.23.0
+
+toolchain go1.24.2
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -30,6 +32,7 @@ require (
 	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
