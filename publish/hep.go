@@ -184,10 +184,6 @@ func (h *HEPOutputer) Send(msg []byte) {
 			_, err = writeAndFlush(&h.client[n], msg, "sending message")
 			if err != nil {
 				logp.Err("Failed to send message: %s", err.Error())
-				// Force connection cleanup on write errors
-				h.client[n].conn.Close()
-				h.client[n].conn = nil
-				h.client[n].writer = nil
 			}
 		}
 
@@ -201,6 +197,13 @@ func (h *HEPOutputer) Send(msg []byte) {
 			}
 			if retry {
 				h.client[n].errCnt = 0
+				// Clean up connection before attempting reconnection
+				if h.client[n].conn != nil {
+					logp.Debug("collector", "cleaning up broken connection to %s", h.addr[n])
+					h.client[n].conn.Close()
+					h.client[n].conn = nil
+					h.client[n].writer = nil
+				}
 				if err = h.ReConnect(n); err != nil {
 					logp.Err("reconnect error: %v", err)
 					if config.Cfg.HEPBufferEnable && (!onceSent && n == (len(h.addr)-1)) {
