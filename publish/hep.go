@@ -181,9 +181,13 @@ func (h *HEPOutputer) Send(msg []byte) {
 			logp.Debug("Connection is not up", fmt.Sprintf("index: %d, Len: %d, once: %v", n, len(h.addr), onceSent))
 			err = fmt.Errorf("connection is broken")
 		} else {
-			_, err := writeAndFlush(&h.client[n], msg, "sending message")
+			_, err = writeAndFlush(&h.client[n], msg, "sending message")
 			if err != nil {
 				logp.Err("Failed to send message: %s", err.Error())
+				// Force connection cleanup on write errors
+				h.client[n].conn.Close()
+				h.client[n].conn = nil
+				h.client[n].writer = nil
 			}
 		}
 
