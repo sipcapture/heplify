@@ -123,8 +123,10 @@ func extractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 		posLineEnd = 0    // end of line, position of \n or end of content.
 		session    = true // in session or multimedia?
 		sessionIP  []byte // IP found in session connection.
+		rtpPort    []byte // port for RTP.
 		rtcpIP     []byte // IP for RTCP.
 		rtcpPort   []byte // port for RTCP.
+		rtcpMux    = false
 	)
 sdpLoop:
 	for posLine = 0; posLine < len(content); posLine = posLineEnd + 1 {
@@ -207,6 +209,11 @@ sdpLoop:
 			}
 			rtcpPort = []byte(strconv.Itoa(rtpPortNb + 1))
 		case 'a':
+			// If rtcp-mux is indicated, RTCP can appear on the RTP port
+			if bytes.HasPrefix(line, []byte("a=rtcp-mux")) {
+				rtcpMux = true
+				continue sdpLoop
+			}
 			// We are only interested in a=rtcp.
 			if !bytes.HasPrefix(line, []byte("a=rtcp:")) {
 				continue sdpLoop
@@ -244,6 +251,10 @@ sdpLoop:
 	// Add keys for last media.
 	if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
 		cacheCID(srcIPb, rtcpIP, rtcpPort, callID)
+	}
+	// If rtcp-mux is in use add an entry for the rtp port
+	if rtcpMux && len(rtcpIP)>0 && len(rtpPort)>0 && string(rtpPort)!=string(rtcpPort) {
+		cacheCID(srcIPb, rtcpIP, rtpPort, callID)
 	}
 }
 
