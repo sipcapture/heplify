@@ -128,10 +128,22 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 				panic(err)
 			}
 		}
+		var caCertPool *x509.CertPool
+		//serverChain is normally empty, unless a custom root-int-chain ha sbeen specified via argument
 		if serverChain == "" {
-			serverChain, err = loadFile(config.Mcfg.Chainpath)
-			if err != nil {
-				panic(err)
+			if config.Mcfg.Chainpath != "" {
+				serverChain, err = loadFile(config.Mcfg.Chainpath)
+				if err != nil {
+					panic(err)
+				}
+
+				//Load trusted RootCA from file
+				caCertPool = x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM([]byte(serverChain))
+
+			} else {
+				//renewRootCAs() reads trusted RootCAs from OS
+				caCertPool = renewRootCAs()
 			}
 		}
 		if agentKey == "" {
@@ -144,8 +156,7 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 		if err != nil {
 			panic(err)
 		}
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM([]byte(serverChain))
+
 		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{
 			InsecureSkipVerify: false,
 			RootCAs:            caCertPool,

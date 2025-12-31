@@ -1,6 +1,9 @@
 package publish
 
-import "os"
+import (
+	"crypto/x509"
+	"os"
+)
 
 /*
 Certificate, key and chain can be embedded before building the binary by
@@ -31,3 +34,13 @@ xkKI+Y6MRPBb2qXcYfeS/0FI
 var agentCert string
 var serverChain string
 var agentKey string
+
+// Read trusted RootCAs from operating system store
+func renewRootCAs() *x509.CertPool {
+	rootcas, err := x509.SystemCertPool()
+	if err != nil || rootcas == nil {
+		panic("Unable lto load/renew RootCAs from Operating System")
+	}
+
+	return rootcas
+}
