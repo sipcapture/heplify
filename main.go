@@ -68,7 +68,7 @@ func createFlags() {
 	//mtls
 	flag.StringVar(&config.Mcfg.Crtpath, "crt-path", "./cert.pem", "Heplify agent mTLS certificate")
 	flag.StringVar(&config.Mcfg.Keypath, "key-path", "./key.pem", "Heplify agent mTLS key")
-	flag.StringVar(&config.Mcfg.Chainpath, "chain-path", "./chain.pem", "Heplify server mTLS cert chain. Only specified if server using self-signed certificates")
+	flag.StringVar(&config.Mcfg.Chainpath, "chain-path", "", "Heplify server mTLS cert chain. Only specified if server using self-signed certificates")
 
 	//short
 	flag.StringVar(&config.Cfg.Filter, "fi", "", "Filter interesting packets by any string")
