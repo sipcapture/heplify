@@ -135,6 +135,8 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
     needs: build
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_TOKEN != '' && secrets.DOCKERHUB_USERNAME != '' }}
 
     steps:
       - name: Checkout
@@ -169,7 +171,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.HAS_DOCKERHUB == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -193,6 +195,8 @@ jobs:
     name: Docker multi-arch manifest
     needs: docker
     runs-on: ubuntu-latest
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKERHUB_TOKEN != '' && secrets.DOCKERHUB_USERNAME != '' }}
 
     steps:
       - name: Resolve version
@@ -215,7 +219,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.HAS_DOCKERHUB == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -232,7 +236,7 @@ jobs:
           docker buildx imagetools inspect "${IMAGE_NAME}:${VERSION}"
 
       - name: Create and push multi-arch manifest (Docker Hub)
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.HAS_DOCKERHUB == 'true'
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           HUB_IMAGE="sipcapture/heplify"
