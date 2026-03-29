@@ -10,23 +10,23 @@ import (
 
 // HEP chunk type IDs (vendor 0x0000).
 const (
-	chunkVersion  = 1
-	chunkProtocol = 2
-	chunkIP4SrcIP = 3
-	chunkIP4DstIP = 4
-	chunkIP6SrcIP = 5
-	chunkIP6DstIP = 6
-	chunkSrcPort  = 7
-	chunkDstPort  = 8
-	chunkTsec     = 9
-	chunkTmsec    = 10
+	chunkVersion   = 1
+	chunkProtocol  = 2
+	chunkIP4SrcIP  = 3
+	chunkIP4DstIP  = 4
+	chunkIP6SrcIP  = 5
+	chunkIP6DstIP  = 6
+	chunkSrcPort   = 7
+	chunkDstPort   = 8
+	chunkTsec      = 9
+	chunkTmsec     = 10
 	chunkProtoType = 11
-	chunkNodeID   = 12
-	chunkNodePW   = 14
-	chunkPayload  = 15
-	chunkCID      = 17
-	chunkVlan     = 18
-	chunkNodeName = 19
+	chunkNodeID    = 12
+	chunkNodePW    = 14
+	chunkPayload   = 15
+	chunkCID       = 17
+	chunkVlan      = 18
+	chunkNodeName  = 19
 )
 
 // HEP holds a decoded HEP v2/v3 packet.

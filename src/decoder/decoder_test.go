@@ -44,7 +44,8 @@ var (
 )
 
 // buildUDPDatagram returns a raw UDP datagram (header + payload) with zero checksum.
-func buildUDPDatagram(srcPort, dstPort uint16, payload []byte) []byte {
+func buildUDPDatagram(dstPort uint16, payload []byte) []byte {
+	const srcPort = 5060
 	udp := make([]byte, 8+len(payload))
 	binary.BigEndian.PutUint16(udp[0:2], srcPort)
 	binary.BigEndian.PutUint16(udp[2:4], dstPort)
@@ -126,7 +127,7 @@ func TestIPv4Defragmentation(t *testing.T) {
 	// UDP payload must be sized so the split boundary is a multiple of 8.
 	// udpDatagram = 8-byte header + 40-byte payload = 48 bytes; split at 24.
 	udpPayload := []byte("SIP/2.0 200 OK defrag test payload!12345")
-	udpDatagram := buildUDPDatagram(5060, 5060, udpPayload)
+	udpDatagram := buildUDPDatagram(5060, udpPayload)
 	const splitAt = 24 // multiple of 8 → fragOffset = 3
 	chunk1 := udpDatagram[:splitAt]
 	chunk2 := udpDatagram[splitAt:]
@@ -164,7 +165,7 @@ func TestIPv4DefragDisabled(t *testing.T) {
 	d.DisableDefrag()
 	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
 
-	udpDatagram := buildUDPDatagram(5060, 5060, []byte("SIP/2.0 200 OK defrag test payload!12345"))
+	udpDatagram := buildUDPDatagram(5060, []byte("SIP/2.0 200 OK defrag test payload!12345"))
 	const splitAt = 24
 	chunk1 := udpDatagram[:splitAt]
 	chunk2 := udpDatagram[splitAt:]
@@ -191,7 +192,7 @@ func TestIPv6Defragmentation(t *testing.T) {
 	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
 
 	udpPayload := []byte("SIP/2.0 200 OK defrag test payload!12345")
-	udpDatagram := buildUDPDatagram(5060, 5060, udpPayload)
+	udpDatagram := buildUDPDatagram(5060, udpPayload)
 	const splitAt = 24 // multiple of 8
 	chunk1 := udpDatagram[:splitAt]
 	chunk2 := udpDatagram[splitAt:]
@@ -227,7 +228,7 @@ func TestIPv6Defragmentation(t *testing.T) {
 // ─── decodeTransport helper ───────────────────────────────────────────────────
 
 func TestDecodeTransportUDP(t *testing.T) {
-	payload := buildUDPDatagram(5060, 5061, []byte("hello"))
+	payload := buildUDPDatagram(5061, []byte("hello"))
 	proto, sp, dp, flags, data, ok := decodeTransport(layers.IPProtocolUDP, payload)
 	if !ok {
 		t.Fatal("decodeTransport: expected ok=true")

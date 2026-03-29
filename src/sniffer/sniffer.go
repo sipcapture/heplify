@@ -391,7 +391,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 			Str("destination", fmt.Sprintf("%s:%d", pkt.DstIP, pkt.DstPort)).
 			Int("len", len(data)).
 			Int("payload", len(pkt.Payload)).
-			Str("payload_hex", formatPayloadHex(pkt.Payload, 128)).
+			Str("payload_hex", formatPayloadHex(pkt.Payload)).
 			Uint64("num", processedNum).
 			Msg("Start processing packet")
 	}
@@ -485,7 +485,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 
 	// If debug is enabled and a non-matching UDP/TCP packet was processed,
 	// emit a short trace to make it obvious why SIP wasn't handled.
-	if (pkt.Protocol == 0x11 || pkt.Protocol == 0x06) {
+	if pkt.Protocol == 0x11 || pkt.Protocol == 0x06 {
 		s.stats.Inc(StatUnknown)
 		unmatchedNum := atomic.AddUint64(&unmatchedForDebug, 1)
 		if unmatchedNum <= 5 || unmatchedNum%100 == 0 {
@@ -498,7 +498,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 				Uint8("proto", pkt.Protocol).
 				Str("reason", "no configured protocol/port match").
 				Int("payload", len(pkt.Payload)).
-				Str("payload_hex", formatPayloadHex(pkt.Payload, 128)).
+				Str("payload_hex", formatPayloadHex(pkt.Payload)).
 				Msg("Packet ignored by protocol filter")
 		}
 	}
@@ -541,7 +541,7 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet) {
 			Uint8("proto", pkt.Protocol).
 			Str("proto_type", "1").
 			Int("payload", len(pkt.Payload)).
-			Str("payload_hex", formatPayloadHex(pkt.Payload, 128)).
+			Str("payload_hex", formatPayloadHex(pkt.Payload)).
 			Msg("Handling SIP packet")
 	}
 
@@ -678,7 +678,7 @@ func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16
 			Uint16("proto", uint16(pkt.Protocol)).
 			Uint8("proto_type", protoType).
 			Int("payload", len(pkt.Payload)).
-			Str("payload_hex", formatPayloadHex(pkt.Payload, 128)).
+			Str("payload_hex", formatPayloadHex(pkt.Payload)).
 			Msg("Queue packet for HEP sending")
 	}
 
@@ -775,7 +775,8 @@ func min(a, b int) int {
 	return b
 }
 
-func formatPayloadHex(payload []byte, maxLen int) string {
+func formatPayloadHex(payload []byte) string {
+	const maxLen = 128
 	if len(payload) == 0 {
 		return ""
 	}
