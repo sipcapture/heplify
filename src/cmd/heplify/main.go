@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -191,7 +192,7 @@ func init() {
 	flag.BoolVar(&replaceToken, "replacetoken", false, "Replace NodePW in forwarded HEP packets (collector mode)")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "heplify %s (built %s)\n\n", Version, BuildDate)
+		fmt.Fprintf(os.Stderr, "heplify v%s (built %s, commit %s)\n\n", Version, BuildDate, GitCommit)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -217,7 +218,7 @@ func main() {
 	}
 
 	if showVersion {
-		fmt.Printf("heplify %s (built %s)\n", Version, BuildDate)
+		printVersion()
 		os.Exit(0)
 	}
 
@@ -236,6 +237,9 @@ func main() {
 	log.Info().
 		Str("version", Version).
 		Str("build_date", BuildDate).
+		Str("git_commit", GitCommit).
+		Str("go_version", runtime.Version()).
+		Str("os_arch", runtime.GOOS+"/"+runtime.GOARCH).
 		Msg("Starting heplify")
 
 	var cfg *config.Config

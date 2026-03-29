@@ -20,14 +20,12 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#v}"
-          ESCAPED_VERSION="${VERSION//\\/\\\\}"
-          ESCAPED_VERSION="${ESCAPED_VERSION//&/\\&}"
-          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${ESCAPED_VERSION}\"|" src/cmd/heplify/version.go
+          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
           if grep -qF "var Version = \"${VERSION}\"" src/cmd/heplify/version.go; then
             echo "Updated version.go to ${VERSION}"
             echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           else
-            echo "Error: failed to update version.go to ${VERSION}" >&2
+            echo "::error::Failed to update version.go to ${VERSION}" >&2
             exit 1
           fi
 
@@ -36,6 +34,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/cmd/heplify/version.go
-          git diff --staged --quiet || git commit -m "chore: bump version to ${{ env.VERSION }}"
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore: bump version to ${{ env.VERSION }}"
           git pull --rebase origin ${{ github.event.repository.default_branch }}
           git push

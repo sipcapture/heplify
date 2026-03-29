@@ -1,31 +1,33 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      ref_name:
-        description: 'Release version tag (e.g. v2.0.0)'
+      tag:
+        description: 'Release tag (e.g. v2.0.1)'
         required: true
-      release:
-        description: 'Create GitHub release and packages'
-        required: true
-        type: boolean
-        default: true
-  release:
-    types: [published]
 
 permissions:
   contents: write
 
+env:
+  GO_VERSION_FILE: go.mod
+
 jobs:
   build:
+    name: Build & Package (${{ matrix.goarch }})
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goarch: amd64
             runner: ubuntu-latest
           - goarch: arm64
             runner: ubuntu-24.04-arm
+
     runs-on: ${{ matrix.runner }}
 
     steps:
@@ -37,7 +39,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache: true
 
       - name: Install build dependencies
         run: |
@@ -45,31 +48,45 @@ jobs:
           sudo apt-get install -y libpcap-dev libluajit-5.1-dev
 
       - name: Resolve version
+        id: version
         run: |
-          TAG="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
           VERSION="${TAG#v}"
           if [ -z "${VERSION}" ]; then
-            echo "::error::VERSION is empty. Provide a valid tag (e.g. v2.0.0)."
+            echo "::error::VERSION is empty. Provide a valid tag (e.g. v2.0.1)."
             exit 1
           fi
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          GIT_COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "VERSION=${VERSION}"      >> "$GITHUB_OUTPUT"
+          echo "GIT_COMMIT=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
+          echo "VERSION=${VERSION}"      >> "$GITHUB_ENV"
 
       - name: Update version.go
         run: |
-          ESCAPED="${VERSION//\\/\\\\}"
-          ESCAPED="${ESCAPED//&/\\&}"
-          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${ESCAPED}\"|" src/cmd/heplify/version.go
-          echo "Updated version.go to ${VERSION}"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
+          grep "var Version" src/cmd/heplify/version.go
 
       - name: Build heplify (${{ matrix.goarch }})
         run: |
-          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE}"
-          CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -trimpath -o heplify_${{ matrix.goarch }} ./src/cmd/heplify
-          echo "Built: $(./heplify_${{ matrix.goarch }} -version 2>&1 || true)"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          GIT_COMMIT="${{ steps.version.outputs.GIT_COMMIT }}"
+          BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}"
+          CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -trimpath \
+            -o heplify_${{ matrix.goarch }} \
+            ./src/cmd/heplify
+          echo "=== Version dump ==="
+          ./heplify_${{ matrix.goarch }} -version
 
       - name: Get nfpm
-        if: github.event_name == 'release' || inputs.release == true
         run: |
           NFPM_ARCH="${{ matrix.goarch == 'arm64' && 'arm64' || 'x86_64' }}"
           wget -qO- "https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_${NFPM_ARCH}.tar.gz" \
@@ -77,27 +94,75 @@ jobs:
           chmod +x nfpm
 
       - name: Create packages (${{ matrix.goarch }})
-        if: github.event_name == 'release' || inputs.release == true
         run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
           cp heplify_${{ matrix.goarch }} heplify
-          sed -i "s|arch: \"amd64\"|arch: \"${{ matrix.goarch }}\"|g" nfpm.yaml
+          ARCH="${{ matrix.goarch }}"
+          sed -i "s|arch: \"amd64\"|arch: \"${ARCH}\"|g" nfpm.yaml
           VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
-            --target "./heplify_${VERSION}_${{ matrix.goarch }}.deb"
+            --target "./heplify_${VERSION}_${ARCH}.deb"
           VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
-            --target "./heplify_${VERSION}_${{ matrix.goarch }}.rpm"
+            --target "./heplify_${VERSION}_${ARCH}.rpm"
+          ls -lh heplify_*.deb heplify_*.rpm heplify_${{ matrix.goarch }}
 
-      - name: Upload release assets
-        if: github.event_name == 'release' || inputs.release == true
-        uses: boxpositron/upload-multiple-releases@1.0.7
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: heplify-${{ matrix.goarch }}
+          retention-days: 1
+          path: |
+            heplify_${{ matrix.goarch }}
+            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
+            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: List artifacts
+        run: find dist/ -type f | sort
+
+      - name: Ensure tag exists
+        run: |
+          TAG="${{ steps.version.outputs.TAG }}"
+          if ! git rev-parse "${TAG}" >/dev/null 2>&1; then
+            git tag "${TAG}"
+            git push origin "${TAG}"
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: "heplify v${{ steps.version.outputs.VERSION }}"
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          release_config: |
-            heplify_${{ matrix.goarch }}
-            heplify_${{ env.VERSION }}_${{ matrix.goarch }}.deb
-            heplify_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
-          tag_name: ${{ env.VERSION }}
-          release_name: ${{ env.VERSION }}
-          draft: false
-          prerelease: false
-          overwrite: true

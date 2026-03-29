@@ -6,7 +6,8 @@ VERSION?=$(shell \
 		echo "dev"; \
 	fi)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE)"
+GIT_COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.GitCommit=$(GIT_COMMIT)"
 
 PKGLIST=$(shell go list ./... | grep -Ev '/vendor')
 
@@ -22,7 +23,7 @@ linux:
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(NAME)-linux-amd64 ./src/cmd/heplify
 
 linux-static:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -linkmode external -extldflags '-static'" -o $(NAME)-linux-static ./src/cmd/heplify
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.GitCommit=$(GIT_COMMIT) -linkmode external -extldflags '-static'" -o $(NAME)-linux-static ./src/cmd/heplify
 
 test:
 	go test $(PKGLIST)

@@ -30,6 +30,7 @@ builds:
       - -s -w
       - -X main.Version={{.Version}}
       - -X main.BuildDate={{.Date}}
+      - -X main.GitCommit={{.ShortCommit}}
     flags:
       - -trimpath
 
@@ -48,6 +49,7 @@ builds:
       - -extldflags '-static'
       - -X main.Version={{.Version}}
       - -X main.BuildDate={{.Date}}
+      - -X main.GitCommit={{.ShortCommit}}
     flags:
       - -trimpath
 
