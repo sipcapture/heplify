@@ -1,0 +1,265 @@
+{
+    "socket": [
+        {
+            "name": "default",
+            "active": true,
+            "socket_type": "afpacket",
+            "sequential_processing": false,
+            "collector_host": "0.0.0.0",
+            "collector_port": 9060,
+            "collector_proto": "udp",
+            "device": "any",
+            "promisc": true,
+            "tcp_reasm": true,
+            "sip_reasm": false,
+            "ipfragments": true,
+            "vlan": false,
+            "erspan": false,
+            "vxlan": false,
+            "pcap_file": "",
+            "snap_len": 8192,
+            "capture_mode": [
+                "SIP",
+                "RTP"
+            ],
+            "fanout_id": 1000,
+            "fanout_workers": 0,
+            "buffer_size_mb": 0,
+            "cpu_limit": 2,
+            "bpf_filter": ""
+        }
+    ],
+    "transport": [
+        {
+            "name": "hepsocket",
+            "active": true,
+            "protocol": "HEPv3",
+            "host": "127.0.0.1",
+            "transport": "tcp",
+            "port": 9062,
+            "password": "",
+            "payload_zip": false,
+            "skip_verify": true,
+            "keepalive": 0,
+            "max_retries": 0
+        },
+        {
+            "name": "arrow-flight",
+            "active": false,
+            "host": "localhost",
+            "port": 8815,
+            "transport": "grpc-flight",
+            "stream_name": "sip_packets",
+            "batch_size": 500,
+            "flush_interval_ms": 1000,
+            "tls_enabled": false,
+            "skip_verify": false
+        }
+    ],
+    "subscribe_settings": {
+        "active": false
+    },
+    "log_settings": {
+        "active": true,
+        "timestamp": true,
+        "path": "/usr/local/heplify/log",
+        "level": "error",
+        "name": "heplify.log",
+        "stdout": true,
+        "json": false,
+        "syslog": false,
+        "log_payload": false
+    },
+    "protocol": [
+        {
+            "name": "SIP",
+            "filter": "((tcp or sctp) and greater 42 and portrange $minport-$maxport) or (udp and greater 128 and portrange $minport-$maxport) or ip[6:2] & 0x1fff != 0 or ip6[6]=44",
+            "min_port": 5060,
+            "max_port": 5090,
+            "protocol": [
+                "udp",
+                "tcp"
+            ],
+            "description": "Basic SIP message template"
+        },
+        {
+            "name": "RTP",
+            "filter": "(ip and portrange $minport-$maxport and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80)",
+            "min_port": 1024,
+            "max_port": 65535,
+            "protocol": [
+                "udp"
+            ],
+            "description": "RTP and RTCP stream analysis template"
+        },
+        {
+            "name": "RTCP",
+            "filter": "(ip and portrange $minport-$maxport and ip[6] & 0x2 = 0 and ip[6:2] & 0x1fff = 0 and udp and udp[8] & 0xc0 = 0x80 and udp[9] >= 0xc8 && udp[9] <= 0xcc)",
+            "min_port": 1024,
+            "max_port": 65535,
+            "protocol": [
+                "udp"
+            ],
+            "description": "RTCP stream analysis template"
+        },
+        {
+            "name": "NGCP",
+            "filter": "(src port $minport or dst port $minport) or (src port $maxport or dst port $maxport)",
+            "min_port": 2222,
+            "max_port": 2223,
+            "protocol": [
+                "udp"
+            ],
+            "description": "NGCP message template"
+        },
+        {
+            "name": "RTPPROXY",
+            "filter": "(src port $minport or dst port $minport) or (src port $maxport or dst port $maxport)",
+            "min_port": 7898,
+            "max_port": 7899,
+            "protocol": [
+                "udp"
+            ],
+            "description": "RTPPROXY message template"
+        },
+        {
+            "name": "ISUP",
+            "filter": "(proto 132) or (vlan and proto 132)",
+            "isup_type": "ansi",
+            "protocol": [
+                "sctp"
+            ],
+            "description": "ISUP message template"
+        },
+        {
+            "name": "HEP",
+            "filter": "",
+            "min_port": 9062,
+            "max_port": 9063,
+            "protocol": [
+                "udp",
+                "tcp"
+            ],
+            "description": "HEP message template"
+        }
+    ],
+    "rtp_settings": {
+        "rtp_stats_active": true,
+        "rtcp_stats_active": true,
+        "video_mos_adaption_active": false,
+        "rate_adaption_video_mos": 1.4,
+        "wideband_e_model_active": false,
+        "amr_wb_ie": 13,
+        "amr_wb_bpl": 10,
+        "nat_mode_active": false,
+        "reverse_nat_mode_active": false,
+        "ignore_dtmf_active": false,
+        "report_media_interval": "30s",
+        "report_media_timeout": "120s",
+        "final_media_report_timeout": "3s",
+        "ignore_final_short_rtp_stream": true,
+        "replace_media_ip": null,
+        "num_workers": 4,
+        "ephemeral_streams": false,
+        "ephemeral_stats": false,
+        "ephemeral_report": false,
+        "rtp_short_report": true
+    },
+    "network_settings": {
+        "option_checker": true,
+        "tcp_checksum": false,
+        "promisc_interfaces": []
+    },
+    "sip_settings": {
+        "censored_methods": [],
+        "disconnect_active": true,
+        "discard_ips": [],
+        "discard_src_ips": [],
+        "discard_dst_ips": [],
+        "aleg_ids": [],
+        "deduplicate": false,
+        "custom_headers": [],
+        "check_sip_interval": "30s",
+        "num_workers": 4,
+        "encode_hep": true,
+        "transaction": {
+            "call": false,
+            "register": false,
+            "call_timeout": "6h"
+        },
+        "force_aleg_id": false,
+        "dialog_timeout": 0
+    },
+    "interception_settings": {
+        "active": false,
+        "interval": "10s",
+        "stats_interval": "10m",
+        "worker_count": 6,
+        "max_interceptions": 30
+    },
+    "hep_settings": {
+        "hepv2_active": true,
+        "hepv3_active": true,
+        "deduplicate": false,
+        "replace_token": false
+    },
+    "system_settings": {
+        "hostname": "hostname",
+        "node_name": "node",
+        "url": "http://127.0.0.1",
+        "uuid": "",
+        "uuid_on_start": true,
+        "daemon": false,
+        "pid_file": "/var/run/heplify.pid",
+        "fragment_full_search": false,
+        "ip_defrag_original": false,
+        "tcp_reasm_v2": false,
+        "validate_snaplen": false,
+        "tcpreasm": {
+            "debug": false,
+            "clean_timeout": "120s",
+            "fragment_timeout": "60s"
+        },
+        "queue": {
+            "rtp_packet_queue_size": 10000,
+            "rtcp_packet_queue_size": 10000,
+            "disconnect_queue_size": 10000,
+            "sip_process_queue_size": 10000,
+            "interception_queue_size": 10000,
+            "hep_queue_size": 10000,
+            "publish_packet_queue_size": 10000,
+            "ip_defragmenter": 5000,
+            "tcp_reassembler": 5000
+        },
+        "pprof": {
+            "active": false,
+            "url": "localhost:6060"
+        }
+    },
+    "prometheus_settings": {
+        "active": false,
+        "host": "0.0.0.0",
+        "port": 8008
+    },
+    "debug_settings": {
+        "disable_rtp_stats": false,
+        "disable_sip_stats": false,
+        "disable_publish": false,
+        "disable_disconnect": false,
+        "disable_interception": false,
+        "disable_tcp_reassembly": false,
+        "disable_ip_defrag": false
+    },
+    "http_settings": {
+        "active": false,
+        "host": "0.0.0.0",
+        "port": 18090,
+        "api_prefix": "",
+        "debug": false
+    },
+    "script_settings": {
+        "active": false,
+        "file": "",
+        "hep_filter": ""
+    }
+}

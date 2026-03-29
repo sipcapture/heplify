@@ -1,73 +1,103 @@
-name: Release Binary/Images (old)
+name: Release
 
 on:
   workflow_dispatch:
-#  release:
-#    types: [created, published]
+    inputs:
+      ref_name:
+        description: 'Release version tag (e.g. v2.0.0)'
+        required: true
+      release:
+        description: 'Create GitHub release and packages'
+        required: true
+        type: boolean
+        default: true
+  release:
+    types: [published]
 
-env:
-  REGISTRY: ghcr.io
+permissions:
+  contents: write
 
 jobs:
-
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v5.0.1
-      with:
-        go-version: 1.23
-        
-    - name: Libraries
-      run: sudo apt-get install -y libpcap-dev libluajit-5.1-dev
-      
-    - name: LuaJIT
-      run: git clone https://luajit.org/git/luajit-2.0.git && cd luajit-2.0 && git checkout v2.1 && make CCOPT="-static -fPIC" BUILDMODE="static" && sudo make install && sudo ldconfig
-      
-    - name: Build
-      run: CGO_ENABLED=1 GOOS=linux go build -a --ldflags '-linkmode external -extldflags "-static -s -w"' -o heplify .
-      # run: CGO_ENABLED=1 GOOS=linux CGO_LDFLAGS="-lm -ldl" go build -a -ldflags '-extldflags "-static"' -tags netgo -installsuffix netgo -o heplify *.go
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
-    - name: Upload
-      uses: skx/github-action-publish-binaries@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        args: 'heplify'
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libpcap-dev libluajit-5.1-dev
 
-  docker-push:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      packages: write
-      contents: read
-    
-    steps:
-    - uses: actions/checkout@v4          
-    - name: Log in to the Container registry
-      uses: docker/login-action@v3.2.0
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve version
+        run: |
+          TAG="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}"
+          VERSION="${TAG#v}"
+          if [ -z "${VERSION}" ]; then
+            echo "::error::VERSION is empty. Provide a valid tag (e.g. v2.0.0)."
+            exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-    - name: Docker meta
-      id: meta
-      uses: docker/metadata-action@v5.5.1
-      with:
-        images: |
-          ghcr.io/${{ github.repository }}
-        tags: |
-          latest
-          ${{ github.ref_name }}
-          
-    - name: Build and push
-      uses: docker/build-push-action@v5.4.0
-      with:
-        context: .
-        file: ./docker/heplify/Dockerfile
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+      - name: Update version.go
+        run: |
+          ESCAPED="${VERSION//\\/\\\\}"
+          ESCAPED="${ESCAPED//&/\\&}"
+          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${ESCAPED}\"|" src/cmd/heplify-ng/version.go
+          echo "Updated version.go to ${VERSION}"
+
+      - name: Build heplify-ng (${{ matrix.goarch }})
+        run: |
+          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE}"
+          CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -trimpath -o heplify-ng_${{ matrix.goarch }} ./src/cmd/heplify-ng
+          echo "Built: $(./heplify-ng_${{ matrix.goarch }} -version 2>&1 || true)"
+
+      - name: Get nfpm
+        if: github.event_name == 'release' || inputs.release == true
+        run: |
+          NFPM_ARCH="${{ matrix.goarch == 'arm64' && 'arm64' || 'x86_64' }}"
+          wget -qO- "https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_${NFPM_ARCH}.tar.gz" \
+            | tar --directory ./ -xz nfpm
+          chmod +x nfpm
+
+      - name: Create packages (${{ matrix.goarch }})
+        if: github.event_name == 'release' || inputs.release == true
+        run: |
+          cp heplify-ng_${{ matrix.goarch }} heplify-ng
+          sed -i "s|arch: \"amd64\"|arch: \"${{ matrix.goarch }}\"|g" nfpm.yaml
+          VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
+            --target "./heplify-ng_${VERSION}_${{ matrix.goarch }}.deb"
+          VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
+            --target "./heplify-ng_${VERSION}_${{ matrix.goarch }}.rpm"
+
+      - name: Upload release assets
+        if: github.event_name == 'release' || inputs.release == true
+        uses: boxpositron/upload-multiple-releases@1.0.7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_config: |
+            heplify-ng_${{ matrix.goarch }}
+            heplify-ng_${{ env.VERSION }}_${{ matrix.goarch }}.deb
+            heplify-ng_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
+          tag_name: ${{ env.VERSION }}
+          release_name: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          overwrite: true

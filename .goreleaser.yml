@@ -1,0 +1,120 @@
+version: 2
+
+project_name: heplify-ng
+
+before:
+  hooks:
+    - bash scripts/update_version.sh {{ .Version }}
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: heplify-ng
+    main: ./src/cmd/heplify-ng
+    binary: heplify-ng
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildDate={{.Date}}
+    flags:
+      - -trimpath
+
+  - id: heplify-ng-static
+    main: ./src/cmd/heplify-ng
+    binary: heplify-ng-static
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w
+      - -linkmode external
+      - -extldflags '-static'
+      - -X main.Version={{.Version}}
+      - -X main.BuildDate={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: heplify-ng
+    ids:
+      - heplify-ng
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - heplify.json
+      - example.lua
+
+  - id: heplify-ng-static
+    ids:
+      - heplify-ng-static
+    name_template: "{{ .ProjectName }}_{{ .Version }}_linux_amd64_static"
+    formats:
+      - tar.gz
+    files:
+      - README.md
+      - LICENSE
+      - heplify.json
+      - example.lua
+
+nfpms:
+  - id: heplify-ng-deb-rpm
+    ids:
+      - heplify-ng
+    package_name: heplify-ng
+    vendor: SIPCAPTURE
+    homepage: https://github.com/sipcapture/heplify-ng
+    maintainer: SIPCAPTURE <support@sipcapture.org>
+    description: Next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem
+    license: AGPL-3.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: heplify.json
+        dst: /etc/heplify-ng/heplify.json
+        type: config|noreplace
+      - src: example.lua
+        dst: /etc/heplify-ng/example.lua
+        type: config|noreplace
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: sipcapture
+    name: heplify-ng
+  draft: false
+  prerelease: auto
+  name_template: "{{.ProjectName}} v{{.Version}}"

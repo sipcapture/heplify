@@ -1,0 +1,254 @@
+package decoder
+
+import (
+	"encoding/binary"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+)
+
+func TestBoolToUint8(t *testing.T) {
+	if got := boolToUint8(true); got != 1 {
+		t.Fatalf("expected 1, got %d", got)
+	}
+	if got := boolToUint8(false); got != 0 {
+		t.Fatalf("expected 0, got %d", got)
+	}
+}
+
+func TestDecodeInvalidPacketReturnsNil(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	pkt, err := d.Decode([]byte{0x01, 0x02, 0x03}, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt != nil {
+		t.Fatalf("expected nil packet for invalid input")
+	}
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+var (
+	testSrcMAC = net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x01}
+	testDstMAC = net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
+	testSrcIP4 = net.ParseIP("10.0.0.1").To4()
+	testDstIP4 = net.ParseIP("10.0.0.2").To4()
+	testSrcIP6 = net.ParseIP("2001:db8::1")
+	testDstIP6 = net.ParseIP("2001:db8::2")
+)
+
+// buildUDPDatagram returns a raw UDP datagram (header + payload) with zero checksum.
+func buildUDPDatagram(srcPort, dstPort uint16, payload []byte) []byte {
+	udp := make([]byte, 8+len(payload))
+	binary.BigEndian.PutUint16(udp[0:2], srcPort)
+	binary.BigEndian.PutUint16(udp[2:4], dstPort)
+	binary.BigEndian.PutUint16(udp[4:6], uint16(len(udp)))
+	// checksum = 0 (disabled)
+	copy(udp[8:], payload)
+	return udp
+}
+
+// buildIPv4Frag builds a complete Ethernet+IPv4 packet carrying a fragment.
+// fragmentOffset is in 8-byte units (matches the IPv4 header field).
+func buildIPv4Frag(t *testing.T, fragID uint16, fragOffset uint16, moreFragments bool, payload []byte) []byte {
+	t.Helper()
+	flags := layers.IPv4Flag(0)
+	if moreFragments {
+		flags = layers.IPv4MoreFragments
+	}
+	buf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{
+			Version:    4,
+			IHL:        5,
+			Protocol:   layers.IPProtocolUDP,
+			TTL:        64,
+			Id:         fragID,
+			SrcIP:      testSrcIP4,
+			DstIP:      testDstIP4,
+			Flags:      flags,
+			FragOffset: fragOffset,
+		},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildIPv4Frag: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// buildIPv6Frag builds a complete Ethernet+IPv6 packet carrying an IPv6 fragment extension header.
+// fragOffset is in 8-byte units.
+func buildIPv6Frag(t *testing.T, fragID uint32, fragOffset uint16, moreFragments bool, nextProto byte, payload []byte) []byte {
+	t.Helper()
+	// 8-byte IPv6 Fragment extension header (RFC 2460 §4.5)
+	fragHdr := make([]byte, 8)
+	fragHdr[0] = nextProto
+	fragHdr[1] = 0
+	offsetAndFlags := fragOffset << 3
+	if moreFragments {
+		offsetAndFlags |= 1
+	}
+	binary.BigEndian.PutUint16(fragHdr[2:4], offsetAndFlags)
+	binary.BigEndian.PutUint32(fragHdr[4:8], fragID)
+
+	fragPayload := append(fragHdr, payload...)
+
+	buf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv6},
+		&layers.IPv6{
+			Version:    6,
+			NextHeader: layers.IPProtocolIPv6Fragment,
+			HopLimit:   64,
+			SrcIP:      testSrcIP6,
+			DstIP:      testDstIP6,
+		},
+		gopacket.Payload(fragPayload),
+	); err != nil {
+		t.Fatalf("buildIPv6Frag: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// ─── IPv4 defragmentation ─────────────────────────────────────────────────────
+
+func TestIPv4Defragmentation(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	// UDP payload must be sized so the split boundary is a multiple of 8.
+	// udpDatagram = 8-byte header + 40-byte payload = 48 bytes; split at 24.
+	udpPayload := []byte("SIP/2.0 200 OK defrag test payload!12345")
+	udpDatagram := buildUDPDatagram(5060, 5060, udpPayload)
+	const splitAt = 24 // multiple of 8 → fragOffset = 3
+	chunk1 := udpDatagram[:splitAt]
+	chunk2 := udpDatagram[splitAt:]
+
+	// Fragment 1: MF=1, offset=0 — should be buffered.
+	pkt, err := d.Decode(buildIPv4Frag(t, 0xAB01, 0, true, chunk1), ci)
+	if err != nil {
+		t.Fatalf("frag1 decode error: %v", err)
+	}
+	if pkt != nil {
+		t.Fatal("frag1: expected nil (buffered), got assembled packet")
+	}
+
+	// Fragment 2: MF=0, offset=splitAt/8 — triggers reassembly.
+	pkt, err = d.Decode(buildIPv4Frag(t, 0xAB01, splitAt/8, false, chunk2), ci)
+	if err != nil {
+		t.Fatalf("frag2 decode error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("frag2: expected assembled packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(udpPayload) {
+		t.Fatalf("payload mismatch:\ngot:  %q\nwant: %q", pkt.Payload, udpPayload)
+	}
+}
+
+func TestIPv4DefragDisabled(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	d.DisableDefrag()
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	udpDatagram := buildUDPDatagram(5060, 5060, []byte("SIP/2.0 200 OK defrag test payload!12345"))
+	const splitAt = 24
+	chunk1 := udpDatagram[:splitAt]
+	chunk2 := udpDatagram[splitAt:]
+
+	// With defrag disabled, both fragments are dropped (no transport layer decoded).
+	for i, data := range [][]byte{
+		buildIPv4Frag(t, 0xCC01, 0, true, chunk1),
+		buildIPv4Frag(t, 0xCC01, splitAt/8, false, chunk2),
+	} {
+		pkt, err := d.Decode(data, ci)
+		if err != nil {
+			t.Fatalf("frag%d: unexpected error: %v", i+1, err)
+		}
+		if pkt != nil {
+			t.Fatalf("frag%d: defrag disabled, expected nil, got packet", i+1)
+		}
+	}
+}
+
+// ─── IPv6 defragmentation ─────────────────────────────────────────────────────
+
+func TestIPv6Defragmentation(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	udpPayload := []byte("SIP/2.0 200 OK defrag test payload!12345")
+	udpDatagram := buildUDPDatagram(5060, 5060, udpPayload)
+	const splitAt = 24 // multiple of 8
+	chunk1 := udpDatagram[:splitAt]
+	chunk2 := udpDatagram[splitAt:]
+
+	// Fragment 1: MF=1, offset=0.
+	pkt, err := d.Decode(buildIPv6Frag(t, 0xDEADBEEF, 0, true, 0x11, chunk1), ci)
+	if err != nil {
+		t.Fatalf("frag1 decode error: %v", err)
+	}
+	if pkt != nil {
+		t.Fatal("frag1: expected nil (buffered), got assembled packet")
+	}
+
+	// Fragment 2: MF=0, offset=splitAt/8.
+	pkt, err = d.Decode(buildIPv6Frag(t, 0xDEADBEEF, splitAt/8, false, 0x11, chunk2), ci)
+	if err != nil {
+		t.Fatalf("frag2 decode error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("frag2: expected assembled packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(udpPayload) {
+		t.Fatalf("payload mismatch:\ngot:  %q\nwant: %q", pkt.Payload, udpPayload)
+	}
+}
+
+// ─── decodeTransport helper ───────────────────────────────────────────────────
+
+func TestDecodeTransportUDP(t *testing.T) {
+	payload := buildUDPDatagram(5060, 5061, []byte("hello"))
+	proto, sp, dp, flags, data, ok := decodeTransport(layers.IPProtocolUDP, payload)
+	if !ok {
+		t.Fatal("decodeTransport: expected ok=true")
+	}
+	if proto != 0x11 {
+		t.Fatalf("expected proto 0x11, got 0x%02x", proto)
+	}
+	if sp != 5060 || dp != 5061 {
+		t.Fatalf("expected 5060/5061, got %d/%d", sp, dp)
+	}
+	if flags != 0 {
+		t.Fatalf("expected flags=0, got %d", flags)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("payload mismatch: %q", data)
+	}
+}
+
+func TestDecodeTransportUnknownProto(t *testing.T) {
+	_, _, _, _, _, ok := decodeTransport(layers.IPProtocolICMPv6, []byte{0, 1, 2, 3})
+	if ok {
+		t.Fatal("expected ok=false for unknown protocol")
+	}
+}

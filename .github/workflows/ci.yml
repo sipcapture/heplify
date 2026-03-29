@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: go vet
+        run: make lint
+
+      - name: Unit tests
+        run: make test
+
+      - name: Race tests
+        run: make test-race
+
+      - name: Coverage
+        run: make test-coverage
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout=5m

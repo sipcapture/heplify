@@ -1,0 +1,48 @@
+{
+    "system_settings": {
+        "node_name": "test-node",
+        "hostname": "test-host",
+        "queue": {
+            "rtp_packet_queue_size": 1000,
+            "rtcp_packet_queue_size": 1000
+        }
+    },
+    "socket": [
+        {
+            "name": "socket1",
+            "active": true,
+            "socket_type": "afpacket",
+            "snap_len": 65535,
+            "promisc": true,
+            "device": "any"
+        }
+    ],
+    "transport": [
+        {
+            "name": "udp",
+            "active": true,
+            "protocol": "udp",
+            "host": "127.0.0.1",
+            "port": 9090
+        }
+    ],
+    "protocol": [
+        {
+            "name": "sip-udp",
+            "min_port": 5000,
+            "max_port": 6000,
+            "protocol": [
+                "udp"
+            ]
+        }
+    ],
+    "script_settings": {
+        "active": true,
+        "file": "./example.lua"
+    },
+    "prometheus_settings": {
+        "active": true,
+        "host": "0.0.0.0",
+        "port": 9096
+    }
+}

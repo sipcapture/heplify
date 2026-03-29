@@ -1,0 +1,38 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - misspell
+    - unconvert
+    - unparam
+
+linters-settings:
+  govet:
+    enable-all: false
+    enable:
+      - shadow
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    # generated flatbuffers code from arrow-go
+    - path: ".*_generated\\.go"
+      linters: [errcheck, unused, staticcheck]
+    # test helpers allowed to shadow
+    - path: "_test\\.go"
+      linters: [govet]
+  max-issues-per-linter: 50
+  max-same-issues: 5

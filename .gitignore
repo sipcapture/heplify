@@ -1,3 +1,10 @@
-heplify
-heplify.log*
-vendor/
+/heplify-ng
+/heplify-ng-linux-amd64
+/heplify-ng-linux-static
+/heplify-ng-static
+coverage.out
+*.prof
+*.test
+
+# GoReleaser output
+dist/
