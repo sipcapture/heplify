@@ -12,9 +12,11 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   GO_VERSION_FILE: go.mod
+  IMAGE_NAME: ghcr.io/sipcapture/heplify
 
 jobs:
   build:
@@ -62,11 +64,11 @@ jobs:
           fi
           GIT_COMMIT="$(git rev-parse --short HEAD)"
           BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          echo "VERSION=${VERSION}"      >> "$GITHUB_OUTPUT"
+          echo "VERSION=${VERSION}"       >> "$GITHUB_OUTPUT"
           echo "GIT_COMMIT=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
           echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
           echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
-          echo "VERSION=${VERSION}"      >> "$GITHUB_ENV"
+          echo "VERSION=${VERSION}"       >> "$GITHUB_ENV"
 
       - name: Update version.go
         run: |
@@ -114,6 +116,128 @@ jobs:
             heplify_${{ matrix.goarch }}
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+
+  docker:
+    name: Docker image (${{ matrix.goarch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
+    runs-on: ${{ matrix.runner }}
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          VERSION="${TAG#v}"
+          GIT_COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "VERSION=${VERSION}"       >> "$GITHUB_OUTPUT"
+          echo "GIT_COMMIT=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push arch-specific image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}-${{ matrix.goarch }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            BUILD_DATE=${{ steps.version.outputs.BUILD_DATE }}
+            GIT_COMMIT=${{ steps.version.outputs.GIT_COMMIT }}
+
+  docker-manifest:
+    name: Docker multi-arch manifest
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest (GHCR)
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:${VERSION}" \
+            --tag "${IMAGE_NAME}:latest" \
+            "${IMAGE_NAME}:${VERSION}-amd64" \
+            "${IMAGE_NAME}:${VERSION}-arm64"
+          docker buildx imagetools inspect "${IMAGE_NAME}:${VERSION}"
+
+      - name: Create and push multi-arch manifest (Docker Hub)
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          HUB_IMAGE="sipcapture/heplify"
+          docker buildx imagetools create \
+            --tag "${HUB_IMAGE}:${VERSION}" \
+            --tag "${HUB_IMAGE}:latest" \
+            "${IMAGE_NAME}:${VERSION}-amd64" \
+            "${IMAGE_NAME}:${VERSION}-arm64"
 
   release:
     name: Create GitHub Release

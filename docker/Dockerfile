@@ -3,7 +3,7 @@ FROM golang:1.24-bookworm AS builder
 WORKDIR /build
 
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends libpcap-dev && \
+    apt-get install -y --no-install-recommends libpcap-dev libluajit-5.1-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
@@ -13,11 +13,13 @@ COPY . .
 
 ARG VERSION=dev
 ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
 
 RUN CGO_ENABLED=1 GOOS=linux go build \
-    -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE}" \
-    -o heplify-ng \
-    ./src/cmd/heplify-ng
+    -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}" \
+    -trimpath \
+    -o heplify \
+    ./src/cmd/heplify
 
 # ──────────────────────────────────────────────────────
 FROM debian:bookworm-slim
@@ -26,14 +28,14 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends libpcap0.8 ca-certificates libcap2-bin && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/heplify-ng /usr/local/bin/heplify-ng
+COPY --from=builder /build/heplify /usr/local/bin/heplify
 
-# Allow non-root users with CAP_NET_RAW + CAP_NET_ADMIN to run capture
-RUN setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/heplify-ng
-COPY heplify.json            /etc/heplify-ng/heplify.json
-COPY example.lua              /etc/heplify-ng/example.lua
+RUN setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/heplify
 
-ENV HEPLIFY_CONFIG=/etc/heplify-ng/heplify.json
+COPY heplify.json  /etc/heplify/heplify.json
+COPY example.lua   /etc/heplify/example.lua
 
-ENTRYPOINT ["heplify-ng"]
-CMD ["-config", "/etc/heplify-ng/heplify.json"]
+ENV HEPLIFY_CONFIG=/etc/heplify/heplify.json
+
+ENTRYPOINT ["heplify"]
+CMD ["-config", "/etc/heplify/heplify.json"]
