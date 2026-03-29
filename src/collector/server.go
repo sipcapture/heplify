@@ -2,16 +2,20 @@ package collector
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/hep"
 	heplifyDecoder "github.com/sipcapture/heplify/src/hep"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 type Server struct {
@@ -19,6 +23,7 @@ type Server struct {
 	sender   Sender
 	udpConn  net.PacketConn
 	tcpLn    net.Listener
+	httpSrv  *http.Server
 	wg       sync.WaitGroup
 	shutdown chan struct{}
 }
@@ -77,6 +82,11 @@ func (s *Server) Start() error {
 	case "both":
 		go s.startUDP(addr)
 		go s.startTCP(addr)
+	case "http2":
+		go s.startHTTP2(addr)
+	default:
+		log.Warn().Str("proto", proto).Msg("Unknown collector protocol, defaulting to udp")
+		go s.startUDP(addr)
 	}
 
 	return nil
@@ -221,8 +231,49 @@ func (s *Server) readHEPPacket(reader *bufio.Reader) ([]byte, error) {
 	return data, nil
 }
 
+// startHTTP2 starts a cleartext HTTP/2 (h2c) server that receives HEP3 packets
+// via POST /hep with Content-Type: application/octet-stream.
+// Usage: set collector_proto = "http2" in socket config, or use -hin http2:addr:port
+func (s *Server) startHTTP2(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hep", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		data, err := io.ReadAll(io.LimitReader(r.Body, 65535))
+		if err != nil {
+			http.Error(w, "Failed to read body", http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
+
+		if len(data) < 6 || string(data[0:4]) != "HEP3" {
+			http.Error(w, "Not HEP3 Data", http.StatusBadRequest)
+			return
+		}
+
+		remoteAddr := r.RemoteAddr
+		go s.processHEP(data, remoteAddr)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	h2s := &http2.Server{}
+	s.httpSrv = &http.Server{
+		Addr:    addr,
+		Handler: h2c.NewHandler(mux, h2s),
+	}
+
+	log.Info().Str("addr", addr).Msg("HTTP/2 (h2c) collector listening")
+
+	if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("HTTP/2 collector failed")
+	}
+}
+
 func (s *Server) processHEP(data []byte, remoteAddr string) {
-	// Decode HEP
 	hepMsg, err := heplifyDecoder.DecodeHEP(data)
 	if err != nil {
 		log.Debug().Err(err).Str("addr", remoteAddr).Msg("Failed to decode HEP")
@@ -302,6 +353,10 @@ func (s *Server) Stop() {
 
 	if s.tcpLn != nil {
 		s.tcpLn.Close()
+	}
+
+	if s.httpSrv != nil {
+		_ = s.httpSrv.Shutdown(context.Background())
 	}
 
 	s.wg.Wait()
