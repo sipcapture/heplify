@@ -8,3 +8,7 @@ coverage.out
 
 # GoReleaser output
 dist/
+
+# Local test configs (may contain real hosts/passwords)
+*-test.json
+*.local.json
