@@ -1,4 +1,4 @@
-NAME?=heplify-ng
+NAME?=heplify
 VERSION?=$(shell \
 	if git describe --tags --abbrev=0 >/dev/null 2>&1; then \
 		git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//'; \
@@ -13,16 +13,16 @@ PKGLIST=$(shell go list ./... | grep -Ev '/vendor')
 all: build
 
 build:
-	go build $(LDFLAGS) -o $(NAME) ./src/cmd/heplify-ng
+	go build $(LDFLAGS) -o $(NAME) ./src/cmd/heplify
 
 debug:
-	go build -o $(NAME) ./src/cmd/heplify-ng
+	go build -o $(NAME) ./src/cmd/heplify
 
 linux:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(NAME)-linux-amd64 ./src/cmd/heplify-ng
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(NAME)-linux-amd64 ./src/cmd/heplify
 
 linux-static:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -linkmode external -extldflags '-static'" -o $(NAME)-linux-static ./src/cmd/heplify-ng
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -linkmode external -extldflags '-static'" -o $(NAME)-linux-static ./src/cmd/heplify
 
 test:
 	go test $(PKGLIST)
@@ -51,14 +51,14 @@ tidy:
 deps:
 	go mod download
 
-## update-version — write VERSION into src/cmd/heplify-ng/version.go (mirrors heplify.go pattern)
+## update-version — write VERSION into src/cmd/heplify/version.go (mirrors heplify.go pattern)
 update-version:
 	chmod +x scripts/update_version.sh
 	VERSION=$(VERSION) bash scripts/update_version.sh
 
 ## release — bump version.go, commit, tag and push (triggers GoReleaser CI)
 release: update-version
-	git add src/cmd/heplify-ng/version.go
+	git add src/cmd/heplify/version.go
 	git diff --cached --quiet || git commit -m "chore: bump version to $(VERSION)"
 	git tag -a v$(VERSION) -m "Release v$(VERSION)"
 	git push origin HEAD --tags

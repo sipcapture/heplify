@@ -1,8 +1,8 @@
-# heplify-ng Architecture
+# heplify Architecture
 
 ## Overview
 
-`heplify-ng` is a high-performance network packet capture and HEP encapsulation agent written in Go.
+`heplify` is a high-performance network packet capture and HEP encapsulation agent written in Go.
 It captures SIP, RTCP/RTP, DNS, NG (rtpengine), and LOG traffic, encapsulates packets in HEP v3
 format, and forwards them to a monitoring backend (HOMER, GigAPI, or any Arrow Flight server).
 
@@ -14,8 +14,8 @@ visibility, and support for modern columnar data transports.
 ## Repository Layout
 
 ```
-heplify-ng/
-├── src/cmd/heplify-ng/     # Entry point: CLI flags, startup, graceful shutdown
+heplify/
+├── src/cmd/heplify/     # Entry point: CLI flags, startup, graceful shutdown
 ├── config/             # Config structs, JSON loader, validation
 ├── collector/          # HEP relay server (receive → re-encode → forward)
 ├── decoder/            # Protocol parsers (SIP, RTCP, RTP, DNS, NG, WebSocket)
@@ -41,7 +41,7 @@ heplify-ng/
 
 ```
                          ┌──────────────────────────────────────────────┐
-                         │                  heplify-ng                  │
+                         │                  heplify                  │
                          │                                              │
   ┌──────────────┐       │  ┌───────────┐       ┌─────────────────────┐│
   │  Network IF  │──────▶│  │  Sniffer  │──────▶│    Protocol         ││
@@ -77,7 +77,7 @@ heplify-ng/
 
 ## Components
 
-### 1. Entry Point (`src/cmd/heplify-ng`)
+### 1. Entry Point (`src/cmd/heplify`)
 
 Bootstraps the agent from either:
 - **CLI flags** — compatible with legacy `heplify` flag names
@@ -396,7 +396,7 @@ if s.sender.HasFlightClients() {
 // fallthrough: standard HEP encode + send
 ```
 
-This means a single heplify-ng instance either sends HEP frames (UDP/TCP/TLS) **or**
+This means a single heplify instance either sends HEP frames (UDP/TCP/TLS) **or**
 Arrow RecordBatches (gRPC Flight) — never both simultaneously.
 The active mode is determined purely by which transport entries have `active: true`
 and `"transport": "grpc-flight"` in the config.
@@ -433,8 +433,8 @@ Shared state is protected by `sync.RWMutex` (sender client list) and
 | Docker image | Docker | `docker/Dockerfile` (multi-stage) |
 | GitHub Release | GoReleaser | `.github/workflows/release.yml` on `v*` tag |
 
-Systemd unit: `examples/heplify-ng.service`
-SysV init: `examples/heplify-ng.init`
+Systemd unit: `examples/heplify.service`
+SysV init: `examples/heplify.init`
 
 ---
 

@@ -17,7 +17,7 @@ func LoadConfig(path string) (*Config, error) {
 	} else {
 		v.SetConfigName("heplify")
 		v.SetConfigType("json")
-		v.AddConfigPath("/etc/heplify-ng/")
+		v.AddConfigPath("/etc/heplify/")
 		v.AddConfigPath("./")
 	}
 

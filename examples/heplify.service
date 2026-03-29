@@ -1,0 +1,24 @@
+# systemd unit for heplify
+#
+# Install:
+#   cp heplify.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now heplify
+
+[Unit]
+Description=heplify - HEP Agent and Collector
+Documentation=https://github.com/sipcapture/heplify
+After=network.target
+Wants=network-online.target
+
+[Service]
+Environment="HEPLIFY_CONFIG=/etc/heplify/heplify.json"
+ExecStart=/usr/local/bin/heplify -config ${HEPLIFY_CONFIG}
+Restart=always
+RestartSec=3s
+Type=simple
+User=root
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

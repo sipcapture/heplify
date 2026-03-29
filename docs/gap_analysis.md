@@ -1,6 +1,6 @@
-# Gap Analysis: heplify vs heplify-ng
+# Gap Analysis: heplify vs heplify
 
-The user requested to check `heplify` features and identify missing capabilities in `heplify-ng`.
+The user requested to check `heplify` features and identify missing capabilities in `heplify`.
 
 ## Heplify Features NOT in Heplify-NG
 
@@ -18,7 +18,7 @@ The user requested to check `heplify` features and identify missing capabilities
 
 4.  **VLAN/ERSPAN/VXLAN Support**:
     - `heplify` has specific flags for these.
-    - *Action*: `afpacket` in `heplify-ng` might support some naturally, but explicit extraction logic is missing.
+    - *Action*: `afpacket` in `heplify` might support some naturally, but explicit extraction logic is missing.
 
 5.  **De-duplication** (`dedup` flag):
     - *Action*: Add simple cache-based deduplication if required.

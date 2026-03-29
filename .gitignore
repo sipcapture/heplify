@@ -1,7 +1,7 @@
-/heplify-ng
-/heplify-ng-linux-amd64
-/heplify-ng-linux-static
-/heplify-ng-static
+/heplify
+/heplify-linux-amd64
+/heplify-linux-static
+/heplify-static
 coverage.out
 *.prof
 *.test

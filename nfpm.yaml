@@ -1,8 +1,8 @@
-# nfpm package configuration for heplify-ng
+# nfpm package configuration for heplify
 # Used by release workflow and scripts/build_package.sh
 # VERSION is passed via environment variable: VERSION=1.2.3 nfpm pkg ...
 
-name: "heplify-ng"
+name: "heplify"
 arch: "amd64"
 platform: "linux"
 version: "${VERSION}"
@@ -11,28 +11,28 @@ priority: "optional"
 replaces:
   - heplify
 provides:
-  - heplify-ng
+  - heplify
 maintainer: "SIPCAPTURE <support@sipcapture.org>"
 description: |
   Next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem.
   Captures SIP, RTCP and other VoIP traffic and forwards it via HEP protocol.
 vendor: "SIPCAPTURE"
-homepage: "https://github.com/sipcapture/heplify-ng"
+homepage: "https://github.com/sipcapture/heplify"
 license: "AGPL-3.0"
 contents:
-  - src: ./heplify-ng
-    dst: /usr/local/bin/heplify-ng
+  - src: ./heplify
+    dst: /usr/local/bin/heplify
 
   - src: ./heplify.json
-    dst: /etc/heplify-ng/heplify.json
+    dst: /etc/heplify/heplify.json
     type: config|noreplace
 
   - src: ./example.lua
-    dst: /etc/heplify-ng/example.lua
+    dst: /etc/heplify/example.lua
     type: config|noreplace
 
-  - src: ./examples/heplify-ng.service
-    dst: /etc/systemd/system/heplify-ng.service
+  - src: ./examples/heplify.service
+    dst: /etc/systemd/system/heplify.service
 
-  - src: ./examples/heplify-ng.init
-    dst: /etc/init.d/heplify-ng
+  - src: ./examples/heplify.init
+    dst: /etc/init.d/heplify

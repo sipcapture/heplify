@@ -1,6 +1,6 @@
 version: 2
 
-project_name: heplify-ng
+project_name: heplify
 
 before:
   hooks:
@@ -9,9 +9,9 @@ before:
     - go vet ./...
 
 builds:
-  - id: heplify-ng
-    main: ./src/cmd/heplify-ng
-    binary: heplify-ng
+  - id: heplify
+    main: ./src/cmd/heplify
+    binary: heplify
     env:
       - CGO_ENABLED=1
     goos:
@@ -33,9 +33,9 @@ builds:
     flags:
       - -trimpath
 
-  - id: heplify-ng-static
-    main: ./src/cmd/heplify-ng
-    binary: heplify-ng-static
+  - id: heplify-static
+    main: ./src/cmd/heplify
+    binary: heplify-static
     env:
       - CGO_ENABLED=1
     goos:
@@ -52,9 +52,9 @@ builds:
       - -trimpath
 
 archives:
-  - id: heplify-ng
+  - id: heplify
     ids:
-      - heplify-ng
+      - heplify
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - tar.gz
@@ -64,9 +64,9 @@ archives:
       - heplify.json
       - example.lua
 
-  - id: heplify-ng-static
+  - id: heplify-static
     ids:
-      - heplify-ng-static
+      - heplify-static
     name_template: "{{ .ProjectName }}_{{ .Version }}_linux_amd64_static"
     formats:
       - tar.gz
@@ -77,12 +77,12 @@ archives:
       - example.lua
 
 nfpms:
-  - id: heplify-ng-deb-rpm
+  - id: heplify-deb-rpm
     ids:
-      - heplify-ng
-    package_name: heplify-ng
+      - heplify
+    package_name: heplify
     vendor: SIPCAPTURE
-    homepage: https://github.com/sipcapture/heplify-ng
+    homepage: https://github.com/sipcapture/heplify
     maintainer: SIPCAPTURE <support@sipcapture.org>
     description: Next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem
     license: AGPL-3.0
@@ -92,10 +92,10 @@ nfpms:
     bindir: /usr/bin
     contents:
       - src: heplify.json
-        dst: /etc/heplify-ng/heplify.json
+        dst: /etc/heplify/heplify.json
         type: config|noreplace
       - src: example.lua
-        dst: /etc/heplify-ng/example.lua
+        dst: /etc/heplify/example.lua
         type: config|noreplace
 
 checksum:
@@ -114,7 +114,7 @@ changelog:
 release:
   github:
     owner: sipcapture
-    name: heplify-ng
+    name: heplify
   draft: false
   prerelease: auto
   name_template: "{{.ProjectName}} v{{.Version}}"

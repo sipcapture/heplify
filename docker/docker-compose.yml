@@ -1,25 +1,25 @@
 version: "3.9"
 
 services:
-  heplify-ng:
+  heplify:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: sipcapture/heplify-ng:latest
-    container_name: heplify-ng
+    image: sipcapture/heplify:latest
+    container_name: heplify
     restart: unless-stopped
     network_mode: host
     cap_add:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - ./config/heplify.json:/etc/heplify-ng/heplify.json:ro
-      - ./config/script.lua:/etc/heplify-ng/script.lua:ro
+      - ./config/heplify.json:/etc/heplify/heplify.json:ro
+      - ./config/script.lua:/etc/heplify/script.lua:ro
     environment:
-      - HEPLIFY_CONFIG=/etc/heplify-ng/heplify.json
+      - HEPLIFY_CONFIG=/etc/heplify/heplify.json
     command:
       - -config
-      - /etc/heplify-ng/heplify.json
+      - /etc/heplify/heplify.json
     logging:
       driver: "json-file"
       options:

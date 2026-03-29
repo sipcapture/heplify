@@ -1,20 +1,20 @@
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          heplify-ng
+# Provides:          heplify
 # Required-Start:    $syslog $local_fs $remote_fs $network
 # Required-Stop:     $syslog $local_fs $remote_fs $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: heplify-ng HEP Agent and Collector
+# Short-Description: heplify HEP Agent and Collector
 ### END INIT INFO
 
 . /lib/lsb/init-functions
 
-prog=heplify-ng
-BINARY=/usr/local/bin/heplify-ng
-CONFIG=/etc/heplify-ng/heplify.json
+prog=heplify
+BINARY=/usr/local/bin/heplify
+CONFIG=/etc/heplify/heplify.json
 PIDFILE=/var/run/${prog}.pid
-DESC="heplify-ng HEP Agent"
+DESC="heplify HEP Agent"
 
 start() {
     log_daemon_msg "Starting ${DESC}" "${prog}"

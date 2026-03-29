@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# update_version.sh — update src/cmd/heplify-ng/version.go with the given version.
+# update_version.sh — update src/cmd/heplify/version.go with the given version.
 #
 # Usage:
 #   ./scripts/update_version.sh [VERSION]
@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VERSION_FILE="${ROOT_DIR}/src/cmd/heplify-ng/version.go"
+VERSION_FILE="${ROOT_DIR}/src/cmd/heplify/version.go"
 
 # --- Resolve version ---
 if [ -n "${1:-}" ]; then

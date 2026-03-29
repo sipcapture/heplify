@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# build_package.sh - Build heplify-ng deb/rpm packages using nfpm via Docker
+# build_package.sh - Build heplify deb/rpm packages using nfpm via Docker
 #
 # Usage:
 #   ./scripts/build_package.sh [VERSION]
@@ -13,7 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PACKAGE="heplify-ng"
+PACKAGE="heplify"
 ARCH="amd64"
 
 # Colors
@@ -49,7 +49,7 @@ if [ ! -f "${ROOT_DIR}/${PACKAGE}" ]; then
     go build \
         -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE}" \
         -o "${PACKAGE}" \
-        ./src/cmd/heplify-ng
+        ./src/cmd/heplify
     log_info "Build complete: ${PACKAGE}"
 fi
 

@@ -191,7 +191,7 @@ func init() {
 	flag.BoolVar(&replaceToken, "replacetoken", false, "Replace NodePW in forwarded HEP packets (collector mode)")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "heplify-ng %s (built %s)\n\n", Version, BuildDate)
+		fmt.Fprintf(os.Stderr, "heplify %s (built %s)\n\n", Version, BuildDate)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -201,7 +201,7 @@ func init() {
 		fmt.Fprintf(os.Stderr, "  %s -i eth0 -hs 192.168.1.1:9060 -nt tls -skipverify\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -i eth0 -hs \"192.168.1.1:9060,192.168.2.2:9060\"\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -rf capture.pcap -hs 192.168.1.1:9060\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s -config /etc/heplify-ng/config.json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -config /etc/heplify/config.json\n", os.Args[0])
 	}
 }
 
@@ -217,7 +217,7 @@ func main() {
 	}
 
 	if showVersion {
-		fmt.Printf("heplify-ng %s (built %s)\n", Version, BuildDate)
+		fmt.Printf("heplify %s (built %s)\n", Version, BuildDate)
 		os.Exit(0)
 	}
 
@@ -236,7 +236,7 @@ func main() {
 	log.Info().
 		Str("version", Version).
 		Str("build_date", BuildDate).
-		Msg("Starting heplify-ng")
+		Msg("Starting heplify")
 
 	var cfg *config.Config
 	var err error
@@ -315,7 +315,7 @@ func main() {
 		scriptEngine.Close()
 	}
 
-	log.Info().Msg("heplify-ng stopped")
+	log.Info().Msg("heplify stopped")
 }
 
 func setupLogger() {

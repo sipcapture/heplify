@@ -1,6 +1,6 @@
-# heplify-ng
+# heplify
 
-**heplify-ng** is a next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem, written in Go. It serves as a simplified, high-performance successor to legacy agents, designed to capture SIP, RTCP, and other VoIP-related traffic and send it to HOMER or other HEP-compliant monitoring systems.
+**heplify** is a next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem, written in Go. It serves as a simplified, high-performance successor to legacy agents, designed to capture SIP, RTCP, and other VoIP-related traffic and send it to HOMER or other HEP-compliant monitoring systems.
 
 ## Features
 
@@ -23,23 +23,23 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/sipcapture/heplify-ng.git
-cd heplify-ng
+git clone https://github.com/sipcapture/heplify.git
+cd heplify
 
 # Build the binary
-go build -o heplify-ng src/cmd/heplify-ng/main.go
+go build -o heplify src/cmd/heplify/main.go
 ```
 
 ### Running
 
-By default, `heplify-ng` looks for a configuration file named `heplify.json` in the current directory, or you can specify a path.
+By default, `heplify` looks for a configuration file named `heplify.json` in the current directory, or you can specify a path.
 
 ```bash
 # Run with default config lookup
-./heplify-ng
+./heplify
 
 # Run with specific config file
-./heplify-ng -config /path/to/my/config.json
+./heplify -config /path/to/my/config.json
 ```
 
 ### Logging options
@@ -48,29 +48,29 @@ You can control log output with two short flags:
 
 ```bash
 # Set log level (alias for -l)
-./heplify-ng -x debug
+./heplify -x debug
 
 # Log to stdout (instead of stderr)
-./heplify-ng -S
+./heplify -S
 
 # Use JSON log format
-./heplify-ng -log-format=json
+./heplify -log-format=json
 
 # Plain text log format (default)
-./heplify-ng -log-format=text
+./heplify -log-format=text
 
 # Combine both
-./heplify-ng -x debug -S -config heplify-test.json
+./heplify -x debug -S -config heplify-test.json
 
 # Short + long examples
-./heplify-ng -x debug -S -log-format=json -config heplify-test.json
-./heplify-ng -l warn -log-format text -config heplify-test.json
+./heplify -x debug -S -log-format=json -config heplify-test.json
+./heplify -l warn -log-format text -config heplify-test.json
 ```
 
 ### Example `-h` flags (logging)
 
 ```bash
-Usage: ./heplify-ng [options]
+Usage: ./heplify [options]
 
 Options:
   -l value
@@ -98,7 +98,7 @@ Key sections include:
 
 ## Lua Scripting
 
-`heplify-ng` supports Lua scripting to manipulate or filter packets before sending. See `example.lua` for a starting point.
+`heplify` supports Lua scripting to manipulate or filter packets before sending. See `example.lua` for a starting point.
 
 ## License
 

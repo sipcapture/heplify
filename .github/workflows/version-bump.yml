@@ -22,8 +22,8 @@ jobs:
           VERSION="${TAG#v}"
           ESCAPED_VERSION="${VERSION//\\/\\\\}"
           ESCAPED_VERSION="${ESCAPED_VERSION//&/\\&}"
-          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${ESCAPED_VERSION}\"|" src/cmd/heplify-ng/version.go
-          if grep -qF "var Version = \"${VERSION}\"" src/cmd/heplify-ng/version.go; then
+          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${ESCAPED_VERSION}\"|" src/cmd/heplify/version.go
+          if grep -qF "var Version = \"${VERSION}\"" src/cmd/heplify/version.go; then
             echo "Updated version.go to ${VERSION}"
             echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           else
@@ -35,7 +35,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/cmd/heplify-ng/version.go
+          git add src/cmd/heplify/version.go
           git diff --staged --quiet || git commit -m "chore: bump version to ${{ env.VERSION }}"
           git pull --rebase origin ${{ github.event.repository.default_branch }}
           git push

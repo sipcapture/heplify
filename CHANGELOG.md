@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-03-19
 
 ### Added
-- Initial release of heplify-ng
+- Initial release of heplify
 - Packet sniffing via AF_PACKET (TPACKETv3) and libpcap
 - HEP v3 encapsulation and forwarding to HOMER / heplify-server
 - HEP collector mode — receive and relay HEP from other agents (UDP/TCP)
@@ -29,5 +29,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TLS transport with optional certificate verification skip
 - AF_PACKET fanout (multi-worker) support
 
-[Unreleased]: https://github.com/sipcapture/heplify-ng/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/sipcapture/heplify-ng/releases/tag/v1.0.0
+[Unreleased]: https://github.com/sipcapture/heplify/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sipcapture/heplify/releases/tag/v1.0.0
