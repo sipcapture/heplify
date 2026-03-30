@@ -22,62 +22,8 @@ env:
   IMAGE_NAME: ghcr.io/sipcapture/heplify
 
 jobs:
-  version-bump:
-    name: Bump version.go
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout default branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          VERSION="${TAG#v}"
-          if [ -z "${VERSION}" ]; then
-            echo "::error::VERSION is empty. Provide a valid tag (e.g. v2.0.1)."
-            exit 1
-          fi
-          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
-
-      - name: Update version.go
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
-          if grep -qF "var Version = \"${VERSION}\"" src/cmd/heplify/version.go; then
-            echo "Updated version.go to ${VERSION}"
-          else
-            echo "::error::Failed to update version.go to ${VERSION}" >&2
-            exit 1
-          fi
-
-      - name: Commit and push version update
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/cmd/heplify/version.go
-          git diff --staged --quiet && echo "No changes to commit" && exit 0
-          git commit -m "chore: bump version to ${VERSION}"
-          git pull --rebase origin ${{ github.event.repository.default_branch }}
-          git push
-
   build:
     name: Build & Package (${{ matrix.goarch }})
-    needs: version-bump
-    if: always()
     strategy:
       fail-fast: false
       matrix:
