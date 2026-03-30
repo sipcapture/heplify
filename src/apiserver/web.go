@@ -1,4 +1,4 @@
-package promstats
+package apiserver
 
 import _ "embed"
 

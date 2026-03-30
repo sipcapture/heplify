@@ -37,6 +37,6 @@ contents:
   - src: ./examples/heplify.init
     dst: /etc/init.d/heplify
 
-  - src: ./src/promstats/stats.html
+  - src: ./src/apiserver/stats.html
     dst: /usr/share/heplify/stats.html
     type: config|noreplace

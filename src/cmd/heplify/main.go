@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/collector"
 	"github.com/sipcapture/heplify/src/config"
-	"github.com/sipcapture/heplify/src/promstats"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/script"
 	"github.com/sipcapture/heplify/src/sniffer"
 	"github.com/sipcapture/heplify/src/transport"
@@ -266,7 +266,7 @@ func main() {
 
 	// Start API / Prometheus metrics server
 	if cfg.ApiSettings.Active {
-		promstats.StartMetrics(cfg)
+		apiserver.StartMetrics(cfg)
 		log.Info().
 			Str("addr", fmt.Sprintf("%s:%d", cfg.ApiSettings.Host, cfg.ApiSettings.Port)).
 			Msg("Started API server")
@@ -300,7 +300,7 @@ func main() {
 
 	// Register web stats getter for /api/stats endpoint
 	if cfg.ApiSettings.Active {
-		promstats.RegisterStatsGetter(func() promstats.WebStats {
+		apiserver.RegisterStatsGetter(func() apiserver.WebStats {
 			snap := sniff.GetStats().Snapshot()
 			ifaces := make([]string, 0, len(cfg.SocketSettings))
 			capModes := make(map[string][]string)
@@ -308,7 +308,7 @@ func main() {
 				ifaces = append(ifaces, s.Device)
 				capModes[s.Device] = s.CaptureMode
 			}
-			ws := promstats.WebStats{
+			ws := apiserver.WebStats{
 				NodeName:      cfg.SystemSettings.NodeName,
 				NodeID:        int(cfg.SystemSettings.NodeID),
 				Interfaces:    ifaces,

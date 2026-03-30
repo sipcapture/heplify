@@ -15,7 +15,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/config"
-	"github.com/sipcapture/heplify/src/promstats"
+	"github.com/sipcapture/heplify/src/apiserver"
 )
 
 type clientState string
@@ -209,7 +209,7 @@ func (s *Sender) scheduleReconnect(client *HEPClient, reason string) {
 	client.state = stateReconnecting
 	client.mu.Unlock()
 
-	promstats.IncReconnect(client.addr, client.proto)
+	apiserver.IncReconnect(client.addr, client.proto)
 	s.reconnectWG.Add(1)
 	go s.reconnectLoop(client, reason)
 }
@@ -237,7 +237,7 @@ func (s *Sender) reconnectLoop(client *HEPClient, reason string) {
 			client.reconnecting = false
 			client.backoff = initialReconnectBackoff
 			client.mu.Unlock()
-			promstats.SetTransportConnected(client.addr, client.proto, true)
+			apiserver.SetTransportConnected(client.addr, client.proto, true)
 
 			log.Info().
 				Str("component", "sender").
@@ -265,7 +265,7 @@ func (s *Sender) reconnectLoop(client *HEPClient, reason string) {
 		client.state = stateReconnecting
 		reachedLimit := client.maxRetries > 0 && int(client.errCnt) >= client.maxRetries
 		client.mu.Unlock()
-		promstats.SetTransportConnected(client.addr, client.proto, false)
+		apiserver.SetTransportConnected(client.addr, client.proto, false)
 
 		if reachedLimit {
 			log.Error().
@@ -317,7 +317,7 @@ func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err er
 		client.conn = nil
 		client.state = stateDisconnected
 		client.errCnt++
-		promstats.SetTransportConnected(client.addr, client.proto, false)
+		apiserver.SetTransportConnected(client.addr, client.proto, false)
 	}
 	client.mu.Unlock()
 
@@ -336,13 +336,13 @@ func (s *Sender) startWorker() {
 				case msg := <-s.hepQueue:
 					s.sendToAll(msg)
 				default:
-					promstats.SetQueueSize(len(s.hepQueue))
+					apiserver.SetQueueSize(len(s.hepQueue))
 					return
 				}
 			}
 		case msg := <-s.hepQueue:
 			s.sendToAll(msg)
-			promstats.SetQueueSize(len(s.hepQueue))
+			apiserver.SetQueueSize(len(s.hepQueue))
 		}
 	}
 }
@@ -410,12 +410,12 @@ func (s *Sender) sendToAll(msg []byte) {
 		client.backoff = initialReconnectBackoff
 		client.mu.Unlock()
 		onceSent = true
-		promstats.HepSentCount.Inc()
+		apiserver.HepSentCount.Inc()
 	}
 
 	if !onceSent && hasHEPClients {
 		s.bufferToFile(msg)
-		promstats.HepErrorCount.Inc()
+		apiserver.HepErrorCount.Inc()
 	}
 }
 
@@ -442,20 +442,20 @@ func (s *Sender) HasFlightClients() bool {
 // Send queues a message for sending to all servers
 func (s *Sender) Send(data []byte) error {
 	if s.closed.Load() {
-		promstats.HepErrorCount.Inc()
+		apiserver.HepErrorCount.Inc()
 		return fmt.Errorf("sender is closed")
 	}
 	select {
 	case <-s.stopCh:
-		promstats.HepErrorCount.Inc()
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepErrorCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return fmt.Errorf("sender is stopping")
 	case s.hepQueue <- data:
-		promstats.SetQueueSize(len(s.hepQueue))
+		apiserver.SetQueueSize(len(s.hepQueue))
 		return nil
 	default:
-		promstats.HepErrorCount.Inc()
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepErrorCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return fmt.Errorf("HEP queue is full")
 	}
 }
@@ -463,7 +463,7 @@ func (s *Sender) Send(data []byte) error {
 // bufferToFile writes HEP data to disk when all servers are unavailable
 func (s *Sender) bufferToFile(data []byte) {
 	if !s.bufferEnabled {
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return
 	}
 
@@ -488,7 +488,7 @@ func (s *Sender) bufferToFile(data []byte) {
 				Int64("current_size", fi.Size()).
 				Int64("max_size", s.bufferMaxSize).
 				Msg("Buffer file size limit exceeded, dropping packet")
-			promstats.HepDroppedCount.Inc()
+			apiserver.HepDroppedCount.Inc()
 			return
 		}
 	}
@@ -509,7 +509,7 @@ func (s *Sender) bufferToFile(data []byte) {
 		log.Error().Str("component", "sender").Err(err).Msg("Failed to write data to buffer")
 	}
 	if fi, err := f.Stat(); err == nil {
-		promstats.SetBufferSizeBytes(fi.Size())
+		apiserver.SetBufferSizeBytes(fi.Size())
 	}
 }
 
@@ -585,7 +585,7 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 		defer s.mu.Unlock()
 		if bytesConsumed >= len(data) {
 			_ = os.Truncate(s.bufferFile, 0)
-			promstats.SetBufferSizeBytes(0)
+			apiserver.SetBufferSizeBytes(0)
 			return
 		}
 		remaining := data[bytesConsumed:]
@@ -598,7 +598,7 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to atomically replace buffer file")
 			return
 		}
-		promstats.SetBufferSizeBytes(int64(len(remaining)))
+		apiserver.SetBufferSizeBytes(int64(len(remaining)))
 	}
 }
 
@@ -621,13 +621,13 @@ func (s *Sender) Close() {
 			}
 			client.state = stateDisconnected
 			client.reconnecting = false
-			promstats.SetTransportConnected(client.addr, client.proto, false)
+			apiserver.SetTransportConnected(client.addr, client.proto, false)
 			client.mu.Unlock()
 		case kindFlight:
 			tc.flight.Close()
 		}
 	}
-	promstats.SetQueueSize(0)
+	apiserver.SetQueueSize(0)
 }
 
 // SendNoErr queues a HEP packet, discarding any error (used by sniffer).
