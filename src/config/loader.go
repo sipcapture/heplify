@@ -26,6 +26,7 @@ func LoadConfig(path string) (*Config, error) {
 	v.AutomaticEnv()
 
 	v.SetDefault("rtcp_settings.active", true)
+	v.SetDefault("api_settings.tls", false)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
