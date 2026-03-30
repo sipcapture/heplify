@@ -6,7 +6,7 @@ import (
 )
 
 // Version is set at build time via -X main.Version=<ver> ldflags.
-var Version = "2.0.3"
+var Version = "2.0.4"
 
 // BuildDate is set at build time via -X main.BuildDate=<date> ldflags.
 var BuildDate = "unknown"
