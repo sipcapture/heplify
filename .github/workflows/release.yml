@@ -23,15 +23,23 @@ env:
 
 jobs:
   build:
-    name: Build & Package (${{ matrix.goarch }})
+    name: Build & Package (${{ matrix.goos }}/${{ matrix.goarch }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - goarch: amd64
+            goos: linux
             runner: ubuntu-latest
           - goarch: arm64
+            goos: linux
             runner: ubuntu-24.04-arm
+          - goarch: amd64
+            goos: darwin
+            runner: macos-13
+          - goarch: arm64
+            goos: darwin
+            runner: macos-latest
 
     runs-on: ${{ matrix.runner }}
 
@@ -47,10 +55,16 @@ jobs:
           go-version-file: ${{ env.GO_VERSION_FILE }}
           cache: true
 
-      - name: Install build dependencies
+      - name: Install build dependencies (Linux)
+        if: matrix.goos == 'linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+
+      - name: Install build dependencies (macOS)
+        if: matrix.goos == 'darwin'
+        run: |
+          brew install libpcap luajit
 
       - name: Resolve version
         id: version
@@ -73,33 +87,43 @@ jobs:
           echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
           echo "VERSION=${VERSION}"       >> "$GITHUB_ENV"
 
-      - name: Update version.go
+      - name: Update version.go (Linux)
+        if: matrix.goos == 'linux'
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           sed -i "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
           grep "var Version" src/cmd/heplify/version.go
 
-      - name: Build heplify (${{ matrix.goarch }})
+      - name: Update version.go (macOS)
+        if: matrix.goos == 'darwin'
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          sed -i '' "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
+          grep "var Version" src/cmd/heplify/version.go
+
+      - name: Build heplify (${{ matrix.goos }}/${{ matrix.goarch }})
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           GIT_COMMIT="${{ steps.version.outputs.GIT_COMMIT }}"
           BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
           LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}"
-          CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -trimpath \
-            -o heplify_${{ matrix.goarch }} \
+          CGO_ENABLED=1 GOOS=${{ matrix.goos }} go build -ldflags "${LDFLAGS}" -trimpath \
+            -o heplify_${{ matrix.goos }}_${{ matrix.goarch }} \
             ./src/cmd/heplify
           echo "=== Version dump ==="
-          ./heplify_${{ matrix.goarch }} -version
+          ./heplify_${{ matrix.goos }}_${{ matrix.goarch }} -version
 
       - name: glibc polyfill
+        if: matrix.goos == 'linux'
         run: |
           CONTAINER_ID=$(docker create ghcr.io/lmangani/polyfill-glibc-action:latest)
           docker cp $CONTAINER_ID:/usr/local/bin/polyfill-glibc ./polyfill-glibc
           docker rm $CONTAINER_ID
           chmod +x ./polyfill-glibc
-          ./polyfill-glibc --target-glibc=2.17 ./heplify_${{ matrix.goarch }}
+          ./polyfill-glibc --target-glibc=2.17 ./heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
       - name: Get nfpm
+        if: matrix.goos == 'linux'
         run: |
           NFPM_ARCH="${{ matrix.goarch == 'arm64' && 'arm64' || 'x86_64' }}"
           wget -qO- "https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_${NFPM_ARCH}.tar.gz" \
@@ -107,26 +131,37 @@ jobs:
           chmod +x nfpm
 
       - name: Create packages (${{ matrix.goarch }})
+        if: matrix.goos == 'linux'
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
-          cp heplify_${{ matrix.goarch }} heplify
+          cp heplify_${{ matrix.goos }}_${{ matrix.goarch }} heplify
           ARCH="${{ matrix.goarch }}"
           sed -i "s|arch: \"amd64\"|arch: \"${ARCH}\"|g" nfpm.yaml
           VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
             --target "./heplify_${VERSION}_${ARCH}.deb"
           VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
             --target "./heplify_${VERSION}_${ARCH}.rpm"
-          ls -lh heplify_*.deb heplify_*.rpm heplify_${{ matrix.goarch }}
+          ls -lh heplify_*.deb heplify_*.rpm heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
-      - name: Upload artifacts
+      - name: Upload artifacts (Linux)
+        if: matrix.goos == 'linux'
         uses: actions/upload-artifact@v4
         with:
-          name: heplify-${{ matrix.goarch }}
+          name: heplify-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 1
           path: |
-            heplify_${{ matrix.goarch }}
+            heplify_${{ matrix.goos }}_${{ matrix.goarch }}
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+
+      - name: Upload artifacts (macOS)
+        if: matrix.goos == 'darwin'
+        uses: actions/upload-artifact@v4
+        with:
+          name: heplify-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 1
+          path: |
+            heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
   docker:
     name: Docker image (${{ matrix.goarch }})
