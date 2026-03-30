@@ -28,6 +28,10 @@ type Config struct {
 		CollectOnlySIP bool `json:"collect_only_sip" mapstructure:"collect_only_sip"`
 	} `json:"hep_settings" mapstructure:"hep_settings"`
 
+	RtcpSettings struct {
+		Active bool `json:"active" mapstructure:"active"`
+	} `json:"rtcp_settings" mapstructure:"rtcp_settings"`
+
 	SystemSettings struct {
 		NodeName string `json:"node_name" mapstructure:"node_name"`
 		NodeID   uint32 `json:"node_id" mapstructure:"node_id"`

@@ -25,6 +25,8 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	v.SetDefault("rtcp_settings.active", true)
+
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}

@@ -534,6 +534,8 @@ func (s *Sniffer) handleProtocol(pkt *decoder.Packet, proto config.ProtocolSetti
 		s.handleRTCP(pkt)
 	case "RTP":
 		s.handleRTP(pkt)
+	case "DNS":
+		s.handleDNS(pkt)
 	case "HEP":
 		// Incoming HEP in sniffer mode — forward as-is
 		if s.sender != nil {
@@ -611,6 +613,9 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet) {
 }
 
 func (s *Sniffer) handleRTCP(pkt *decoder.Packet) {
+	if !s.cfg.RtcpSettings.Active {
+		return
+	}
 	jsonData, cid, mos := decoder.CorrelateRTCP(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
 	if jsonData == nil {
 		s.stats.Inc(StatRTCPFail)

@@ -446,14 +446,7 @@ func buildConfigFromFlags() *config.Config {
 		log.Warn().Err(err).Str("range", portRange).Msg("Invalid port range, using default 5060-5090")
 		minPort, maxPort = 5060, 5090
 	}
-	cfg.ProtocolSettings = []config.ProtocolSettings{
-		{
-			Name:     "SIP",
-			MinPort:  minPort,
-			MaxPort:  maxPort,
-			Protocol: []string{"udp", "tcp"},
-		},
-	}
+	cfg.ProtocolSettings = buildProtocolSettings(parseCaptureMode(captureMode), minPort, maxPort)
 
 	// SIP settings
 	cfg.SipSettings.Deduplicate = dedup
@@ -488,6 +481,9 @@ func buildConfigFromFlags() *config.Config {
 	// HEP settings
 	cfg.HepSettings.CollectOnlySIP = collectOnlySIP
 	cfg.HepSettings.ReplaceToken = replaceToken
+
+	// RTCP settings: active by default when running from CLI
+	cfg.RtcpSettings.Active = true
 
 	// Prometheus settings
 	cfg.PrometheusSettings.Active = prometheusAddr != ""
@@ -545,6 +541,7 @@ func parseCaptureMode(mode string) []string {
 	case "SIPRTP":
 		return []string{"SIP", "RTP"}
 	default:
+		log.Warn().Str("mode", mode).Msg("Unknown capture mode, falling back to SIPRTCP. Valid modes: SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP")
 		return []string{"SIP", "RTCP"}
 	}
 }
@@ -610,4 +607,47 @@ func parseSize(s string) int64 {
 	// Default: try parsing as bytes
 	n, _ := strconv.ParseInt(s, 10, 64)
 	return n
+}
+
+// buildProtocolSettings constructs ProtocolSettings for each protocol in captureMode.
+// SIP uses the user-specified port range; RTCP/RTP use the standard media range 1024-65535.
+func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.ProtocolSettings {
+	var ps []config.ProtocolSettings
+	for _, m := range modes {
+		switch m {
+		case "SIP":
+			ps = append(ps, config.ProtocolSettings{
+				Name:        "SIP",
+				MinPort:     sipMin,
+				MaxPort:     sipMax,
+				Protocol:    []string{"udp", "tcp"},
+				Description: "SIP",
+			})
+		case "RTCP":
+			ps = append(ps, config.ProtocolSettings{
+				Name:        "RTCP",
+				MinPort:     1024,
+				MaxPort:     65535,
+				Protocol:    []string{"udp"},
+				Description: "RTCP",
+			})
+		case "RTP":
+			ps = append(ps, config.ProtocolSettings{
+				Name:        "RTP",
+				MinPort:     1024,
+				MaxPort:     65535,
+				Protocol:    []string{"udp"},
+				Description: "RTP",
+			})
+		case "DNS":
+			ps = append(ps, config.ProtocolSettings{
+				Name:        "DNS",
+				MinPort:     53,
+				MaxPort:     53,
+				Protocol:    []string{"udp", "tcp"},
+				Description: "DNS",
+			})
+		}
+	}
+	return ps
 }

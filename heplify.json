@@ -56,18 +56,11 @@
             "skip_verify": false
         }
     ],
-    "subscribe_settings": {
-        "active": false
-    },
     "log_settings": {
         "active": true,
-        "timestamp": true,
-        "path": "/usr/local/heplify/log",
         "level": "error",
-        "name": "heplify.log",
         "stdout": true,
         "json": false,
-        "syslog": false,
         "log_payload": false
     },
     "protocol": [
@@ -114,68 +107,25 @@
             "description": "HEP message template"
         }
     ],
-    "network_settings": {
-        "option_checker": true,
-        "tcp_checksum": false,
-        "promisc_interfaces": []
-    },
     "sip_settings": {
-        "censored_methods": [],
-        "disconnect_active": true,
+        "discard_methods": [],
         "discard_ips": [],
         "discard_src_ips": [],
         "discard_dst_ips": [],
-        "aleg_ids": [],
-        "deduplicate": false,
-        "custom_headers": [],
-        "check_sip_interval": "30s",
-        "num_workers": 4,
-        "encode_hep": true,
-        "transaction": {
-            "call": false,
-            "register": false,
-            "call_timeout": "6h"
-        },
-        "force_aleg_id": false,
-        "dialog_timeout": 0
+        "deduplicate": false
     },
     "hep_settings": {
-        "hepv2_active": true,
-        "hepv3_active": true,
+        "replace_token": false,
         "deduplicate": false,
-        "replace_token": false
+        "collect_only_sip": false
+    },
+    "rtcp_settings": {
+        "active": true
     },
     "system_settings": {
-        "hostname": "hostname",
         "node_name": "node",
-        "url": "http://127.0.0.1",
-        "uuid": "",
-        "uuid_on_start": true,
-        "daemon": false,
-        "pid_file": "/var/run/heplify.pid",
-        "fragment_full_search": false,
-        "ip_defrag_original": false,
-        "tcp_reasm_v2": false,
-        "validate_snaplen": false,
-        "tcpreasm": {
-            "debug": false,
-            "clean_timeout": "120s",
-            "fragment_timeout": "60s"
-        },
-        "queue": {
-            "rtp_packet_queue_size": 10000,
-            "rtcp_packet_queue_size": 10000,
-            "disconnect_queue_size": 10000,
-            "sip_process_queue_size": 10000,
-            "hep_queue_size": 10000,
-            "publish_packet_queue_size": 10000,
-            "ip_defragmenter": 5000,
-            "tcp_reassembler": 5000
-        },
-        "pprof": {
-            "active": false,
-            "url": "localhost:6060"
-        }
+        "node_id": 0,
+        "node_pw": ""
     },
     "prometheus_settings": {
         "active": false,
@@ -183,18 +133,18 @@
         "port": 8008
     },
     "debug_settings": {
-        "disable_rtp_stats": false,
-        "disable_sip_stats": false,
-        "disable_publish": false,
-        "disable_disconnect": false,
         "disable_tcp_reassembly": false,
         "disable_ip_defrag": false
     },
-    "http_settings": {
-        "active": false,
-        "host": "0.0.0.0",
-        "port": 18090,
-        "api_prefix": "",
+    "pcap_settings": {
+        "write_file": "",
+        "rotate_minutes": 60,
+        "compress": false
+    },
+    "buffer_settings": {
+        "enable": false,
+        "file": "hep-buffer.dump",
+        "max_size": 104857600,
         "debug": false
     },
     "script_settings": {

@@ -125,10 +125,16 @@ Key sections in `heplify.json`:
 |---------|-------------|
 | `socket` | Capture interface, mode, BPF, snap length |
 | `transport` | HEP destination(s): host, port, protocol, password |
-| `protocol` | Port ranges per protocol (SIP, RTP, etc.) |
-| `log_settings` | Log level, format, stdout, file path, `log_payload` |
-| `rtp_settings` | RTP/RTCP correlation and stats |
-| `http_settings` | Prometheus/HTTP API listener |
+| `protocol` | Port ranges per protocol — drives BPF filter and packet dispatch |
+| `log_settings` | Log level, format, stdout, `log_payload` |
+| `sip_settings` | SIP method/IP filtering, deduplication |
+| `hep_settings` | HEP collector options, deduplication, token replacement |
+| `rtcp_settings` | Enable/disable RTCP report processing (`active`) |
+| `system_settings` | HEP node name, ID and password |
+| `prometheus_settings` | Prometheus metrics endpoint |
+| `debug_settings` | Disable individual subsystems for troubleshooting |
+| `pcap_settings` | PCAP write directory, rotation, compression, replay options |
+| `buffer_settings` | Disk-based HEP failover buffer |
 | `script_settings` | Lua script path and HEP type filter |
 
 All command-line flags still work and override the config file.
@@ -218,7 +224,7 @@ PCAP:
   -rf string
         Read from pcap file
   -wf string
-        Write to pcap file
+        Write captured packets to pcap (output directory)
   -rt int
         PCAP rotation time in minutes (default 60)
   -zf
