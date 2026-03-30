@@ -25,6 +25,7 @@ jobs:
   version-bump:
     name: Bump version.go
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: write
     steps:
@@ -76,6 +77,7 @@ jobs:
   build:
     name: Build & Package (${{ matrix.goarch }})
     needs: version-bump
+    if: always()
     strategy:
       fail-fast: false
       matrix:
