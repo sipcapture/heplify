@@ -40,7 +40,7 @@ Array of capture interfaces. At least one active entry is required for packet sn
 | `device` | string | `"any"` | Network interface to capture on (`any`, `eth0`, etc.) |
 | `promisc` | bool | `true` | Enable promiscuous mode |
 | `snap_len` | int | `8192` | Maximum bytes to capture per packet |
-| `capture_mode` | []string | `["SIP","RTP"]` | Protocols to capture. Values: `SIP`, `RTP`, `RTCP`, `DNS`, `LOG`, `RTPPROXY`, `HEP` |
+| `capture_mode` | []string | `["SIP","RTCP"]` | Protocols to capture. Values: `SIP`, `RTP`, `RTCP`, `DNS`, `LOG`, `RTPPROXY`, `HEP` |
 | `tcp_reasm` | bool | `false` | Enable TCP stream reassembly |
 | `sip_reasm` | bool | `false` | Enable SIP reassembly for fragmented TCP (Skype for Business, Lync) |
 | `ipfragments` | bool | `true` | Handle IP fragmented packets |
