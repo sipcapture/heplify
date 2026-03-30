@@ -46,29 +46,18 @@ func (s *Server) SetSender(sender Sender) {
 }
 
 func (s *Server) Start() error {
-	// Find collector configuration from socket settings
-	var host string
-	var port int
-	var proto string
-
-	for _, socket := range s.cfg.SocketSettings {
-		if socket.Active && socket.CollectorPort > 0 {
-			host = socket.CollectorHost
-			if host == "" {
-				host = "0.0.0.0"
-			}
-			port = socket.CollectorPort
-			proto = socket.CollectorProto
-			if proto == "" {
-				proto = "udp"
-			}
-			break
-		}
+	if !s.cfg.CollectorSettings.Active || s.cfg.CollectorSettings.Port == 0 {
+		return nil
 	}
 
-	if port == 0 {
-		// No collector configured
-		return nil
+	host := s.cfg.CollectorSettings.Host
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	port := s.cfg.CollectorSettings.Port
+	proto := s.cfg.CollectorSettings.Proto
+	if proto == "" {
+		proto = "udp"
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)

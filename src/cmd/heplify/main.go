@@ -440,42 +440,37 @@ func buildConfigFromFlags() *config.Config {
 	}
 
 	// Parse collector address
-	collectorHost := ""
-	collectorPort := 0
-	collectorProto := ""
 	if collectorAddr != "" {
-		// Format: proto:host:port
+		// Format: proto:host:port  e.g. "udp:0.0.0.0:9060"
 		parts := strings.Split(collectorAddr, ":")
 		if len(parts) >= 3 {
-			collectorProto = parts[0]
-			collectorHost = parts[1]
+			cfg.CollectorSettings.Active = true
+			cfg.CollectorSettings.Proto = parts[0]
+			cfg.CollectorSettings.Host = parts[1]
 			if p, err := strconv.Atoi(parts[2]); err == nil {
-				collectorPort = p
+				cfg.CollectorSettings.Port = p
 			}
 		}
 	}
 
 	cfg.SocketSettings = []config.SocketSettings{
 		{
-			Name:           "capture",
-			Active:         true,
-			SocketType:     socketType,
-			Device:         device,
-			Promisc:        promisc,
-			SnapLen:        snaplen,
-			BufferSizeMB:   bufferSizeMB,
-			Vlan:           withVlan,
-			Erspan:         withErspan,
-			BPFFilter:      bpfFilter,
-			PcapFile:       readFile,
-			FanoutID:       uint16(fanoutID),
-			FanoutWorkers:  fanoutWorkers,
-			TcpReasm:       tcpAssembly,
-			SIPReasm:       sipAssembly,
-			CaptureMode:    parseCaptureMode(captureMode),
-			CollectorHost:  collectorHost,
-			CollectorPort:  collectorPort,
-			CollectorProto: collectorProto,
+			Name:          "capture",
+			Active:        true,
+			SocketType:    socketType,
+			Device:        device,
+			Promisc:       promisc,
+			SnapLen:       snaplen,
+			BufferSizeMB:  bufferSizeMB,
+			Vlan:          withVlan,
+			Erspan:        withErspan,
+			BPFFilter:     bpfFilter,
+			PcapFile:      readFile,
+			FanoutID:      uint16(fanoutID),
+			FanoutWorkers: fanoutWorkers,
+			TcpReasm:      tcpAssembly,
+			SIPReasm:      sipAssembly,
+			CaptureMode:   parseCaptureMode(captureMode),
 		},
 	}
 

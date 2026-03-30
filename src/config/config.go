@@ -89,6 +89,15 @@ type Config struct {
 		MaxSizeBytes int64  `json:"max_size" mapstructure:"max_size"` // default: 100MB
 		Debug        bool   `json:"debug" mapstructure:"debug"`
 	} `json:"buffer_settings" mapstructure:"buffer_settings"`
+
+	// CollectorSettings configures the inbound HEP listener (relay / proxy mode).
+	// Other agents send HEP to this address; heplify re-forwards it via transport[].
+	CollectorSettings struct {
+		Active bool   `json:"active" mapstructure:"active"`
+		Host   string `json:"host" mapstructure:"host"`
+		Port   int    `json:"port" mapstructure:"port"`
+		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2"
+	} `json:"collector_settings" mapstructure:"collector_settings"`
 }
 
 type SocketSettings struct {
@@ -96,9 +105,6 @@ type SocketSettings struct {
 	Active               bool     `json:"active" mapstructure:"active"`
 	SocketType           string   `json:"socket_type" mapstructure:"socket_type"` // "pcap" or "afpacket"
 	SequentialProcessing bool     `json:"sequential_processing" mapstructure:"sequential_processing"`
-	CollectorHost        string   `json:"collector_host" mapstructure:"collector_host"`
-	CollectorPort        int      `json:"collector_port" mapstructure:"collector_port"`
-	CollectorProto       string   `json:"collector_proto" mapstructure:"collector_proto"`
 	Device               string   `json:"device" mapstructure:"device"`
 	Promisc              bool     `json:"promisc" mapstructure:"promisc"`
 	TcpReasm             bool     `json:"tcp_reasm" mapstructure:"tcp_reasm"`
@@ -187,9 +193,17 @@ func (c *Config) Validate() error {
 			if s.SnapLen < 0 {
 				return fmt.Errorf("socket[%d] has invalid snap_len: %d", i, s.SnapLen)
 			}
-			if s.CollectorPort < 0 || s.CollectorPort > 65535 {
-				return fmt.Errorf("socket[%d] has invalid collector_port: %d", i, s.CollectorPort)
-			}
+		}
+	}
+
+	if c.CollectorSettings.Active {
+		if c.CollectorSettings.Port < 1 || c.CollectorSettings.Port > 65535 {
+			return fmt.Errorf("collector_settings.port has invalid value: %d", c.CollectorSettings.Port)
+		}
+		switch strings.ToLower(c.CollectorSettings.Proto) {
+		case "udp", "tcp", "both", "http2", "":
+		default:
+			return fmt.Errorf("collector_settings.proto has unsupported value: %s", c.CollectorSettings.Proto)
 		}
 	}
 

@@ -164,6 +164,28 @@ scrape_configs:
 
 ## Configuration reference
 
+### `collector_settings`
+
+Inbound HEP listener — other heplify agents or HEP-capable devices send packets here, and heplify re-forwards them via `transport[]`.
+
+```json
+"collector_settings": {
+  "active": false,
+  "host":   "0.0.0.0",
+  "port":   9060,
+  "proto":  "udp"
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `active` | `false` | Enable the inbound HEP listener |
+| `host` | `0.0.0.0` | Listen address |
+| `port` | `9060` | Listen port |
+| `proto` | `udp` | Transport protocol: `udp`, `tcp`, `both` (UDP+TCP), `http2` |
+
+---
+
 ### `api_settings`
 
 ```json
@@ -172,8 +194,7 @@ scrape_configs:
   "host":     "0.0.0.0",
   "port":     9060,
   "username": "",
-  "password": "",
-  "ui_file":  "/usr/share/heplify/index.html"
+  "password": ""
 }
 ```
 
@@ -212,4 +233,5 @@ scrape_configs:
 -api-user   ""           HTTP Basic Auth username for the API server
 -api-pass   ""           HTTP Basic Auth password for the API server
 -prometheus :9096        Prometheus /metrics server address (empty = disabled)
+-hin        ""           Inbound HEP collector address, e.g. udp:0.0.0.0:9060 (empty = disabled)
 ```

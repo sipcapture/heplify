@@ -115,5 +115,11 @@
     "active": false,
     "file": "",
     "hep_filter": ""
+  },
+  "collector_settings": {
+    "active": false,
+    "host": "0.0.0.0",
+    "port": 9060,
+    "proto": "udp"
   }
 }
