@@ -267,15 +267,15 @@ func StartMetrics(cfg *config.Config) {
 		return
 	}
 
-	addr := fmt.Sprintf("%s:%d", cfg.PrometheusSettings.Host, cfg.PrometheusSettings.Port)
-	if cfg.PrometheusSettings.Port == 0 {
+	addr := fmt.Sprintf("%s:%d", cfg.ApiSettings.Host, cfg.ApiSettings.Port)
+	if cfg.ApiSettings.Port == 0 {
 		addr = ":9096"
 	}
 
 	log.Info().Str("addr", addr).Msg("Starting Prometheus / Web Stats Server")
 
-	user := cfg.HttpServerSettings.Username
-	pass := cfg.HttpServerSettings.Password
+	user := cfg.ApiSettings.Username
+	pass := cfg.ApiSettings.Password
 	if user != "" {
 		log.Info().Str("addr", addr).Msg("Web stats UI protected by HTTP Basic Auth")
 	}

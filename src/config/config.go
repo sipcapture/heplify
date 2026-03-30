@@ -39,15 +39,15 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active bool   `json:"active" mapstructure:"active"`
-		Host   string `json:"host" mapstructure:"host"`
-		Port   int    `json:"port" mapstructure:"port"`
+		Active bool `json:"active" mapstructure:"active"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
-	HttpServerSettings struct {
+	ApiSettings struct {
+		Host     string `json:"host" mapstructure:"host"`
+		Port     int    `json:"port" mapstructure:"port"`
 		Username string `json:"username" mapstructure:"username"`
 		Password string `json:"password" mapstructure:"password"`
-	} `json:"http_server" mapstructure:"http_server"`
+	} `json:"api_settings" mapstructure:"api_settings"`
 
 	DebugSettings struct {
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
@@ -199,12 +199,12 @@ func (c *Config) Validate() error {
 	}
 
 	if c.PrometheusSettings.Active {
-		if c.PrometheusSettings.Port < 1 || c.PrometheusSettings.Port > 65535 {
-			return fmt.Errorf("prometheus_settings.port has invalid value: %d", c.PrometheusSettings.Port)
+		if c.ApiSettings.Port < 1 || c.ApiSettings.Port > 65535 {
+			return fmt.Errorf("api_settings.port has invalid value: %d", c.ApiSettings.Port)
 		}
-		if c.PrometheusSettings.Host != "" && c.PrometheusSettings.Host != "0.0.0.0" {
-			if ip := net.ParseIP(c.PrometheusSettings.Host); ip == nil && c.PrometheusSettings.Host != "localhost" {
-				return fmt.Errorf("prometheus_settings.host is not a valid host/ip: %s", c.PrometheusSettings.Host)
+		if c.ApiSettings.Host != "" && c.ApiSettings.Host != "0.0.0.0" {
+			if ip := net.ParseIP(c.ApiSettings.Host); ip == nil && c.ApiSettings.Host != "localhost" {
+				return fmt.Errorf("api_settings.host is not a valid host/ip: %s", c.ApiSettings.Host)
 			}
 		}
 	}

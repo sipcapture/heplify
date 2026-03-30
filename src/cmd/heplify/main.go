@@ -268,7 +268,7 @@ func main() {
 	if cfg.PrometheusSettings.Active {
 		promstats.StartMetrics(cfg)
 		log.Info().
-			Str("addr", fmt.Sprintf("%s:%d", cfg.PrometheusSettings.Host, cfg.PrometheusSettings.Port)).
+			Str("addr", fmt.Sprintf("%s:%d", cfg.ApiSettings.Host, cfg.ApiSettings.Port)).
 			Msg("Started Prometheus metrics")
 	}
 
@@ -521,21 +521,21 @@ func buildConfigFromFlags() *config.Config {
 	// RTCP settings: active by default when running from CLI
 	cfg.RtcpSettings.Active = true
 
-	// Prometheus settings
+	// Prometheus / API settings
 	cfg.PrometheusSettings.Active = prometheusAddr != ""
 	if prometheusAddr != "" {
 		parts := strings.Split(prometheusAddr, ":")
 		if len(parts) >= 2 {
-			cfg.PrometheusSettings.Host = parts[0]
+			cfg.ApiSettings.Host = parts[0]
 			if p, err := strconv.Atoi(parts[1]); err == nil {
-				cfg.PrometheusSettings.Port = p
+				cfg.ApiSettings.Port = p
 			}
 		}
-		if cfg.PrometheusSettings.Port == 0 {
-			cfg.PrometheusSettings.Port = 9096
+		if cfg.ApiSettings.Port == 0 {
+			cfg.ApiSettings.Port = 9096
 		}
-		cfg.HttpServerSettings.Username = prometheusUser
-		cfg.HttpServerSettings.Password = prometheusPass
+		cfg.ApiSettings.Username = prometheusUser
+		cfg.ApiSettings.Password = prometheusPass
 	}
 
 	// Script settings
