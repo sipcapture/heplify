@@ -234,7 +234,6 @@ func apiStatsHandler(w http.ResponseWriter, _ *http.Request) {
 	transportsMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	_ = json.NewEncoder(w).Encode(ws)
 }
 
@@ -244,7 +243,7 @@ func webUIHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 // basicAuth wraps h with HTTP Basic Auth when username is non-empty.
-// /health and /metrics remain open for Prometheus scrapers and k8s probes.
+// /health is always open. /metrics auth is controlled separately via prometheus_settings.auth.
 func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	if username == "" {
 		return h
@@ -278,6 +277,10 @@ func StartMetrics(cfg *config.Config) {
 	pass := cfg.ApiSettings.Password
 	if user != "" {
 		log.Info().Str("addr", addr).Msg("Web stats UI protected by HTTP Basic Auth")
+	}
+
+	if cfg.PrometheusSettings.Active && cfg.PrometheusSettings.Auth && user == "" {
+		log.Warn().Msg("prometheus_settings.auth is true but api_settings.username is empty — /metrics will NOT be protected")
 	}
 
 	mux := http.NewServeMux()

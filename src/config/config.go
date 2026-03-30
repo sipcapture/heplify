@@ -211,5 +211,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.PrometheusSettings.Active && !c.ApiSettings.Active {
+		return fmt.Errorf("prometheus_settings.active requires api_settings.active to be true (both share the same HTTP server)")
+	}
+
 	return nil
 }

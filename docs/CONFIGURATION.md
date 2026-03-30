@@ -273,7 +273,7 @@ The following endpoints are always available when the server is running:
 |----------|------|-------------|
 | `GET /` | yes (if set) | Web stats dashboard (auto-refreshes every 3 s) |
 | `GET /api/stats` | yes (if set) | Live stats as JSON |
-| `GET /health` | no | Health check — returns `{"status":"ok"}` |
+| `GET /health` | no | Health check — returns `{"status":"ok"}` when at least one transport is connected, `{"status":"degraded"}` otherwise |
 | `GET /metrics` | see `prometheus_settings.auth` | Prometheus metrics (only when `prometheus_settings.active: true`) |
 
 **Example — web UI only (no Prometheus):**

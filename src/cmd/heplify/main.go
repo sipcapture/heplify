@@ -299,7 +299,7 @@ func main() {
 	log.Info().Msg("Started packet capture")
 
 	// Register web stats getter for /api/stats endpoint
-	if cfg.PrometheusSettings.Active {
+	if cfg.ApiSettings.Active {
 		promstats.RegisterStatsGetter(func() promstats.WebStats {
 			snap := sniff.GetStats().Snapshot()
 			ifaces := make([]string, 0, len(cfg.SocketSettings))
