@@ -168,7 +168,14 @@ func (s *Sniffer) capture(socket config.SocketSettings) {
 	}
 	defer source.Close()
 
-	s.processPackets(source, socket)
+	var dumpCh chan<- dumpPacket
+	if s.cfg.PcapSettings.WriteFile != "" {
+		ch := make(chan dumpPacket, 100000)
+		go s.dumpPcap(ch, socket.Device, source.LinkType())
+		dumpCh = ch
+	}
+
+	s.processPackets(source, socket, dumpCh)
 }
 
 func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
@@ -182,7 +189,15 @@ func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
 		return
 	}
 	defer source.Close()
-	s.processPackets(source, socket)
+
+	var dumpCh chan<- dumpPacket
+	if s.cfg.PcapSettings.WriteFile != "" {
+		ch := make(chan dumpPacket, 100000)
+		go s.dumpPcap(ch, fmt.Sprintf("%s_w%d", socket.Device, workerID), source.LinkType())
+		dumpCh = ch
+	}
+
+	s.processPackets(source, socket, dumpCh)
 }
 
 func (s *Sniffer) createPcapSource(socket config.SocketSettings, snapLen int) (PacketSource, error) {
@@ -294,7 +309,7 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 	return filter
 }
 
-func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings) {
+func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings, dumpCh chan<- dumpPacket) {
 	dec := decoder.NewDecoder(source.LinkType())
 	packetCount := 0
 
@@ -368,6 +383,13 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 		// MaxSpeed: ignore packet timestamps when replaying pcap
 		if pcapFile != "" && s.cfg.PcapSettings.MaxSpeed {
 			ci.Timestamp = time.Now()
+		}
+
+		if dumpCh != nil {
+			select {
+			case dumpCh <- dumpPacket{ci, data}:
+			default:
+			}
 		}
 
 		s.stats.Inc(StatTotal)

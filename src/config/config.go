@@ -55,6 +55,12 @@ type Config struct {
 	FilterExclude []string `json:"filter_exclude" mapstructure:"filter_exclude"`
 
 	PcapSettings struct {
+		// WriteFile: output directory for captured pcap files (-wf)
+		WriteFile string `json:"write_file" mapstructure:"write_file"`
+		// RotateMinutes: pcap rotation interval in minutes (-rt)
+		RotateMinutes int `json:"rotate_minutes" mapstructure:"rotate_minutes"`
+		// Compress: gzip-compress rotated pcap files (-zf)
+		Compress bool `json:"compress" mapstructure:"compress"`
 		// MaxSpeed: replay pcap at max speed, ignoring timestamps (-rs)
 		MaxSpeed bool `json:"max_speed" mapstructure:"max_speed"`
 		// LoopCount: number of times to replay pcap file, 0=infinite (-lp)
