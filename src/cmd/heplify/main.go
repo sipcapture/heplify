@@ -88,6 +88,8 @@ var (
 
 	// Prometheus
 	prometheusAddr string
+	prometheusUser string
+	prometheusPass string
 
 	// TCP
 	tcpAssembly bool
@@ -171,6 +173,8 @@ func init() {
 
 	// Prometheus flags
 	flag.StringVar(&prometheusAddr, "prometheus", ":9096", "Prometheus metrics address")
+	flag.StringVar(&prometheusUser, "prometheus-user", "", "Username for web stats Basic Auth (empty = no auth)")
+	flag.StringVar(&prometheusPass, "prometheus-pass", "", "Password for web stats Basic Auth")
 
 	// TCP flags
 	flag.BoolVar(&tcpAssembly, "tcpassembly", false, "Enable TCP reassembly")
@@ -530,6 +534,8 @@ func buildConfigFromFlags() *config.Config {
 		if cfg.PrometheusSettings.Port == 0 {
 			cfg.PrometheusSettings.Port = 9096
 		}
+		cfg.PrometheusSettings.Username = prometheusUser
+		cfg.PrometheusSettings.Password = prometheusPass
 	}
 
 	// Script settings

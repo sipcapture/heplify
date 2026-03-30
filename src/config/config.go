@@ -39,9 +39,11 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active bool   `json:"active" mapstructure:"active"`
-		Host   string `json:"host" mapstructure:"host"`
-		Port   int    `json:"port" mapstructure:"port"`
+		Active   bool   `json:"active" mapstructure:"active"`
+		Host     string `json:"host" mapstructure:"host"`
+		Port     int    `json:"port" mapstructure:"port"`
+		Username string `json:"username" mapstructure:"username"`
+		Password string `json:"password" mapstructure:"password"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	DebugSettings struct {

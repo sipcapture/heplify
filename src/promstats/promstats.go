@@ -1,6 +1,7 @@
 package promstats
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -242,6 +243,25 @@ func webUIHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(statsPage))
 }
 
+// basicAuth wraps h with HTTP Basic Auth when username is non-empty.
+// /health and /metrics remain open for Prometheus scrapers and k8s probes.
+func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
+	if username == "" {
+		return h
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok ||
+			subtle.ConstantTimeCompare([]byte(u), []byte(username)) != 1 ||
+			subtle.ConstantTimeCompare([]byte(p), []byte(password)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="heplify stats"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		h(w, r)
+	}
+}
+
 func StartMetrics(cfg *config.Config) {
 	if !cfg.PrometheusSettings.Active {
 		return
@@ -254,11 +274,17 @@ func StartMetrics(cfg *config.Config) {
 
 	log.Info().Str("addr", addr).Msg("Starting Prometheus / Web Stats Server")
 
+	user := cfg.PrometheusSettings.Username
+	pass := cfg.PrometheusSettings.Password
+	if user != "" {
+		log.Info().Str("addr", addr).Msg("Web stats UI protected by HTTP Basic Auth")
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/api/stats", apiStatsHandler)
-	mux.HandleFunc("/", webUIHandler)
+	mux.HandleFunc("/api/stats", basicAuth(user, pass, apiStatsHandler))
+	mux.HandleFunc("/", basicAuth(user, pass, webUIHandler))
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Error().Err(err).Msg("Failed to start Prometheus Metrics Server")
