@@ -1,6 +1,6 @@
 module github.com/sipcapture/heplify
 
-go 1.26.1
+go 1.24.0
 
 require (
 	github.com/apache/arrow-go/v18 v18.5.2
