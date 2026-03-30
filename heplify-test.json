@@ -1,0 +1,63 @@
+{
+  "socket": [
+    {
+      "name": "test",
+      "active": true,
+      "socket_type": "afpacket",
+      "device": "any",
+      "promisc": true,
+      "ipfragments": true,
+      "tcp_reasm": true,
+      "snap_len": 65535,
+      "capture_mode": [
+        "SIP"
+      ],
+      "fanout_workers": 0
+    }
+  ],
+  "transport": [
+    {
+      "name": "nyc01",
+      "active": true,
+      "protocol": "HEPv3",
+      "host": "nyc01.sipcapture.io",
+      "transport": "udp",
+      "port": 9063,
+      "password": "",
+      "payload_zip": false,
+      "skip_verify": true,
+      "max_retries": 0,
+      "keepalive": 0
+    }
+  ],
+  "protocol": [
+    {
+      "name": "SIP",
+      "min_port": 5060,
+      "max_port": 5090,
+      "protocol": [
+        "udp",
+        "tcp"
+      ],
+      "description": "SIP for local test"
+    }
+  ],
+  "log_settings": {
+    "active": true,
+    "level": "info",
+    "stdout": true,
+    "json": false,
+    "log_payload": true
+  },
+  "prometheus_settings": {
+    "active": false,
+    "auth": false
+  },
+  "api_settings": {
+    "active": false,
+    "host": "0.0.0.0",
+    "port": 8008,
+    "username": "",
+    "password": ""
+  }
+}

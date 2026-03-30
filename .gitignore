@@ -11,4 +11,5 @@ dist/
 
 # Local test configs (may contain real hosts/passwords)
 *-test.json
+!heplify-test.json
 *.local.json
