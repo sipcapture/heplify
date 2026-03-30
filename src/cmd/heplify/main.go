@@ -67,10 +67,7 @@ var (
 	discardDstIPs  string
 
 	// PCAP
-	readFile     string
-	writeFile    string
-	rotationTime int
-	compressPcap bool
+	readFile string
 
 	// AF_PACKET
 	fanoutID      uint
@@ -151,9 +148,6 @@ func init() {
 
 	// PCAP flags
 	flag.StringVar(&readFile, "rf", "", "Read from pcap file")
-	flag.StringVar(&writeFile, "wf", "", "Write to pcap file")
-	flag.IntVar(&rotationTime, "rt", 60, "PCAP rotation time (minutes)")
-	flag.BoolVar(&compressPcap, "zf", false, "Compress pcap files with gzip")
 
 	// AF_PACKET flags
 	flag.UintVar(&fanoutID, "fg", 0, "Fanout group ID for af_packet")
@@ -463,7 +457,6 @@ func buildConfigFromFlags() *config.Config {
 	cfg.SipSettings.DiscardDstIP = parseCSV(discardDstIPs)
 
 	// HEP settings
-	cfg.HepSettings.HepV3Active = true
 	cfg.HepSettings.Deduplicate = dedup
 
 	// System settings
@@ -511,10 +504,6 @@ func buildConfigFromFlags() *config.Config {
 	cfg.ScriptSettings.HEPFilter = scriptFilter
 
 	// PCAP settings
-	cfg.PcapSettings.WriteEnable = writeFile != ""
-	cfg.PcapSettings.WritePath = writeFile
-	cfg.PcapSettings.RotateMinutes = rotationTime
-	cfg.PcapSettings.Compress = compressPcap
 	cfg.PcapSettings.MaxSpeed = pcapMaxSpeed
 	cfg.PcapSettings.LoopCount = pcapLoopCount
 	cfg.PcapSettings.EOFExit = pcapEOFExit

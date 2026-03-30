@@ -9,86 +9,29 @@ import (
 
 // Config represents the top-level configuration structure
 type Config struct {
-	SocketSettings    []SocketSettings    `json:"socket" mapstructure:"socket"`
+	SocketSettings   []SocketSettings   `json:"socket" mapstructure:"socket"`
 	TransportSettings []TransportSettings `json:"transport" mapstructure:"transport"`
-	SubscribeSettings SubscribeSettings   `json:"subscribe_settings" mapstructure:"subscribe_settings"`
-	LogSettings       LogSettings         `json:"log_settings" mapstructure:"log_settings"`
-	ProtocolSettings  []ProtocolSettings  `json:"protocol" mapstructure:"protocol"`
-
-	NetworkSettings struct {
-		OptionChecker     bool     `json:"option_checker" mapstructure:"option_checker"`
-		TCPChecksum       bool     `json:"tcp_checksum" mapstructure:"tcp_checksum"`
-		PromiscInterfaces []string `json:"promisc_interfaces" mapstructure:"promisc_interfaces"`
-	} `json:"network_settings" mapstructure:"network_settings"`
+	LogSettings      LogSettings        `json:"log_settings" mapstructure:"log_settings"`
+	ProtocolSettings []ProtocolSettings `json:"protocol" mapstructure:"protocol"`
 
 	SipSettings struct {
-		ParseOnlySDPActive bool     `json:"parse_only_sdp" mapstructure:"parse_only_sdp"`
-		CensorMethod       []string `json:"censored_methods" mapstructure:"censored_methods"`
-		DiscardMethods     []string `json:"discard_methods" mapstructure:"discard_methods"`
-		DisconnectActive   bool     `json:"disconnect_active" mapstructure:"disconnect_active"`
-		DiscardIPs         []string `json:"discard_ips" mapstructure:"discard_ips"`
-		DiscardSrcIP       []string `json:"discard_src_ips" mapstructure:"discard_src_ips"`
-		DiscardDstIP       []string `json:"discard_dst_ips" mapstructure:"discard_dst_ips"`
-		AlegIDs            []string `json:"aleg_ids" mapstructure:"aleg_ids"`
-		Deduplicate        bool     `json:"deduplicate" mapstructure:"deduplicate"`
-		CustomHeaders      []string `json:"custom_headers" mapstructure:"custom_headers"`
-		CheckSIPInterval   string   `json:"check_sip_interval" mapstructure:"check_sip_interval"`
-		NumWorkers         int      `json:"num_workers" mapstructure:"num_workers"`
-		EncodeHep          bool     `json:"encode_hep" mapstructure:"encode_hep"`
-		Transaction        struct {
-			Call        bool   `json:"call" mapstructure:"call"`
-			Register    bool   `json:"register" mapstructure:"register"`
-			CallTimeout string `json:"call_timeout" mapstructure:"call_timeout"`
-		} `json:"transaction" mapstructure:"transaction"`
-		ForceALegID   bool `json:"force_aleg_id" mapstructure:"force_aleg_id"`
-		DialogTimeout int  `json:"dialog_timeout" mapstructure:"dialog_timeout"`
+		DiscardMethods []string `json:"discard_methods" mapstructure:"discard_methods"`
+		DiscardIPs     []string `json:"discard_ips" mapstructure:"discard_ips"`
+		DiscardSrcIP   []string `json:"discard_src_ips" mapstructure:"discard_src_ips"`
+		DiscardDstIP   []string `json:"discard_dst_ips" mapstructure:"discard_dst_ips"`
+		Deduplicate    bool     `json:"deduplicate" mapstructure:"deduplicate"`
 	} `json:"sip_settings" mapstructure:"sip_settings"`
 
 	HepSettings struct {
-		HepV2Active  bool `json:"hepv2_active" mapstructure:"hepv2_active"`
-		HepV3Active  bool `json:"hepv3_active" mapstructure:"hepv3_active"`
-		Deduplicate  bool `json:"deduplicate" mapstructure:"deduplicate"`
-		ReplaceToken bool `json:"replace_token" mapstructure:"replace_token"`
-		ReplaceCID   bool `json:"replace_cid" mapstructure:"replace_cid"`
-		// CollectOnlySIP: in collector mode, accept only HEP ProtoType=1 (SIP)
+		ReplaceToken   bool `json:"replace_token" mapstructure:"replace_token"`
+		Deduplicate    bool `json:"deduplicate" mapstructure:"deduplicate"`
 		CollectOnlySIP bool `json:"collect_only_sip" mapstructure:"collect_only_sip"`
 	} `json:"hep_settings" mapstructure:"hep_settings"`
 
 	SystemSettings struct {
-		HostName         string `json:"hostname" mapstructure:"hostname"`
-		NodeName         string `json:"node_name" mapstructure:"node_name"`
-		NodeID           uint32 `json:"node_id" mapstructure:"node_id"`
-		NodePW           string `json:"node_pw" mapstructure:"node_pw"`
-		Url              string `json:"url" mapstructure:"url"`
-		Uuid             string `json:"uuid" mapstructure:"uuid"`
-		UuidOnStart      bool   `json:"uuid_on_start" mapstructure:"uuid_on_start"`
-		Daemon           bool   `json:"daemon" mapstructure:"daemon"`
-		PidFile          string `json:"pid_file" mapstructure:"pid_file"`
-		FragFullSearch   bool   `json:"fragment_full_search" mapstructure:"fragment_full_search"`
-		IPDefragOriginal bool   `json:"ip_defrag_original" mapstructure:"ip_defrag_original"`
-		TCPReasmV2       bool   `json:"tcp_reasm_v2" mapstructure:"tcp_reasm_v2"`
-		ValidateSnaplen  bool   `json:"validate_snaplen" mapstructure:"validate_snaplen"`
-		Tcpreasm         struct {
-			Debug           bool   `json:"debug" mapstructure:"debug"`
-			CleanTimeout    string `json:"clean_timeout" mapstructure:"clean_timeout"`
-			FragmentTimeout string `json:"fragment_timeout" mapstructure:"fragment_timeout"`
-		} `json:"tcpreasm" mapstructure:"tcpreasm"`
-
-		Queues struct {
-			RTPPacketQueueSize     int `json:"rtp_packet_queue_size" mapstructure:"rtp_packet_queue_size"`
-			RTCPPacketQueueSize    int `json:"rtcp_packet_queue_size" mapstructure:"rtcp_packet_queue_size"`
-			DisconnectQueueSize    int `json:"disconnect_queue_size" mapstructure:"disconnect_queue_size"`
-			SIPProcessQueueSize    int `json:"sip_process_queue_size" mapstructure:"sip_process_queue_size"`
-			HEPQueueSize           int `json:"hep_queue_size" mapstructure:"hep_queue_size"`
-			PublishPacketQueueSize int `json:"publish_packet_queue_size" mapstructure:"publish_packet_queue_size"`
-			IPDefragmenter         int `json:"ip_defragmenter" mapstructure:"ip_defragmenter"`
-			TCPReassembler         int `json:"tcp_reassembler" mapstructure:"tcp_reassembler"`
-		} `json:"queue" mapstructure:"queue"`
-
-		Pprof struct {
-			Active bool   `json:"active" mapstructure:"active"`
-			Url    string `json:"url" mapstructure:"url"`
-		} `json:"pprof" mapstructure:"pprof"`
+		NodeName string `json:"node_name" mapstructure:"node_name"`
+		NodeID   uint32 `json:"node_id" mapstructure:"node_id"`
+		NodePW   string `json:"node_pw" mapstructure:"node_pw"`
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
@@ -98,36 +41,20 @@ type Config struct {
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	DebugSettings struct {
-		DisableRtpStats      bool `json:"disable_rtp_stats" mapstructure:"disable_rtp_stats"`
-		DisableSipStats      bool `json:"disable_sip_stats" mapstructure:"disable_sip_stats"`
-		DisablePublish       bool `json:"disable_publish" mapstructure:"disable_publish"`
-		DisableDisconnect    bool `json:"disable_disconnect" mapstructure:"disable_disconnect"`
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
 		DisableIPDefrag      bool `json:"disable_ip_defrag" mapstructure:"disable_ip_defrag"`
 	} `json:"debug_settings" mapstructure:"debug_settings"`
 
-	HttpSettings struct {
-		Active    bool   `json:"active" mapstructure:"active"`
-		Host      string `json:"host" mapstructure:"host"`
-		Port      int    `json:"port" mapstructure:"port"`
-		ApiPrefix string `json:"api_prefix" mapstructure:"api_prefix"`
-		Debug     bool   `json:"debug" mapstructure:"debug"`
-	} `json:"http_settings" mapstructure:"http_settings"`
-
 	ScriptSettings ScriptSettings `json:"script_settings" mapstructure:"script_settings"`
 
+	// DebugSelectors: fine-grained debug logging (defrag, layer, payload, rtp, rtcp, sdp)
+	DebugSelectors []string `json:"debug_selectors" mapstructure:"debug_selectors"`
 	// FilterInclude: pass packet only if payload contains ALL these strings (-fi)
 	FilterInclude []string `json:"filter_include" mapstructure:"filter_include"`
 	// FilterExclude: drop packet if payload contains ANY of these strings (-di)
 	FilterExclude []string `json:"filter_exclude" mapstructure:"filter_exclude"`
-	// DebugSelectors: fine-grained debug logging (defrag, layer, payload, rtp, rtcp, sdp)
-	DebugSelectors []string `json:"debug_selectors" mapstructure:"debug_selectors"`
 
 	PcapSettings struct {
-		WriteEnable   bool   `json:"write_enable" mapstructure:"write_enable"`
-		WritePath     string `json:"write_path" mapstructure:"write_path"`
-		RotateMinutes int    `json:"rotate_minutes" mapstructure:"rotate_minutes"`
-		Compress      bool   `json:"compress" mapstructure:"compress"`
 		// MaxSpeed: replay pcap at max speed, ignoring timestamps (-rs)
 		MaxSpeed bool `json:"max_speed" mapstructure:"max_speed"`
 		// LoopCount: number of times to replay pcap file, 0=infinite (-lp)
@@ -200,18 +127,10 @@ type ProtocolSettings struct {
 
 type LogSettings struct {
 	Active     bool   `json:"active" mapstructure:"active"`
-	Timestamp  bool   `json:"timestamp" mapstructure:"timestamp"`
-	Path       string `json:"path" mapstructure:"path"`
 	Level      string `json:"level" mapstructure:"level"`
-	Name       string `json:"name" mapstructure:"name"`
 	Stdout     bool   `json:"stdout" mapstructure:"stdout"`
 	Json       bool   `json:"json" mapstructure:"json"`
-	SysLog     bool   `json:"syslog" mapstructure:"syslog"`
 	LogPayload bool   `json:"log_payload" mapstructure:"log_payload"` // print SIP payload as plain text in debug logs
-}
-
-type SubscribeSettings struct {
-	Active bool `json:"active" mapstructure:"active"`
 }
 
 type ScriptSettings struct {
