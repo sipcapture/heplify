@@ -114,28 +114,6 @@
             "description": "HEP message template"
         }
     ],
-    "rtp_settings": {
-        "rtp_stats_active": true,
-        "rtcp_stats_active": true,
-        "video_mos_adaption_active": false,
-        "rate_adaption_video_mos": 1.4,
-        "wideband_e_model_active": false,
-        "amr_wb_ie": 13,
-        "amr_wb_bpl": 10,
-        "nat_mode_active": false,
-        "reverse_nat_mode_active": false,
-        "ignore_dtmf_active": false,
-        "report_media_interval": "30s",
-        "report_media_timeout": "120s",
-        "final_media_report_timeout": "3s",
-        "ignore_final_short_rtp_stream": true,
-        "replace_media_ip": null,
-        "num_workers": 4,
-        "ephemeral_streams": false,
-        "ephemeral_stats": false,
-        "ephemeral_report": false,
-        "rtp_short_report": true
-    },
     "network_settings": {
         "option_checker": true,
         "tcp_checksum": false,

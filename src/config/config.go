@@ -15,29 +15,6 @@ type Config struct {
 	LogSettings       LogSettings         `json:"log_settings" mapstructure:"log_settings"`
 	ProtocolSettings  []ProtocolSettings  `json:"protocol" mapstructure:"protocol"`
 
-	RtpSettings struct {
-		RtpStatsActive            bool             `json:"rtp_stats_active" mapstructure:"rtp_stats_active"`
-		RtcpStatsActive           bool             `json:"rtcp_stats_active" mapstructure:"rtcp_stats_active"`
-		VideoMosAdaptionActive    bool             `json:"video_mos_adaption_active" mapstructure:"video_mos_adaption_active"`
-		RateAdaptionVideoMos      float64          `json:"rate_adaption_video_mos" mapstructure:"rate_adaption_video_mos"`
-		WidebandEModelActive      bool             `json:"wideband_e_model_active" mapstructure:"wideband_e_model_active"`
-		AmrWbIe                   int              `json:"amr_wb_ie" mapstructure:"amr_wb_ie"`
-		AmrWbBpl                  int              `json:"amr_wb_bpl" mapstructure:"amr_wb_bpl"`
-		NatModeActive             bool             `json:"nat_mode_active" mapstructure:"nat_mode_active"`
-		ReverseNatModeActive      bool             `json:"reverse_nat_mode_active" mapstructure:"reverse_nat_mode_active"`
-		IgnoreDTMFActive          bool             `json:"ignore_dtmf_active" mapstructure:"ignore_dtmf_active"`
-		ReportMediaInterval       string           `json:"report_media_interval" mapstructure:"report_media_interval"`
-		ReportMediaTimeout        string           `json:"report_media_timeout" mapstructure:"report_media_timeout"`
-		FinalMediaReportTimeout   string           `json:"final_media_report_timeout" mapstructure:"final_media_report_timeout"`
-		IgnoreFinalShortRtpStream bool             `json:"ignore_final_short_rtp_stream" mapstructure:"ignore_final_short_rtp_stream"`
-		ReplaceMediaIP            []IPAliasReplace `json:"replace_media_ip" mapstructure:"replace_media_ip"`
-		NumWorkers                int              `json:"num_workers" mapstructure:"num_workers"`
-		EphemeralStreamsActive    bool             `json:"ephemeral_streams" mapstructure:"ephemeral_streams"`
-		EphemeralStatsActive      bool             `json:"ephemeral_stats" mapstructure:"ephemeral_stats"`
-		EphemeralReportActive     bool             `json:"ephemeral_report" mapstructure:"ephemeral_report"`
-		RTPShortReport            bool             `json:"rtp_short_report" mapstructure:"rtp_short_report"`
-	} `json:"rtp_settings" mapstructure:"rtp_settings"`
-
 	NetworkSettings struct {
 		OptionChecker     bool     `json:"option_checker" mapstructure:"option_checker"`
 		TCPChecksum       bool     `json:"tcp_checksum" mapstructure:"tcp_checksum"`
@@ -175,11 +152,6 @@ type Config struct {
 		MaxSizeBytes int64  `json:"max_size" mapstructure:"max_size"` // default: 100MB
 		Debug        bool   `json:"debug" mapstructure:"debug"`
 	} `json:"buffer_settings" mapstructure:"buffer_settings"`
-}
-
-type IPAliasReplace struct {
-	MediaIP string `json:"match_media_ip" mapstructure:"match_media_ip"`
-	AliasIP string `json:"alias_media_ip" mapstructure:"alias_media_ip"`
 }
 
 type SocketSettings struct {
