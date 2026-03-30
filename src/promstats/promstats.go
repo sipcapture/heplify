@@ -282,8 +282,13 @@ func StartMetrics(cfg *config.Config) {
 
 	mux := http.NewServeMux()
 	if cfg.PrometheusSettings.Active {
-		mux.Handle("/metrics", promhttp.Handler())
-		log.Info().Str("addr", addr).Msg("Prometheus /metrics endpoint enabled")
+		metricsHandler := promhttp.Handler()
+		if cfg.PrometheusSettings.Auth {
+			mux.Handle("/metrics", basicAuth(user, pass, metricsHandler.ServeHTTP))
+		} else {
+			mux.Handle("/metrics", metricsHandler)
+		}
+		log.Info().Str("addr", addr).Bool("auth", cfg.PrometheusSettings.Auth).Msg("Prometheus /metrics endpoint enabled")
 	}
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/stats", basicAuth(user, pass, apiStatsHandler))

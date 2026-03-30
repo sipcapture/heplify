@@ -128,7 +128,8 @@
         "node_pw": ""
     },
     "prometheus_settings": {
-        "active": false
+        "active": false,
+        "auth": false
     },
     "api_settings": {
         "active": false,

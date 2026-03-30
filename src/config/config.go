@@ -40,6 +40,7 @@ type Config struct {
 
 	PrometheusSettings struct {
 		Active bool `json:"active" mapstructure:"active"`
+		Auth   bool `json:"auth" mapstructure:"auth"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {
