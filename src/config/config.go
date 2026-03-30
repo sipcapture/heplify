@@ -36,6 +36,7 @@ type Config struct {
 		NodeName string `json:"node_name" mapstructure:"node_name"`
 		NodeID   uint32 `json:"node_id" mapstructure:"node_id"`
 		NodePW   string `json:"node_pw" mapstructure:"node_pw"`
+		UUID     string `json:"uuid" mapstructure:"uuid"`
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {

@@ -22,6 +22,7 @@ type TransportInfo struct {
 type WebStats struct {
 	NodeName      string              `json:"node_name"`
 	NodeID        int                 `json:"node_id"`
+	UUID          string              `json:"uuid"`
 	Interfaces    []string            `json:"interfaces"`
 	CaptureModes  map[string][]string `json:"capture_modes"`
 	UptimeSeconds int64               `json:"uptime_seconds"`

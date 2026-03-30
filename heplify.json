@@ -125,7 +125,8 @@
     "system_settings": {
         "node_name": "node",
         "node_id": 0,
-        "node_pw": ""
+        "node_pw": "",
+        "uuid": ""
     },
     "prometheus_settings": {
         "active": false,

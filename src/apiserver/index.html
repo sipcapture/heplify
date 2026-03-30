@@ -100,7 +100,7 @@ function renderCards(d) {
   const modes  = Object.values(d.capture_modes || {}).flat().filter((v,i,a)=>a.indexOf(v)===i).join(', ') || '—';
   const items = [
     { label: 'Uptime',        value: d.uptime || '—' },
-    { label: 'Node',          value: d.node_name || '—', sub: 'ID: ' + (d.node_id ?? '—') },
+    { label: 'Node',          value: d.node_name || '—', sub: 'ID: ' + (d.node_id ?? '—') + (d.uuid ? '<br><span style="font-size:0.7em;letter-spacing:.04em;opacity:.6">' + d.uuid + '</span>' : '') },
     { label: 'Interface',     value: ifaces },
     { label: 'Capture mode',  value: modes },
     { label: 'HEP sent',      value: fmt(d.packets?.hep_sent) },

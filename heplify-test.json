@@ -67,7 +67,8 @@
   "system_settings": {
     "node_name": "test-node",
     "node_id": 2002,
-    "node_pw": ""
+    "node_pw": "",
+    "uuid": ""
   },
   "prometheus_settings": {
     "active": false,

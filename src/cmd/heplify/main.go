@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"net"
@@ -13,9 +14,9 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/collector"
 	"github.com/sipcapture/heplify/src/config"
-	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/script"
 	"github.com/sipcapture/heplify/src/sniffer"
 	"github.com/sipcapture/heplify/src/transport"
@@ -311,6 +312,7 @@ func main() {
 			ws := apiserver.WebStats{
 				NodeName:      cfg.SystemSettings.NodeName,
 				NodeID:        int(cfg.SystemSettings.NodeID),
+				UUID:          cfg.SystemSettings.UUID,
 				Interfaces:    ifaces,
 				CaptureModes:  capModes,
 				UptimeSeconds: snap.UptimeSeconds,
@@ -502,6 +504,9 @@ func buildConfigFromFlags() *config.Config {
 		hostname, _ := os.Hostname()
 		cfg.SystemSettings.NodeName = hostname
 	}
+	if cfg.SystemSettings.UUID == "" {
+		cfg.SystemSettings.UUID = generateUUID()
+	}
 
 	// Filter settings
 	if filterInclude != "" {
@@ -689,4 +694,14 @@ func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.Proto
 		}
 	}
 	return ps
+}
+
+// generateUUID returns a random UUID v4 string using crypto/rand (no external deps).
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
