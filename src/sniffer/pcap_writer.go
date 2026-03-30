@@ -132,21 +132,25 @@ func (s *Sniffer) dumpPcap(ch <-chan dumpPacket, device string, lt layers.LinkTy
 		case pkt, ok := <-ch:
 			if !ok {
 				// channel closed — flush and exit
-				if err := w.Close(); err != nil {
+				err = w.Close()
+				if err != nil {
 					log.Error().Err(err).Msg("Error closing pcap on shutdown")
 				}
 				_ = s.movePcap(tmpName, outDir)
 				return
 			}
-			if err := w.WritePacket(pkt.ci, pkt.data); err != nil {
+			err = w.WritePacket(pkt.ci, pkt.data)
+			if err != nil {
 				log.Error().Err(err).Msg("Error writing pcap packet")
 			}
 
 		case <-ticker.C:
-			if err := w.Close(); err != nil {
+			err = w.Close()
+			if err != nil {
 				log.Error().Err(err).Msg("Error closing pcap before rotation")
 			}
-			if err := s.movePcap(tmpName, outDir); err != nil {
+			err = s.movePcap(tmpName, outDir)
+			if err != nil {
 				log.Error().Err(err).Msg("Error rotating pcap file")
 			}
 			w, err = s.createPcap(tmpName, snaplen, lt)
@@ -157,7 +161,8 @@ func (s *Sniffer) dumpPcap(ch <-chan dumpPacket, device string, lt layers.LinkTy
 
 		case <-signals:
 			log.Info().Msg("pcap writer received stop signal")
-			if err := w.Close(); err != nil {
+			err = w.Close()
+			if err != nil {
 				log.Error().Err(err).Msg("Error closing pcap on signal")
 			}
 			_ = s.movePcap(tmpName, outDir)

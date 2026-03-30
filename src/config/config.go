@@ -9,10 +9,10 @@ import (
 
 // Config represents the top-level configuration structure
 type Config struct {
-	SocketSettings   []SocketSettings   `json:"socket" mapstructure:"socket"`
+	SocketSettings    []SocketSettings    `json:"socket" mapstructure:"socket"`
 	TransportSettings []TransportSettings `json:"transport" mapstructure:"transport"`
-	LogSettings      LogSettings        `json:"log_settings" mapstructure:"log_settings"`
-	ProtocolSettings []ProtocolSettings `json:"protocol" mapstructure:"protocol"`
+	LogSettings       LogSettings         `json:"log_settings" mapstructure:"log_settings"`
+	ProtocolSettings  []ProtocolSettings  `json:"protocol" mapstructure:"protocol"`
 
 	SipSettings struct {
 		DiscardMethods []string `json:"discard_methods" mapstructure:"discard_methods"`
