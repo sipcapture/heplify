@@ -7,11 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"strconv"
 	"sync"
-	"syscall"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/config"
@@ -108,25 +105,6 @@ func (e *Engine) Reload() error {
 	e.registerFunctions()
 
 	return e.loadScriptLocked(e.scriptFile)
-}
-
-// WatchSIGHUP starts a goroutine that reloads the script on SIGHUP.
-func (e *Engine) WatchSIGHUP() {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGHUP)
-	go func() {
-		for {
-			select {
-			case <-ch:
-				log.Info().Msg("Received SIGHUP — reloading Lua script")
-				if err := e.Reload(); err != nil {
-					log.Error().Err(err).Msg("Lua script reload failed")
-				}
-			case <-e.stopCh:
-				return
-			}
-		}
-	}()
 }
 
 // Close closes the Lua engine and stops the SIGHUP watcher.

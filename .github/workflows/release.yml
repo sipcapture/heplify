@@ -40,6 +40,9 @@ jobs:
           - goarch: arm64
             goos: darwin
             runner: macos-latest
+          - goarch: amd64
+            goos: windows
+            runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
 
@@ -65,6 +68,16 @@ jobs:
         if: matrix.goos == 'darwin'
         run: |
           brew install libpcap luajit
+
+      - name: Install build dependencies (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $npcapUrl = "https://npcap.com/dist/npcap-sdk-1.13.zip"
+          Invoke-WebRequest -Uri $npcapUrl -OutFile npcap-sdk.zip
+          Expand-Archive -Path npcap-sdk.zip -DestinationPath C:\npcap-sdk
+          echo "CGO_CFLAGS=-IC:/npcap-sdk/Include" >> $env:GITHUB_ENV
+          echo "CGO_LDFLAGS=-LC:/npcap-sdk/Lib/x64 -lwpcap" >> $env:GITHUB_ENV
 
       - name: Resolve version
         id: version
@@ -101,17 +114,28 @@ jobs:
           sed -i '' "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
           grep "var Version" src/cmd/heplify/version.go
 
+      - name: Update version.go (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ steps.version.outputs.VERSION }}"
+          $file = "src/cmd/heplify/version.go"
+          (Get-Content $file) -replace 'var Version = "[^"]*"', "var Version = `"$VERSION`"" | Set-Content $file
+          Select-String "var Version" $file
+
       - name: Build heplify (${{ matrix.goos }}/${{ matrix.goarch }})
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           GIT_COMMIT="${{ steps.version.outputs.GIT_COMMIT }}"
           BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
           LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}"
+          EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} go build -ldflags "${LDFLAGS}" -trimpath \
-            -o heplify_${{ matrix.goos }}_${{ matrix.goarch }} \
+            -o heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} \
             ./src/cmd/heplify
           echo "=== Version dump ==="
-          ./heplify_${{ matrix.goos }}_${{ matrix.goarch }} -version
+          ./heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} -version
+        shell: bash
 
       - name: glibc polyfill
         if: matrix.goos == 'linux'
@@ -162,6 +186,15 @@ jobs:
           retention-days: 1
           path: |
             heplify_${{ matrix.goos }}_${{ matrix.goarch }}
+
+      - name: Upload artifacts (Windows)
+        if: matrix.goos == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: heplify-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 1
+          path: |
+            heplify_${{ matrix.goos }}_${{ matrix.goarch }}.exe
 
   docker:
     name: Docker image (${{ matrix.goarch }})
