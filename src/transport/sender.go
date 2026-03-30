@@ -410,12 +410,12 @@ func (s *Sender) sendToAll(msg []byte) {
 		client.backoff = initialReconnectBackoff
 		client.mu.Unlock()
 		onceSent = true
-		apiserver.HepSentCount.Inc()
+		apiserver.IncTransportSent(client.addr, client.proto)
 	}
 
 	if !onceSent && hasHEPClients {
 		s.bufferToFile(msg)
-		apiserver.HepErrorCount.Inc()
+		apiserver.IncTransportError("", "")
 	}
 }
 

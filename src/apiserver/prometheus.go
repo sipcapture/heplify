@@ -128,6 +128,32 @@ func IncReconnect(addr, proto string) {
 	transportsMu.Unlock()
 }
 
+func IncTransportSent(addr, proto string) {
+	HepSentCount.Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Sent++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Sent: 1}
+	}
+	transportsMu.Unlock()
+}
+
+func IncTransportError(addr, proto string) {
+	HepErrorCount.Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Errors++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Errors: 1}
+	}
+	transportsMu.Unlock()
+}
+
 func refreshConnectedTotal() {
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {

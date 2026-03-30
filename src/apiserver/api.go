@@ -16,6 +16,8 @@ type TransportInfo struct {
 	Proto      string `json:"proto"`
 	Connected  bool   `json:"connected"`
 	Reconnects int64  `json:"reconnects"`
+	Sent       int64  `json:"sent"`
+	Errors     int64  `json:"errors"`
 }
 
 // WebStats is the payload returned by GET /api/stats.

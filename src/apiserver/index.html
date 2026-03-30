@@ -146,6 +146,8 @@ function renderTransports(d) {
       + '<span class="badge ' + (ok ? 'ok' : 'fail') + '"><span class="dot ' + (ok ? 'ok' : 'fail') + '"></span>' + (ok ? 'connected' : 'disconnected') + '</span>'
       + '<span class="t-proto">' + (t.proto || '') + '</span>'
       + '<span class="t-reconnects">reconnects: ' + fmt(t.reconnects) + '</span>'
+      + '<span class="t-reconnects">sent: ' + fmt(t.sent) + '</span>'
+      + '<span class="t-reconnects" style="color:' + (t.errors > 0 ? '#fc8181' : 'inherit') + '">errors: ' + fmt(t.errors) + '</span>'
       + '</div></div>';
   }).join('');
 }
