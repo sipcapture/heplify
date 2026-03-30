@@ -86,7 +86,7 @@ heplify_windows_amd64.exe -config heplify.json
 ### Build from source
 
 ```bash
-# Requires Go 1.21+
+# Requires Go 1.26+
 git clone https://github.com/sipcapture/heplify.git
 cd heplify
 make build
