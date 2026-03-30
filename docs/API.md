@@ -164,28 +164,6 @@ scrape_configs:
 
 ## Configuration reference
 
-### `collector_settings`
-
-Inbound HEP listener — other heplify agents or HEP-capable devices send packets here, and heplify re-forwards them via `transport[]`.
-
-```json
-"collector_settings": {
-  "active": false,
-  "host":   "0.0.0.0",
-  "port":   9060,
-  "proto":  "udp"
-}
-```
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `active` | `false` | Enable the inbound HEP listener |
-| `host` | `0.0.0.0` | Listen address |
-| `port` | `9060` | Listen port |
-| `proto` | `udp` | Transport protocol: `udp`, `tcp`, `both` (UDP+TCP), `http2` |
-
----
-
 ### `api_settings`
 
 ```json
