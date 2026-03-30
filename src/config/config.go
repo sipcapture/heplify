@@ -40,8 +40,10 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active bool `json:"active" mapstructure:"active"`
-		Auth   bool `json:"auth" mapstructure:"auth"`
+		Active bool   `json:"active" mapstructure:"active"`
+		Host   string `json:"host" mapstructure:"host"`
+		Port   int    `json:"port" mapstructure:"port"`
+		Auth   bool   `json:"auth" mapstructure:"auth"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {
@@ -213,8 +215,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.PrometheusSettings.Active && !c.ApiSettings.Active {
-		return fmt.Errorf("prometheus_settings.active requires api_settings.active to be true (both share the same HTTP server)")
+	if c.PrometheusSettings.Active {
+		if c.PrometheusSettings.Port == 0 {
+			c.PrometheusSettings.Port = 9096
+		}
+		if c.PrometheusSettings.Host == "" {
+			c.PrometheusSettings.Host = "0.0.0.0"
+		}
 	}
 
 	return nil

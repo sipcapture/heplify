@@ -130,6 +130,8 @@
     },
     "prometheus_settings": {
         "active": false,
+        "host": "0.0.0.0",
+        "port": 9096,
         "auth": false
     },
     "api_settings": {

@@ -28,6 +28,19 @@
       "skip_verify": true,
       "max_retries": 0,
       "keepalive": 0
+    },
+    {
+      "name": "backup",
+      "active": true,
+      "protocol": "HEPv3",
+      "host": "nyc01.sipcapture.io",
+      "transport": "tcp",
+      "port": 9062,
+      "password": "",
+      "payload_zip": false,
+      "skip_verify": true,
+      "max_retries": 0,
+      "keepalive": 0
     }
   ],
   "protocol": [
@@ -72,6 +85,8 @@
   },
   "prometheus_settings": {
     "active": false,
+    "host": "0.0.0.0",
+    "port": 9096,
     "auth": false
   },
   "api_settings": {

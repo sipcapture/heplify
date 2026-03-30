@@ -87,10 +87,13 @@ var (
 	bufferMaxSize string
 	bufferDebug   bool
 
-	// Prometheus
+	// Prometheus metrics server
 	prometheusAddr string
-	prometheusUser string
-	prometheusPass string
+
+	// API / Web stats server
+	apiAddr string
+	apiUser string
+	apiPass string
 
 	// TCP
 	tcpAssembly bool
@@ -173,9 +176,12 @@ func init() {
 	flag.BoolVar(&bufferDebug, "hep-buffer-debug", false, "Enable buffer debug logging")
 
 	// Prometheus flags
-	flag.StringVar(&prometheusAddr, "prometheus", ":9096", "Prometheus metrics address")
-	flag.StringVar(&prometheusUser, "prometheus-user", "", "Username for web stats Basic Auth (empty = no auth)")
-	flag.StringVar(&prometheusPass, "prometheus-pass", "", "Password for web stats Basic Auth")
+	flag.StringVar(&prometheusAddr, "prometheus", "", "Prometheus /metrics server address, e.g. :9096 (empty = disabled)")
+
+	// API / Web stats flags
+	flag.StringVar(&apiAddr, "api", "", "Web stats API server address, e.g. :9060 (empty = disabled)")
+	flag.StringVar(&apiUser, "api-user", "", "Username for web stats Basic Auth (empty = no auth)")
+	flag.StringVar(&apiPass, "api-pass", "", "Password for web stats Basic Auth")
 
 	// TCP flags
 	flag.BoolVar(&tcpAssembly, "tcpassembly", false, "Enable TCP reassembly")
@@ -266,12 +272,7 @@ func main() {
 	}
 
 	// Start API / Prometheus metrics server
-	if cfg.ApiSettings.Active {
-		apiserver.StartMetrics(cfg)
-		log.Info().
-			Str("addr", fmt.Sprintf("%s:%d", cfg.ApiSettings.Host, cfg.ApiSettings.Port)).
-			Msg("Started API server")
-	}
+	apiserver.StartMetrics(cfg)
 
 	// Initialize Lua scripting
 	var scriptEngine *script.Engine
@@ -526,22 +527,41 @@ func buildConfigFromFlags() *config.Config {
 	// RTCP settings: active by default when running from CLI
 	cfg.RtcpSettings.Active = true
 
-	// Prometheus / API settings
+	// Prometheus settings
 	cfg.PrometheusSettings.Active = prometheusAddr != ""
-	cfg.ApiSettings.Active = prometheusAddr != ""
 	if prometheusAddr != "" {
-		parts := strings.Split(prometheusAddr, ":")
-		if len(parts) >= 2 {
-			cfg.ApiSettings.Host = parts[0]
-			if p, err := strconv.Atoi(parts[1]); err == nil {
+		full := prometheusAddr
+		if strings.HasPrefix(prometheusAddr, ":") {
+			full = "0.0.0.0" + prometheusAddr
+		}
+		hostPort := strings.SplitN(full, ":", 2)
+		cfg.PrometheusSettings.Host = hostPort[0]
+		if len(hostPort) == 2 {
+			if p, err := strconv.Atoi(hostPort[1]); err == nil {
+				cfg.PrometheusSettings.Port = p
+			}
+		}
+	}
+
+	// API / Web stats settings
+	cfg.ApiSettings.Active = apiAddr != ""
+	if apiAddr != "" {
+		full := apiAddr
+		if strings.HasPrefix(apiAddr, ":") {
+			full = "0.0.0.0" + apiAddr
+		}
+		hostPort := strings.SplitN(full, ":", 2)
+		cfg.ApiSettings.Host = hostPort[0]
+		if len(hostPort) == 2 {
+			if p, err := strconv.Atoi(hostPort[1]); err == nil {
 				cfg.ApiSettings.Port = p
 			}
 		}
 		if cfg.ApiSettings.Port == 0 {
-			cfg.ApiSettings.Port = 9096
+			cfg.ApiSettings.Port = 9060
 		}
-		cfg.ApiSettings.Username = prometheusUser
-		cfg.ApiSettings.Password = prometheusPass
+		cfg.ApiSettings.Username = apiUser
+		cfg.ApiSettings.Password = apiPass
 	}
 
 	// Script settings
