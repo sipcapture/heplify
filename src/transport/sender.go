@@ -42,9 +42,10 @@ const (
 // transportClient is the internal union of HEP and Arrow Flight connections.
 // A Sender holds a slice of these and dispatches accordingly.
 type transportClient struct {
-	kind   clientKind
-	hep    *HEPClient         // non-nil when kind == kindHEP
-	flight *ArrowFlightClient // non-nil when kind == kindFlight
+	kind         clientKind
+	failoverOnly bool               // if true: use only when all primary transports fail
+	hep          *HEPClient         // non-nil when kind == kindHEP
+	flight       *ArrowFlightClient // non-nil when kind == kindFlight
 }
 
 // HEPClient represents a single HEP server connection
@@ -125,7 +126,7 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 					Msg("Failed to create Arrow Flight client")
 				continue
 			}
-			s.clients = append(s.clients, &transportClient{kind: kindFlight, flight: fc})
+			s.clients = append(s.clients, &transportClient{kind: kindFlight, failoverOnly: t.FailoverOnly, flight: fc})
 			continue
 		}
 
@@ -144,7 +145,7 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 			state:      stateDisconnected,
 			backoff:    initialReconnectBackoff,
 		}
-		s.clients = append(s.clients, &transportClient{kind: kindHEP, hep: hc})
+		s.clients = append(s.clients, &transportClient{kind: kindHEP, failoverOnly: t.FailoverOnly, hep: hc})
 	}
 
 	// Connect to all HEP servers
@@ -354,16 +355,33 @@ func (s *Sender) startWorker() {
 }
 
 // sendToAll sends raw HEP bytes to all connected HEP servers.
+// Delivery follows a two-phase priority model:
+//   - Phase 1 (primary): send to all non-failover transports.
+//   - Phase 2 (backup):  if no primary succeeded, send to failover-only transports.
+//
 // Arrow Flight clients are skipped here — they receive structured data via SendRecord.
 func (s *Sender) sendToAll(msg []byte) {
-	onceSent := false
-	hasHEPClients := false
+	primarySent := s.sendToGroup(msg, false)
+	if !primarySent {
+		backupSent := s.sendToGroup(msg, true)
+		if !backupSent {
+			s.bufferToFile(msg)
+			apiserver.IncTransportError("", "")
+		}
+	}
+}
+
+// sendToGroup sends msg to all connected HEP transports that match the failoverOnly flag.
+// Returns true if at least one send succeeded.
+func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
+	sent := false
+	hasClients := false
 
 	for _, tc := range s.clients {
-		if tc.kind != kindHEP {
+		if tc.kind != kindHEP || tc.failoverOnly != failoverOnly {
 			continue
 		}
-		hasHEPClients = true
+		hasClients = true
 		client := tc.hep
 
 		client.mu.Lock()
@@ -398,7 +416,7 @@ func (s *Sender) sendToAll(msg []byte) {
 		n, err := conn.Write(data)
 		if err != nil {
 			s.handleWriteError(client, conn, err)
-			if !onceSent {
+			if !sent {
 				s.bufferToFile(msg)
 			}
 			continue
@@ -407,6 +425,7 @@ func (s *Sender) sendToAll(msg []byte) {
 		log.Debug().
 			Str("addr", client.addr).
 			Str("transport", client.proto).
+			Bool("failover", failoverOnly).
 			Int("bytes", n).
 			Msg("HEP packet sent")
 
@@ -415,14 +434,15 @@ func (s *Sender) sendToAll(msg []byte) {
 		client.state = stateConnected
 		client.backoff = initialReconnectBackoff
 		client.mu.Unlock()
-		onceSent = true
+		sent = true
 		apiserver.IncTransportSent(client.addr, client.proto)
 	}
 
-	if !onceSent && hasHEPClients {
-		s.bufferToFile(msg)
-		apiserver.IncTransportError("", "")
+	// No clients of this tier configured — treat as "no attempt needed".
+	if !hasClients {
+		return false
 	}
+	return sent
 }
 
 // SendRecord dispatches a structured PacketRecord to all Arrow Flight clients.

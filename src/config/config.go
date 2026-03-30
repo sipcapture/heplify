@@ -127,17 +127,20 @@ type SocketSettings struct {
 }
 
 type TransportSettings struct {
-	Name       string `json:"name" mapstructure:"name"`
-	Active     bool   `json:"active" mapstructure:"active"`
-	Protocol   string `json:"protocol" mapstructure:"protocol"`
-	Host       string `json:"host" mapstructure:"host"`
-	Transport  string `json:"transport" mapstructure:"transport"`
-	Port       int    `json:"port" mapstructure:"port"`
-	Password   string `json:"password" mapstructure:"password"`
-	PayloadZip bool   `json:"payload_zip" mapstructure:"payload_zip"`
-	SkipVerify bool   `json:"skip_verify" mapstructure:"skip_verify"`
-	KeepAlive  int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
-	MaxRetries int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
+	Name   string `json:"name" mapstructure:"name"`
+	Active bool   `json:"active" mapstructure:"active"`
+	// FailoverOnly marks this transport as a backup destination.
+	// It is used only when every non-failover transport fails to send.
+	FailoverOnly bool   `json:"failover_only" mapstructure:"failover_only"`
+	Protocol     string `json:"protocol" mapstructure:"protocol"`
+	Host         string `json:"host" mapstructure:"host"`
+	Transport    string `json:"transport" mapstructure:"transport"`
+	Port         int    `json:"port" mapstructure:"port"`
+	Password     string `json:"password" mapstructure:"password"`
+	PayloadZip   bool   `json:"payload_zip" mapstructure:"payload_zip"`
+	SkipVerify   bool   `json:"skip_verify" mapstructure:"skip_verify"`
+	KeepAlive    int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
+	MaxRetries   int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
 	// Arrow Flight fields (used when transport = "grpc-flight")
 	TLSEnabled      bool   `json:"tls_enabled"       mapstructure:"tls_enabled"`
 	StreamName      string `json:"stream_name"       mapstructure:"stream_name"`

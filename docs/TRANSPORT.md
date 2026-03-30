@@ -13,6 +13,7 @@ Each entry describes a single remote HEP server or Arrow Flight endpoint.
 |-------|------|---------|-------------|
 | `name` | string | — | Unique identifier, referenced by `socket[].transport_profile` |
 | `active` | bool | `false` | Enable/disable this transport without removing it |
+| `failover_only` | bool | `false` | Mark as backup: used only when all primary transports fail to send |
 | `transport` | string | `"udp"` | Protocol: `udp`, `tcp`, `tls`, `grpc-flight` |
 | `host` | string | — | Remote host or IP |
 | `port` | int | — | Remote port |
@@ -177,6 +178,55 @@ In this setup:
 ```
 
 Both transports receive all captured packets — backward-compatible behaviour.
+
+---
+
+## Failover (primary / backup)
+
+Setting `failover_only: true` on a transport marks it as a **backup**.  
+heplify sends to all **primary** transports first; it switches to backup transports only when every primary fails to deliver the packet.
+
+```
+Normal operation:
+    packet ──► primary-1 (sent OK)  ──► delivered
+               primary-2 (sent OK)  ──► delivered (fan-out)
+               backup               ──  skipped
+
+Primary down:
+    packet ──► primary-1 (error)    ──► reconnecting
+               primary-2 (error)    ──► reconnecting
+               backup   (sent OK)   ──► delivered ← failover activated
+```
+
+### Configuration example
+
+```json
+"transport": [
+    {
+        "name": "homer-primary",
+        "active": true,
+        "failover_only": false,
+        "transport": "tcp",
+        "host": "10.0.0.1",
+        "port": 9060
+    },
+    {
+        "name": "homer-backup",
+        "active": true,
+        "failover_only": true,
+        "transport": "udp",
+        "host": "10.0.0.2",
+        "port": 9060
+    }
+]
+```
+
+**Rules:**
+- All non-`failover_only` transports are **primary** — they always receive packets when connected.
+- `failover_only` transports are **backup** — they receive packets only when no primary succeeded.
+- If both primary and backup fail, the packet is spooled to the disk buffer (if `buffer_settings.enable: true`).
+- When a primary recovers, it automatically resumes receiving traffic; backup goes silent again.
+- Multiple primaries act as fan-out (mirroring); multiple backups also act as fan-out among themselves.
 
 ---
 

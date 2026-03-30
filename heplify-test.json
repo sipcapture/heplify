@@ -20,6 +20,7 @@
     {
       "name": "nyc01",
       "active": true,
+      "failover_only": false,
       "protocol": "HEPv3",
       "host": "nyc01.sipcapture.io",
       "transport": "udp",
@@ -33,6 +34,7 @@
     {
       "name": "backup",
       "active": true,
+      "failover_only": true,
       "protocol": "HEPv3",
       "host": "nyc01.sipcapture.io",
       "transport": "tcp",

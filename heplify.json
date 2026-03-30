@@ -31,6 +31,7 @@
         {
             "name": "hepsocket",
             "active": true,
+            "failover_only": false,
             "protocol": "HEPv3",
             "host": "127.0.0.1",
             "transport": "tcp",
