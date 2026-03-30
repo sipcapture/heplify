@@ -30,13 +30,23 @@ func StartAPIServer(cfg *config.Config) {
 	pass := cfg.ApiSettings.Password
 
 	if user != "" {
-		log.Info().Str("addr", addr).Msg("API / Web Stats server protected by HTTP Basic Auth")
+		log.Info().Str("addr", addr).Msg("API server protected by HTTP Basic Auth")
 	}
-	log.Info().Str("addr", addr).Msg("Starting API / Web Stats server")
 
 	mux := http.NewServeMux()
 	registerAPI(mux, user, pass)
 
+	if cfg.ApiSettings.TLS {
+		log.Info().Str("addr", addr).Str("cert", cfg.ApiSettings.CertFile).Msg("Starting API server (HTTPS)")
+		go func() {
+			if err := http.ListenAndServeTLS(addr, cfg.ApiSettings.CertFile, cfg.ApiSettings.KeyFile, mux); err != nil {
+				log.Error().Err(err).Msg("API server (HTTPS) failed")
+			}
+		}()
+		return
+	}
+
+	log.Info().Str("addr", addr).Msg("Starting API server (HTTP)")
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Error().Err(err).Msg("API server failed")

@@ -183,6 +183,9 @@ scrape_configs:
 | `port` | `9060` | Listen port |
 | `username` | `""` | HTTP Basic Auth username (empty = no auth) |
 | `password` | `""` | HTTP Basic Auth password |
+| `tls` | `false` | Enable HTTPS. Requires `cert_file` and `key_file` |
+| `cert_file` | `""` | Path to TLS certificate file (PEM) |
+| `key_file` | `""` | Path to TLS private key file (PEM) |
 
 ### `prometheus_settings`
 

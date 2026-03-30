@@ -52,6 +52,10 @@ type Config struct {
 		Port     int    `json:"port" mapstructure:"port"`
 		Username string `json:"username" mapstructure:"username"`
 		Password string `json:"password" mapstructure:"password"`
+		// TLS — enable HTTPS. CertFile and KeyFile must both be set.
+		TLS      bool   `json:"tls" mapstructure:"tls"`
+		CertFile string `json:"cert_file" mapstructure:"cert_file"`
+		KeyFile  string `json:"key_file" mapstructure:"key_file"`
 	} `json:"api_settings" mapstructure:"api_settings"`
 
 	DebugSettings struct {
@@ -230,6 +234,11 @@ func (c *Config) Validate() error {
 		if c.ApiSettings.Host != "" && c.ApiSettings.Host != "0.0.0.0" {
 			if ip := net.ParseIP(c.ApiSettings.Host); ip == nil && c.ApiSettings.Host != "localhost" {
 				return fmt.Errorf("api_settings.host is not a valid host/ip: %s", c.ApiSettings.Host)
+			}
+		}
+		if c.ApiSettings.TLS {
+			if c.ApiSettings.CertFile == "" || c.ApiSettings.KeyFile == "" {
+				return fmt.Errorf("api_settings.tls is true but cert_file or key_file is not set")
 			}
 		}
 	}
