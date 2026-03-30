@@ -77,13 +77,13 @@ type TransportInfo struct {
 
 // WebStats is the payload returned by GET /api/stats.
 type WebStats struct {
-	NodeName     string              `json:"node_name"`
-	NodeID       int                 `json:"node_id"`
-	Interfaces   []string            `json:"interfaces"`
-	CaptureModes map[string][]string `json:"capture_modes"`
-	UptimeSeconds int64              `json:"uptime_seconds"`
-	Uptime       string              `json:"uptime"`
-	Packets      struct {
+	NodeName      string              `json:"node_name"`
+	NodeID        int                 `json:"node_id"`
+	Interfaces    []string            `json:"interfaces"`
+	CaptureModes  map[string][]string `json:"capture_modes"`
+	UptimeSeconds int64               `json:"uptime_seconds"`
+	Uptime        string              `json:"uptime"`
+	Packets       struct {
 		Total      int64 `json:"total"`
 		SIP        int64 `json:"sip"`
 		RTCP       int64 `json:"rtcp"`
