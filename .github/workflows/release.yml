@@ -382,6 +382,13 @@ jobs:
             git push origin "${TAG}"
           fi
 
+      - name: Flatten artifacts
+        run: |
+          mkdir -p dist/flat
+          find dist/ -type f -exec mv {} dist/flat/ \;
+          echo "=== Release assets ==="
+          ls -lh dist/flat/
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -390,7 +397,7 @@ jobs:
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           generate_release_notes: true
-          files: |
-            dist/**/*
+          fail_on_unmatched_files: false
+          files: dist/flat/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
