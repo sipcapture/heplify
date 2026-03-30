@@ -62,12 +62,12 @@ jobs:
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y libpcap-dev libluajit-5.1-dev
+          sudo apt-get install -y libpcap-dev
 
       - name: Install build dependencies (macOS)
         if: matrix.goos == 'darwin'
         run: |
-          brew install libpcap luajit
+          brew install libpcap
 
       - name: Install build dependencies (Windows)
         if: matrix.goos == 'windows'
