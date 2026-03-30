@@ -103,16 +103,6 @@
             "description": "RTCP stream analysis template"
         },
         {
-            "name": "RTPPROXY",
-            "filter": "(src port $minport or dst port $minport) or (src port $maxport or dst port $maxport)",
-            "min_port": 7898,
-            "max_port": 7899,
-            "protocol": [
-                "udp"
-            ],
-            "description": "RTPPROXY message template"
-        },
-        {
             "name": "HEP",
             "filter": "",
             "min_port": 9062,
