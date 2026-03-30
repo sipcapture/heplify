@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/apiserver"
+	"github.com/sipcapture/heplify/src/config"
 )
 
 type clientState string
