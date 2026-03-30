@@ -23,11 +23,11 @@ contents:
   - src: ./heplify
     dst: /usr/local/bin/heplify
 
-  - src: ./heplify.json
+  - src: ./examples/heplify.json
     dst: /etc/heplify/heplify.json
     type: config|noreplace
 
-  - src: ./example.lua
+  - src: ./examples/example.lua
     dst: /etc/heplify/example.lua
     type: config|noreplace
 
