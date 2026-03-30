@@ -73,7 +73,7 @@
 </head>
 <body>
 <header>
-  <h1 id="page-title">hep<span>lify</span> &mdash; Live Stats</h1>
+  <h1 id="page-title">hep<span>lify</span> Live Stats</h1>
   <span id="last-updated">loading&hellip;</span>
 </header>
 
@@ -163,10 +163,10 @@ async function fetchStats() {
     // Update page title and header with live node identity
     const node = d.node_name || 'heplify';
     const uuid = d.uuid  || '';
-    const titleText = uuid ? node + ' \u2014 ' + uuid : node;
+    const titleText = uuid ? node + ' ' + uuid : node;
     document.getElementById('page-title').innerHTML =
-      'hep<span>lify</span> &nbsp;<span style="color:#718096;font-weight:400;font-size:.85em">&mdash; ' + titleText + '</span>&nbsp; <span style="color:#4299e1;font-size:.8em">Live Stats</span>';
-    document.title = 'heplify \u2014 ' + titleText;
+      'hep<span>lify</span> <span style="color:#718096;font-weight:400;font-size:.85em">' + titleText + '</span> <span style="color:#4299e1;font-size:.8em">Live Stats</span>';
+    document.title = 'heplify ' + titleText;
     document.getElementById('last-updated').textContent =
       'updated ' + new Date().toLocaleTimeString();
   } catch(e) {
