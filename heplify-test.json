@@ -49,16 +49,56 @@
     "json": false,
     "log_payload": true
   },
+  "sip_settings": {
+    "discard_methods": [],
+    "discard_ips": [],
+    "discard_src_ips": [],
+    "discard_dst_ips": [],
+    "deduplicate": false
+  },
+  "hep_settings": {
+    "replace_token": false,
+    "deduplicate": false,
+    "collect_only_sip": false
+  },
+  "rtcp_settings": {
+    "active": true
+  },
+  "system_settings": {
+    "node_name": "test-node",
+    "node_id": 2002,
+    "node_pw": ""
+  },
   "prometheus_settings": {
     "active": false,
     "auth": false
   },
   "api_settings": {
-    "active": false,
+    "active": true,
     "host": "0.0.0.0",
     "port": 8008,
-    "username": "",
-    "password": "",
+    "username": "admin",
+    "password": "admin",
     "ui_file": "/usr/share/heplify/index.html"
+  },
+  "debug_settings": {
+    "disable_tcp_reassembly": false,
+    "disable_ip_defrag": false
+  },
+  "pcap_settings": {
+    "write_file": "",
+    "rotate_minutes": 60,
+    "compress": false
+  },
+  "buffer_settings": {
+    "enable": false,
+    "file": "hep-buffer.dump",
+    "max_size": 104857600,
+    "debug": false
+  },
+  "script_settings": {
+    "active": false,
+    "file": "",
+    "hep_filter": ""
   }
 }
