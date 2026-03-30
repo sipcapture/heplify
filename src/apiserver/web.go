@@ -2,5 +2,5 @@ package apiserver
 
 import _ "embed"
 
-//go:embed stats.html
+//go:embed index.html
 var statsPage string

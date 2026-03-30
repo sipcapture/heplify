@@ -59,6 +59,6 @@
     "port": 8008,
     "username": "",
     "password": "",
-    "ui_file": "/usr/share/heplify/stats.html"
+    "ui_file": "/usr/share/heplify/index.html"
   }
 }
