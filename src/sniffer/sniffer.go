@@ -512,8 +512,6 @@ func (s *Sniffer) handleProtocol(pkt *decoder.Packet, proto config.ProtocolSetti
 		s.handleRTCP(pkt)
 	case "RTP":
 		s.handleRTP(pkt)
-	case "NGCP":
-		s.handleNG(pkt)
 	case "HEP":
 		// Incoming HEP in sniffer mode — forward as-is
 		if s.sender != nil {
@@ -624,21 +622,6 @@ func (s *Sniffer) handleRTP(pkt *decoder.Packet) {
 		log.Debug().Str("src", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).Msg("[rtp] packet")
 	}
 	s.stats.Inc(StatRTP)
-}
-
-func (s *Sniffer) handleNG(pkt *decoder.Packet) {
-	ssrc, jsonData := decoder.ParseNG(pkt.Payload)
-	if jsonData == nil {
-		return
-	}
-
-	pkt.ProtoType = 38 // HEP ProtoType for rtpengine NG
-	pkt.Payload = jsonData
-	if len(ssrc) > 0 {
-		pkt.CID = ssrc
-	}
-
-	s.sendHEP(pkt, 38)
 }
 
 func (s *Sniffer) handleDNS(pkt *decoder.Packet) {

@@ -103,16 +103,6 @@
             "description": "RTCP stream analysis template"
         },
         {
-            "name": "NGCP",
-            "filter": "(src port $minport or dst port $minport) or (src port $maxport or dst port $maxport)",
-            "min_port": 2222,
-            "max_port": 2223,
-            "protocol": [
-                "udp"
-            ],
-            "description": "NGCP message template"
-        },
-        {
             "name": "RTPPROXY",
             "filter": "(src port $minport or dst port $minport) or (src port $maxport or dst port $maxport)",
             "min_port": 7898,
@@ -121,15 +111,6 @@
                 "udp"
             ],
             "description": "RTPPROXY message template"
-        },
-        {
-            "name": "ISUP",
-            "filter": "(proto 132) or (vlan and proto 132)",
-            "isup_type": "ansi",
-            "protocol": [
-                "sctp"
-            ],
-            "description": "ISUP message template"
         },
         {
             "name": "HEP",
