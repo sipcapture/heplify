@@ -3,7 +3,7 @@ FROM golang:1.24-bookworm AS builder
 WORKDIR /build
 
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends libpcap-dev libluajit-5.1-dev && \
+    apt-get install -y --no-install-recommends libpcap-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
@@ -25,12 +25,10 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
 FROM debian:bookworm-slim
 
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends libpcap0.8 ca-certificates libcap2-bin && \
+    apt-get install -y --no-install-recommends libpcap0.8 ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/heplify /usr/local/bin/heplify
-
-RUN setcap cap_net_raw,cap_net_admin=eip /usr/local/bin/heplify
 
 COPY heplify.json  /etc/heplify/heplify.json
 COPY example.lua   /etc/heplify/example.lua
