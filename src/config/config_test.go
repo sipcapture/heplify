@@ -22,8 +22,9 @@ func TestValidateConfig(t *testing.T) {
 	}
 	cfg.BufferSettings.File = "tmp/buffer.dump"
 	cfg.PrometheusSettings.Active = true
-	cfg.PrometheusSettings.Host = "127.0.0.1"
-	cfg.PrometheusSettings.Port = 9096
+	cfg.ApiSettings.Active = true
+	cfg.ApiSettings.Host = "127.0.0.1"
+	cfg.ApiSettings.Port = 9096
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got error: %v", err)
@@ -56,7 +57,8 @@ func TestLoadConfigFromFile(t *testing.T) {
   "protocol": [
     {"name":"SIP","min_port":5060,"max_port":5090,"protocol":["udp","tcp"]}
   ],
-  "prometheus_settings": {"active": true, "host":"127.0.0.1","port":9096}
+  "prometheus_settings": {"active": true},
+  "api_settings": {"active": true, "host":"127.0.0.1","port":9096}
 }`
 	if err := os.WriteFile(cfgPath, []byte(content), 0600); err != nil {
 		t.Fatalf("failed to write temp config: %v", err)
