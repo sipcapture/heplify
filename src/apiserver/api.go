@@ -4,10 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
-	"os"
 	"sync"
-
-	"github.com/rs/zerolog/log"
 )
 
 // TransportInfo holds live status of a single HEP transport connection.
@@ -45,7 +42,6 @@ type WebStats struct {
 }
 
 var (
-	// transportsMu guards the transports map used for /api/stats.
 	transportsMu sync.RWMutex
 	transports   = map[string]*TransportInfo{}
 
@@ -88,7 +84,6 @@ func apiStatsHandler(w http.ResponseWriter, _ *http.Request) {
 		ws = fn()
 	}
 
-	// Merge live transport info from the registry.
 	transportsMu.RLock()
 	ws.Transport = make([]TransportInfo, 0, len(transports))
 	for _, t := range transports {
@@ -98,21 +93,6 @@ func apiStatsHandler(w http.ResponseWriter, _ *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(ws)
-}
-
-func makeWebUIHandler(uiFile string) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if uiFile != "" {
-			data, err := os.ReadFile(uiFile)
-			if err == nil {
-				_, _ = w.Write(data)
-				return
-			}
-			log.Warn().Str("ui_file", uiFile).Err(err).Msg("Failed to read ui_file, falling back to embedded stats.html")
-		}
-		_, _ = w.Write([]byte(statsPage))
-	}
 }
 
 // basicAuth wraps h with HTTP Basic Auth when username is non-empty.
@@ -134,9 +114,8 @@ func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// registerAPI mounts /health, /api/stats and / on mux.
-func registerAPI(mux *http.ServeMux, user, pass, uiFile string) {
+// registerAPI mounts /health and /api/stats on mux.
+func registerAPI(mux *http.ServeMux, user, pass string) {
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/stats", basicAuth(user, pass, apiStatsHandler))
-	mux.HandleFunc("/", basicAuth(user, pass, makeWebUIHandler(uiFile)))
 }

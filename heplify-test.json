@@ -94,8 +94,7 @@
     "host": "0.0.0.0",
     "port": 8008,
     "username": "admin",
-    "password": "admin",
-    "ui_file": "/usr/share/heplify/index.html"
+    "password": "admin"
   },
   "debug_settings": {
     "disable_tcp_reassembly": false,

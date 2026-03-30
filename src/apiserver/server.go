@@ -35,7 +35,7 @@ func StartAPIServer(cfg *config.Config) {
 	log.Info().Str("addr", addr).Msg("Starting API / Web Stats server")
 
 	mux := http.NewServeMux()
-	registerAPI(mux, user, pass, cfg.ApiSettings.UIFile)
+	registerAPI(mux, user, pass)
 
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {

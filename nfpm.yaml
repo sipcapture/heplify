@@ -36,7 +36,3 @@ contents:
 
   - src: ./examples/heplify.init
     dst: /etc/init.d/heplify
-
-  - src: ./src/apiserver/index.html
-    dst: /usr/share/heplify/index.html
-    type: config|noreplace

@@ -11,19 +11,6 @@ heplify exposes two optional HTTP servers configured independently:
 
 ## API Server (`api_settings`)
 
-### `GET /`
-
-Returns the built-in live stats web dashboard (HTML).
-
-- Served from disk if `api_settings.ui_file` is set; falls back to the embedded `index.html`.
-- Protected by HTTP Basic Auth when `api_settings.username` is set.
-
-```
-curl http://localhost:9060/
-```
-
----
-
 ### `GET /health`
 
 Returns the current health status of the agent. Always open — no auth required.
@@ -197,7 +184,6 @@ scrape_configs:
 | `port` | `9060` | Listen port |
 | `username` | `""` | HTTP Basic Auth username (empty = no auth) |
 | `password` | `""` | HTTP Basic Auth password |
-| `ui_file` | `""` | Path to custom `index.html`; uses embedded file if empty or not found |
 
 ### `prometheus_settings`
 
