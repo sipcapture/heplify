@@ -274,8 +274,8 @@ func StartMetrics(cfg *config.Config) {
 
 	log.Info().Str("addr", addr).Msg("Starting Prometheus / Web Stats Server")
 
-	user := cfg.PrometheusSettings.Username
-	pass := cfg.PrometheusSettings.Password
+	user := cfg.HttpServerSettings.Username
+	pass := cfg.HttpServerSettings.Password
 	if user != "" {
 		log.Info().Str("addr", addr).Msg("Web stats UI protected by HTTP Basic Auth")
 	}

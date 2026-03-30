@@ -534,8 +534,8 @@ func buildConfigFromFlags() *config.Config {
 		if cfg.PrometheusSettings.Port == 0 {
 			cfg.PrometheusSettings.Port = 9096
 		}
-		cfg.PrometheusSettings.Username = prometheusUser
-		cfg.PrometheusSettings.Password = prometheusPass
+		cfg.HttpServerSettings.Username = prometheusUser
+		cfg.HttpServerSettings.Password = prometheusPass
 	}
 
 	// Script settings

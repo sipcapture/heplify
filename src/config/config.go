@@ -39,12 +39,15 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active   bool   `json:"active" mapstructure:"active"`
-		Host     string `json:"host" mapstructure:"host"`
-		Port     int    `json:"port" mapstructure:"port"`
+		Active bool   `json:"active" mapstructure:"active"`
+		Host   string `json:"host" mapstructure:"host"`
+		Port   int    `json:"port" mapstructure:"port"`
+	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
+
+	HttpServerSettings struct {
 		Username string `json:"username" mapstructure:"username"`
 		Password string `json:"password" mapstructure:"password"`
-	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
+	} `json:"http_server" mapstructure:"http_server"`
 
 	DebugSettings struct {
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
