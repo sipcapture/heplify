@@ -29,6 +29,7 @@ It handles fragmented and duplicate packets out of the box.
 - **TCP SIP reassembly** — improved handling of fragmented SIP over TCP (Skype for Business, Lync)
 - **HEP Collector** — receive HEP from other agents and forward/fan-out to multiple destinations
 - **Prometheus metrics** — built-in exporter for agent performance and traffic statistics
+- **Web stats dashboard** — live `/` UI showing uptime, interfaces, packet counters and transport status; JSON API at `/api/stats`; optional HTTP Basic Auth
 - **Lua scripting engine** — custom per-packet processing, filtering and field manipulation
 - **Packet deduplication** — suppresses duplicate packets at the capture layer
 
@@ -131,7 +132,8 @@ Key sections in `heplify.json`:
 | `hep_settings` | HEP collector options, deduplication, token replacement |
 | `rtcp_settings` | Enable/disable RTCP report processing (`active`) |
 | `system_settings` | HEP node name, ID and password |
-| `prometheus_settings` | Prometheus metrics endpoint |
+| `prometheus_settings` | Prometheus `/metrics` endpoint toggle and auth flag |
+| `api_settings` | HTTP server: host, port, Basic Auth credentials |
 | `debug_settings` | Disable individual subsystems for troubleshooting |
 | `pcap_settings` | PCAP write directory, rotation, compression, replay options |
 | `buffer_settings` | Disk-based HEP failover buffer |
@@ -266,9 +268,13 @@ Lua scripting:
   -script-hep-filter string
         HEP types to pass to Lua script, comma-separated (default "1")
 
-Prometheus:
+Prometheus / Web stats:
   -prometheus string
-        Prometheus metrics listen address (default ":9096")
+        HTTP server listen address for metrics and web UI (default ":9096")
+  -prometheus-user string
+        Username for web stats Basic Auth (empty = no auth)
+  -prometheus-pass string
+        Password for web stats Basic Auth
 ```
 
 ---
@@ -312,8 +318,11 @@ Prometheus:
 # Read from pcap file and replay at max speed
 ./heplify -rf capture.pcap -hs 192.168.1.1:9060 -rs
 
-# Export Prometheus metrics on port 9096
+# Export Prometheus metrics and open web stats UI on port 9096
 ./heplify -hs 192.168.1.1:9060 -prometheus :9096
+
+# Web stats UI with Basic Auth (http://host:9096/ requires login)
+./heplify -hs 192.168.1.1:9060 -prometheus :9096 -prometheus-user admin -prometheus-pass secret
 
 # Use Lua script to filter/modify packets
 ./heplify -hs 192.168.1.1:9060 -script-file filter.lua -script-hep-filter 1,5

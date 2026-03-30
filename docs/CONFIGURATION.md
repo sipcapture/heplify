@@ -16,6 +16,7 @@ All sections are optional — omitted fields fall back to their defaults.
 - [rtcp\_settings](#rtcp_settings)
 - [system\_settings](#system_settings)
 - [prometheus\_settings](#prometheus_settings)
+- [api\_settings](#api_settings)
 - [debug\_settings](#debug_settings)
 - [pcap\_settings](#pcap_settings)
 - [buffer\_settings](#buffer_settings)
@@ -244,11 +245,62 @@ Controls RTCP report processing. When `active` is `false`, captured RTCP packets
 
 ## `prometheus_settings`
 
+Controls whether the Prometheus `/metrics` endpoint is mounted on the HTTP server.  
+The HTTP server itself is controlled by [`api_settings`](#api_settings).
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `active` | bool | `false` | Enable Prometheus metrics endpoint |
+| `active` | bool | `false` | Mount the `/metrics` endpoint (requires `api_settings.active: true`) |
+| `auth` | bool | `false` | Protect `/metrics` with HTTP Basic Auth (uses `api_settings` credentials) |
+
+---
+
+## `api_settings`
+
+HTTP server that serves the web stats dashboard, JSON API and Prometheus metrics.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `active` | bool | `false` | Start the HTTP server |
 | `host` | string | `"0.0.0.0"` | Listen host |
-| `port` | int | `8008` | Listen port. Metrics available at `http://host:port/metrics` |
+| `port` | int | `8008` | Listen port |
+| `username` | string | `""` | HTTP Basic Auth username. Empty = auth disabled |
+| `password` | string | `""` | HTTP Basic Auth password |
+
+The following endpoints are always available when the server is running:
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /` | yes (if set) | Web stats dashboard (auto-refreshes every 3 s) |
+| `GET /api/stats` | yes (if set) | Live stats as JSON |
+| `GET /health` | no | Health check — returns `{"status":"ok"}` |
+| `GET /metrics` | see `prometheus_settings.auth` | Prometheus metrics (only when `prometheus_settings.active: true`) |
+
+**Example — web UI only (no Prometheus):**
+
+```json
+"prometheus_settings": { "active": false },
+"api_settings": {
+  "active": true,
+  "host": "0.0.0.0",
+  "port": 8008,
+  "username": "admin",
+  "password": "secret"
+}
+```
+
+**Example — web UI + Prometheus with auth:**
+
+```json
+"prometheus_settings": { "active": true, "auth": true },
+"api_settings": {
+  "active": true,
+  "host": "0.0.0.0",
+  "port": 8008,
+  "username": "admin",
+  "password": "secret"
+}
+```
 
 ---
 
