@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
-	"github.com/sipcapture/heplify/src/promstats"
 )
 
 type clientState string
@@ -42,9 +42,10 @@ const (
 // transportClient is the internal union of HEP and Arrow Flight connections.
 // A Sender holds a slice of these and dispatches accordingly.
 type transportClient struct {
-	kind   clientKind
-	hep    *HEPClient         // non-nil when kind == kindHEP
-	flight *ArrowFlightClient // non-nil when kind == kindFlight
+	kind         clientKind
+	failoverOnly bool               // if true: use only when all primary transports fail
+	hep          *HEPClient         // non-nil when kind == kindHEP
+	flight       *ArrowFlightClient // non-nil when kind == kindFlight
 }
 
 // HEPClient represents a single HEP server connection
@@ -80,8 +81,15 @@ type Sender struct {
 	reconnectWG     sync.WaitGroup
 }
 
-// New creates a new Sender with connections to all active transports
+// New creates a new Sender with connections to all active transports in cfg.
 func New(cfg *config.Config) *Sender {
+	return NewFromTransports(cfg.TransportSettings, cfg)
+}
+
+// NewFromTransports creates a Sender using only the provided transport list.
+// Buffer and queue settings are taken from cfg. Transports that are not Active
+// in the provided list are skipped.
+func NewFromTransports(transports []config.TransportSettings, cfg *config.Config) *Sender {
 	bufferFile := cfg.BufferSettings.File
 	if bufferFile == "" {
 		bufferFile = "hep-buffer.dump"
@@ -103,8 +111,7 @@ func New(cfg *config.Config) *Sender {
 		stopCh:        make(chan struct{}),
 	}
 
-	// Initialize clients for all active transports
-	for _, t := range cfg.TransportSettings {
+	for _, t := range transports {
 		if !t.Active {
 			continue
 		}
@@ -119,7 +126,7 @@ func New(cfg *config.Config) *Sender {
 					Msg("Failed to create Arrow Flight client")
 				continue
 			}
-			s.clients = append(s.clients, &transportClient{kind: kindFlight, flight: fc})
+			s.clients = append(s.clients, &transportClient{kind: kindFlight, failoverOnly: t.FailoverOnly, flight: fc})
 			continue
 		}
 
@@ -138,7 +145,7 @@ func New(cfg *config.Config) *Sender {
 			state:      stateDisconnected,
 			backoff:    initialReconnectBackoff,
 		}
-		s.clients = append(s.clients, &transportClient{kind: kindHEP, hep: hc})
+		s.clients = append(s.clients, &transportClient{kind: kindHEP, failoverOnly: t.FailoverOnly, hep: hc})
 	}
 
 	// Connect to all HEP servers
@@ -209,7 +216,7 @@ func (s *Sender) scheduleReconnect(client *HEPClient, reason string) {
 	client.state = stateReconnecting
 	client.mu.Unlock()
 
-	promstats.IncReconnect(client.addr, client.proto)
+	apiserver.IncReconnect(client.addr, client.proto)
 	s.reconnectWG.Add(1)
 	go s.reconnectLoop(client, reason)
 }
@@ -237,7 +244,7 @@ func (s *Sender) reconnectLoop(client *HEPClient, reason string) {
 			client.reconnecting = false
 			client.backoff = initialReconnectBackoff
 			client.mu.Unlock()
-			promstats.SetTransportConnected(client.addr, client.proto, true)
+			apiserver.SetTransportConnected(client.addr, client.proto, true)
 
 			log.Info().
 				Str("component", "sender").
@@ -265,7 +272,7 @@ func (s *Sender) reconnectLoop(client *HEPClient, reason string) {
 		client.state = stateReconnecting
 		reachedLimit := client.maxRetries > 0 && int(client.errCnt) >= client.maxRetries
 		client.mu.Unlock()
-		promstats.SetTransportConnected(client.addr, client.proto, false)
+		apiserver.SetTransportConnected(client.addr, client.proto, false)
 
 		if reachedLimit {
 			log.Error().
@@ -317,7 +324,7 @@ func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err er
 		client.conn = nil
 		client.state = stateDisconnected
 		client.errCnt++
-		promstats.SetTransportConnected(client.addr, client.proto, false)
+		apiserver.SetTransportConnected(client.addr, client.proto, false)
 	}
 	client.mu.Unlock()
 
@@ -336,28 +343,45 @@ func (s *Sender) startWorker() {
 				case msg := <-s.hepQueue:
 					s.sendToAll(msg)
 				default:
-					promstats.SetQueueSize(len(s.hepQueue))
+					apiserver.SetQueueSize(len(s.hepQueue))
 					return
 				}
 			}
 		case msg := <-s.hepQueue:
 			s.sendToAll(msg)
-			promstats.SetQueueSize(len(s.hepQueue))
+			apiserver.SetQueueSize(len(s.hepQueue))
 		}
 	}
 }
 
 // sendToAll sends raw HEP bytes to all connected HEP servers.
+// Delivery follows a two-phase priority model:
+//   - Phase 1 (primary): send to all non-failover transports.
+//   - Phase 2 (backup):  if no primary succeeded, send to failover-only transports.
+//
 // Arrow Flight clients are skipped here — they receive structured data via SendRecord.
 func (s *Sender) sendToAll(msg []byte) {
-	onceSent := false
-	hasHEPClients := false
+	primarySent := s.sendToGroup(msg, false)
+	if !primarySent {
+		backupSent := s.sendToGroup(msg, true)
+		if !backupSent {
+			s.bufferToFile(msg)
+			apiserver.IncTransportError("", "")
+		}
+	}
+}
+
+// sendToGroup sends msg to all connected HEP transports that match the failoverOnly flag.
+// Returns true if at least one send succeeded.
+func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
+	sent := false
+	hasClients := false
 
 	for _, tc := range s.clients {
-		if tc.kind != kindHEP {
+		if tc.kind != kindHEP || tc.failoverOnly != failoverOnly {
 			continue
 		}
-		hasHEPClients = true
+		hasClients = true
 		client := tc.hep
 
 		client.mu.Lock()
@@ -392,7 +416,7 @@ func (s *Sender) sendToAll(msg []byte) {
 		n, err := conn.Write(data)
 		if err != nil {
 			s.handleWriteError(client, conn, err)
-			if !onceSent {
+			if !sent {
 				s.bufferToFile(msg)
 			}
 			continue
@@ -401,6 +425,7 @@ func (s *Sender) sendToAll(msg []byte) {
 		log.Debug().
 			Str("addr", client.addr).
 			Str("transport", client.proto).
+			Bool("failover", failoverOnly).
 			Int("bytes", n).
 			Msg("HEP packet sent")
 
@@ -409,14 +434,15 @@ func (s *Sender) sendToAll(msg []byte) {
 		client.state = stateConnected
 		client.backoff = initialReconnectBackoff
 		client.mu.Unlock()
-		onceSent = true
-		promstats.HepSentCount.Inc()
+		sent = true
+		apiserver.IncTransportSent(client.addr, client.proto)
 	}
 
-	if !onceSent && hasHEPClients {
-		s.bufferToFile(msg)
-		promstats.HepErrorCount.Inc()
+	// No clients of this tier configured — treat as "no attempt needed".
+	if !hasClients {
+		return false
 	}
+	return sent
 }
 
 // SendRecord dispatches a structured PacketRecord to all Arrow Flight clients.
@@ -442,20 +468,20 @@ func (s *Sender) HasFlightClients() bool {
 // Send queues a message for sending to all servers
 func (s *Sender) Send(data []byte) error {
 	if s.closed.Load() {
-		promstats.HepErrorCount.Inc()
+		apiserver.HepErrorCount.Inc()
 		return fmt.Errorf("sender is closed")
 	}
 	select {
 	case <-s.stopCh:
-		promstats.HepErrorCount.Inc()
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepErrorCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return fmt.Errorf("sender is stopping")
 	case s.hepQueue <- data:
-		promstats.SetQueueSize(len(s.hepQueue))
+		apiserver.SetQueueSize(len(s.hepQueue))
 		return nil
 	default:
-		promstats.HepErrorCount.Inc()
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepErrorCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return fmt.Errorf("HEP queue is full")
 	}
 }
@@ -463,7 +489,7 @@ func (s *Sender) Send(data []byte) error {
 // bufferToFile writes HEP data to disk when all servers are unavailable
 func (s *Sender) bufferToFile(data []byte) {
 	if !s.bufferEnabled {
-		promstats.HepDroppedCount.Inc()
+		apiserver.HepDroppedCount.Inc()
 		return
 	}
 
@@ -488,7 +514,7 @@ func (s *Sender) bufferToFile(data []byte) {
 				Int64("current_size", fi.Size()).
 				Int64("max_size", s.bufferMaxSize).
 				Msg("Buffer file size limit exceeded, dropping packet")
-			promstats.HepDroppedCount.Inc()
+			apiserver.HepDroppedCount.Inc()
 			return
 		}
 	}
@@ -509,7 +535,7 @@ func (s *Sender) bufferToFile(data []byte) {
 		log.Error().Str("component", "sender").Err(err).Msg("Failed to write data to buffer")
 	}
 	if fi, err := f.Stat(); err == nil {
-		promstats.SetBufferSizeBytes(fi.Size())
+		apiserver.SetBufferSizeBytes(fi.Size())
 	}
 }
 
@@ -585,7 +611,7 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 		defer s.mu.Unlock()
 		if bytesConsumed >= len(data) {
 			_ = os.Truncate(s.bufferFile, 0)
-			promstats.SetBufferSizeBytes(0)
+			apiserver.SetBufferSizeBytes(0)
 			return
 		}
 		remaining := data[bytesConsumed:]
@@ -598,7 +624,7 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to atomically replace buffer file")
 			return
 		}
-		promstats.SetBufferSizeBytes(int64(len(remaining)))
+		apiserver.SetBufferSizeBytes(int64(len(remaining)))
 	}
 }
 
@@ -621,13 +647,13 @@ func (s *Sender) Close() {
 			}
 			client.state = stateDisconnected
 			client.reconnecting = false
-			promstats.SetTransportConnected(client.addr, client.proto, false)
+			apiserver.SetTransportConnected(client.addr, client.proto, false)
 			client.mu.Unlock()
 		case kindFlight:
 			tc.flight.Close()
 		}
 	}
-	promstats.SetQueueSize(0)
+	apiserver.SetQueueSize(0)
 }
 
 // SendNoErr queues a HEP packet, discarding any error (used by sniffer).

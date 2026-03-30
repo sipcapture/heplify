@@ -36,13 +36,23 @@ type Config struct {
 		NodeName string `json:"node_name" mapstructure:"node_name"`
 		NodeID   uint32 `json:"node_id" mapstructure:"node_id"`
 		NodePW   string `json:"node_pw" mapstructure:"node_pw"`
+		UUID     string `json:"uuid" mapstructure:"uuid"`
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
 		Active bool   `json:"active" mapstructure:"active"`
 		Host   string `json:"host" mapstructure:"host"`
 		Port   int    `json:"port" mapstructure:"port"`
+		Auth   bool   `json:"auth" mapstructure:"auth"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
+
+	ApiSettings struct {
+		Active   bool   `json:"active" mapstructure:"active"`
+		Host     string `json:"host" mapstructure:"host"`
+		Port     int    `json:"port" mapstructure:"port"`
+		Username string `json:"username" mapstructure:"username"`
+		Password string `json:"password" mapstructure:"password"`
+	} `json:"api_settings" mapstructure:"api_settings"`
 
 	DebugSettings struct {
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
@@ -79,46 +89,58 @@ type Config struct {
 		MaxSizeBytes int64  `json:"max_size" mapstructure:"max_size"` // default: 100MB
 		Debug        bool   `json:"debug" mapstructure:"debug"`
 	} `json:"buffer_settings" mapstructure:"buffer_settings"`
+
+	// CollectorSettings configures the inbound HEP listener (relay / proxy mode).
+	// Other agents send HEP to this address; heplify re-forwards it via transport[].
+	CollectorSettings struct {
+		Active bool   `json:"active" mapstructure:"active"`
+		Host   string `json:"host" mapstructure:"host"`
+		Port   int    `json:"port" mapstructure:"port"`
+		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2"
+	} `json:"collector_settings" mapstructure:"collector_settings"`
 }
 
 type SocketSettings struct {
-	Name                 string   `json:"name" mapstructure:"name"`
-	Active               bool     `json:"active" mapstructure:"active"`
-	SocketType           string   `json:"socket_type" mapstructure:"socket_type"` // "pcap" or "afpacket"
-	SequentialProcessing bool     `json:"sequential_processing" mapstructure:"sequential_processing"`
-	CollectorHost        string   `json:"collector_host" mapstructure:"collector_host"`
-	CollectorPort        int      `json:"collector_port" mapstructure:"collector_port"`
-	CollectorProto       string   `json:"collector_proto" mapstructure:"collector_proto"`
-	Device               string   `json:"device" mapstructure:"device"`
-	Promisc              bool     `json:"promisc" mapstructure:"promisc"`
-	TcpReasm             bool     `json:"tcp_reasm" mapstructure:"tcp_reasm"`
-	IpFragment           bool     `json:"ipfragments" mapstructure:"ipfragments"`
-	Vlan                 bool     `json:"vlan" mapstructure:"vlan"`
-	Erspan               bool     `json:"erspan" mapstructure:"erspan"`
-	Vxlan                bool     `json:"vxlan" mapstructure:"vxlan"`
-	PcapFile             string   `json:"pcap_file" mapstructure:"pcap_file"`
-	SnapLen              int      `json:"snap_len" mapstructure:"snap_len"`
-	CaptureMode          []string `json:"capture_mode" mapstructure:"capture_mode"`
-	FanoutID             uint16   `json:"fanout_id" mapstructure:"fanout_id"`
-	FanoutWorkers        int      `json:"fanout_workers" mapstructure:"fanout_workers"` // Number of AF_PACKET workers
-	BufferSizeMB         int      `json:"buffer_size_mb" mapstructure:"buffer_size_mb"` // AF_PACKET buffer size in MB
-	LimitCPU             int      `json:"cpu_limit" mapstructure:"cpu_limit"`
-	BPFFilter            string   `json:"bpf_filter" mapstructure:"bpf_filter"` // Custom BPF filter
-	SIPReasm             bool     `json:"sip_reasm" mapstructure:"sip_reasm"`
+	Name                 string `json:"name" mapstructure:"name"`
+	Active               bool   `json:"active" mapstructure:"active"`
+	SocketType           string `json:"socket_type" mapstructure:"socket_type"` // "pcap" or "afpacket"
+	SequentialProcessing bool   `json:"sequential_processing" mapstructure:"sequential_processing"`
+	// TransportProfile lists transport names (transport[].name) this socket sends to.
+	// If empty, all active transports are used.
+	TransportProfile []string `json:"transport_profile" mapstructure:"transport_profile"`
+	Device           string   `json:"device" mapstructure:"device"`
+	Promisc          bool     `json:"promisc" mapstructure:"promisc"`
+	TcpReasm         bool     `json:"tcp_reasm" mapstructure:"tcp_reasm"`
+	IpFragment       bool     `json:"ipfragments" mapstructure:"ipfragments"`
+	Vlan             bool     `json:"vlan" mapstructure:"vlan"`
+	Erspan           bool     `json:"erspan" mapstructure:"erspan"`
+	Vxlan            bool     `json:"vxlan" mapstructure:"vxlan"`
+	PcapFile         string   `json:"pcap_file" mapstructure:"pcap_file"`
+	SnapLen          int      `json:"snap_len" mapstructure:"snap_len"`
+	CaptureMode      []string `json:"capture_mode" mapstructure:"capture_mode"`
+	FanoutID         uint16   `json:"fanout_id" mapstructure:"fanout_id"`
+	FanoutWorkers    int      `json:"fanout_workers" mapstructure:"fanout_workers"` // Number of AF_PACKET workers
+	BufferSizeMB     int      `json:"buffer_size_mb" mapstructure:"buffer_size_mb"` // AF_PACKET buffer size in MB
+	LimitCPU         int      `json:"cpu_limit" mapstructure:"cpu_limit"`
+	BPFFilter        string   `json:"bpf_filter" mapstructure:"bpf_filter"` // Custom BPF filter
+	SIPReasm         bool     `json:"sip_reasm" mapstructure:"sip_reasm"`
 }
 
 type TransportSettings struct {
-	Name       string `json:"name" mapstructure:"name"`
-	Active     bool   `json:"active" mapstructure:"active"`
-	Protocol   string `json:"protocol" mapstructure:"protocol"`
-	Host       string `json:"host" mapstructure:"host"`
-	Transport  string `json:"transport" mapstructure:"transport"`
-	Port       int    `json:"port" mapstructure:"port"`
-	Password   string `json:"password" mapstructure:"password"`
-	PayloadZip bool   `json:"payload_zip" mapstructure:"payload_zip"`
-	SkipVerify bool   `json:"skip_verify" mapstructure:"skip_verify"`
-	KeepAlive  int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
-	MaxRetries int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
+	Name   string `json:"name" mapstructure:"name"`
+	Active bool   `json:"active" mapstructure:"active"`
+	// FailoverOnly marks this transport as a backup destination.
+	// It is used only when every non-failover transport fails to send.
+	FailoverOnly bool   `json:"failover_only" mapstructure:"failover_only"`
+	Protocol     string `json:"protocol" mapstructure:"protocol"`
+	Host         string `json:"host" mapstructure:"host"`
+	Transport    string `json:"transport" mapstructure:"transport"`
+	Port         int    `json:"port" mapstructure:"port"`
+	Password     string `json:"password" mapstructure:"password"`
+	PayloadZip   bool   `json:"payload_zip" mapstructure:"payload_zip"`
+	SkipVerify   bool   `json:"skip_verify" mapstructure:"skip_verify"`
+	KeepAlive    int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
+	MaxRetries   int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
 	// Arrow Flight fields (used when transport = "grpc-flight")
 	TLSEnabled      bool   `json:"tls_enabled"       mapstructure:"tls_enabled"`
 	StreamName      string `json:"stream_name"       mapstructure:"stream_name"`
@@ -177,9 +199,17 @@ func (c *Config) Validate() error {
 			if s.SnapLen < 0 {
 				return fmt.Errorf("socket[%d] has invalid snap_len: %d", i, s.SnapLen)
 			}
-			if s.CollectorPort < 0 || s.CollectorPort > 65535 {
-				return fmt.Errorf("socket[%d] has invalid collector_port: %d", i, s.CollectorPort)
-			}
+		}
+	}
+
+	if c.CollectorSettings.Active {
+		if c.CollectorSettings.Port < 1 || c.CollectorSettings.Port > 65535 {
+			return fmt.Errorf("collector_settings.port has invalid value: %d", c.CollectorSettings.Port)
+		}
+		switch strings.ToLower(c.CollectorSettings.Proto) {
+		case "udp", "tcp", "both", "http2", "":
+		default:
+			return fmt.Errorf("collector_settings.proto has unsupported value: %s", c.CollectorSettings.Proto)
 		}
 	}
 
@@ -193,14 +223,23 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.PrometheusSettings.Active {
-		if c.PrometheusSettings.Port < 1 || c.PrometheusSettings.Port > 65535 {
-			return fmt.Errorf("prometheus_settings.port has invalid value: %d", c.PrometheusSettings.Port)
+	if c.ApiSettings.Active {
+		if c.ApiSettings.Port < 1 || c.ApiSettings.Port > 65535 {
+			return fmt.Errorf("api_settings.port has invalid value: %d", c.ApiSettings.Port)
 		}
-		if c.PrometheusSettings.Host != "" && c.PrometheusSettings.Host != "0.0.0.0" {
-			if ip := net.ParseIP(c.PrometheusSettings.Host); ip == nil && c.PrometheusSettings.Host != "localhost" {
-				return fmt.Errorf("prometheus_settings.host is not a valid host/ip: %s", c.PrometheusSettings.Host)
+		if c.ApiSettings.Host != "" && c.ApiSettings.Host != "0.0.0.0" {
+			if ip := net.ParseIP(c.ApiSettings.Host); ip == nil && c.ApiSettings.Host != "localhost" {
+				return fmt.Errorf("api_settings.host is not a valid host/ip: %s", c.ApiSettings.Host)
 			}
+		}
+	}
+
+	if c.PrometheusSettings.Active {
+		if c.PrometheusSettings.Port == 0 {
+			c.PrometheusSettings.Port = 9096
+		}
+		if c.PrometheusSettings.Host == "" {
+			c.PrometheusSettings.Host = "0.0.0.0"
 		}
 	}
 

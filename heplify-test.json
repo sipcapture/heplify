@@ -1,0 +1,128 @@
+{
+  "socket": [
+    {
+      "name": "test",
+      "active": true,
+      "socket_type": "afpacket",
+      "transport_profile": ["hepsocket"],
+      "device": "any",
+      "promisc": true,
+      "ipfragments": true,
+      "tcp_reasm": true,
+      "snap_len": 65535,
+      "capture_mode": [
+        "SIP"
+      ],
+      "fanout_workers": 0
+    }
+  ],
+  "transport": [
+    {
+      "name": "nyc01",
+      "active": true,
+      "failover_only": false,
+      "protocol": "HEPv3",
+      "host": "nyc01.sipcapture.io",
+      "transport": "udp",
+      "port": 9063,
+      "password": "",
+      "payload_zip": false,
+      "skip_verify": true,
+      "max_retries": 0,
+      "keepalive": 0
+    },
+    {
+      "name": "backup",
+      "active": true,
+      "failover_only": true,
+      "protocol": "HEPv3",
+      "host": "nyc01.sipcapture.io",
+      "transport": "tcp",
+      "port": 9062,
+      "password": "",
+      "payload_zip": false,
+      "skip_verify": true,
+      "max_retries": 0,
+      "keepalive": 0
+    }
+  ],
+  "protocol": [
+    {
+      "name": "SIP",
+      "min_port": 5060,
+      "max_port": 5090,
+      "protocol": [
+        "udp",
+        "tcp"
+      ],
+      "description": "SIP for local test"
+    }
+  ],
+  "log_settings": {
+    "active": true,
+    "level": "info",
+    "stdout": true,
+    "json": false,
+    "log_payload": true
+  },
+  "sip_settings": {
+    "discard_methods": [],
+    "discard_ips": [],
+    "discard_src_ips": [],
+    "discard_dst_ips": [],
+    "deduplicate": false
+  },
+  "hep_settings": {
+    "replace_token": false,
+    "deduplicate": false,
+    "collect_only_sip": false
+  },
+  "rtcp_settings": {
+    "active": true
+  },
+  "system_settings": {
+    "node_name": "test-node",
+    "node_id": 2002,
+    "node_pw": "",
+    "uuid": ""
+  },
+  "prometheus_settings": {
+    "active": false,
+    "host": "0.0.0.0",
+    "port": 9096,
+    "auth": false
+  },
+  "api_settings": {
+    "active": false,
+    "host": "0.0.0.0",
+    "port": 8008,
+    "username": "admin",
+    "password": "admin"
+  },
+  "debug_settings": {
+    "disable_tcp_reassembly": false,
+    "disable_ip_defrag": false
+  },
+  "pcap_settings": {
+    "write_file": "",
+    "rotate_minutes": 60,
+    "compress": false
+  },
+  "buffer_settings": {
+    "enable": false,
+    "file": "hep-buffer.dump",
+    "max_size": 104857600,
+    "debug": false
+  },
+  "script_settings": {
+    "active": false,
+    "file": "",
+    "hep_filter": ""
+  },
+  "collector_settings": {
+    "active": false,
+    "host": "0.0.0.0",
+    "port": 9060,
+    "proto": "udp"
+  }
+}

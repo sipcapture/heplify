@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"net"
@@ -13,9 +14,9 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/collector"
 	"github.com/sipcapture/heplify/src/config"
-	"github.com/sipcapture/heplify/src/promstats"
 	"github.com/sipcapture/heplify/src/script"
 	"github.com/sipcapture/heplify/src/sniffer"
 	"github.com/sipcapture/heplify/src/transport"
@@ -86,8 +87,13 @@ var (
 	bufferMaxSize string
 	bufferDebug   bool
 
-	// Prometheus
+	// Prometheus metrics server
 	prometheusAddr string
+
+	// API / Web stats server
+	apiAddr string
+	apiUser string
+	apiPass string
 
 	// TCP
 	tcpAssembly bool
@@ -170,7 +176,12 @@ func init() {
 	flag.BoolVar(&bufferDebug, "hep-buffer-debug", false, "Enable buffer debug logging")
 
 	// Prometheus flags
-	flag.StringVar(&prometheusAddr, "prometheus", ":9096", "Prometheus metrics address")
+	flag.StringVar(&prometheusAddr, "prometheus", "", "Prometheus /metrics server address, e.g. :9096 (empty = disabled)")
+
+	// API / Web stats flags
+	flag.StringVar(&apiAddr, "api", "", "Web stats API server address, e.g. :9060 (empty = disabled)")
+	flag.StringVar(&apiUser, "api-user", "", "Username for web stats Basic Auth (empty = no auth)")
+	flag.StringVar(&apiPass, "api-pass", "", "Password for web stats Basic Auth")
 
 	// TCP flags
 	flag.BoolVar(&tcpAssembly, "tcpassembly", false, "Enable TCP reassembly")
@@ -260,13 +271,8 @@ func main() {
 		log.Fatal().Err(err).Msg("Configuration validation failed")
 	}
 
-	// Start Prometheus metrics
-	if cfg.PrometheusSettings.Active {
-		promstats.StartMetrics(cfg)
-		log.Info().
-			Str("addr", fmt.Sprintf("%s:%d", cfg.PrometheusSettings.Host, cfg.PrometheusSettings.Port)).
-			Msg("Started Prometheus metrics")
-	}
+	// Start API / Prometheus metrics server
+	apiserver.StartMetrics(cfg)
 
 	// Initialize Lua scripting
 	var scriptEngine *script.Engine
@@ -284,19 +290,58 @@ func main() {
 	}
 
 	// Initialize transport (HEP sender)
-	sender := transport.New(cfg)
+	// globalSender uses all active transports; used by the collector and as fallback.
+	globalSender := transport.New(cfg)
 
-	// Start sniffer and wire sender
+	// Start sniffer and wire per-socket senders
 	sniff := sniffer.New(cfg, scriptEngine)
-	sniff.SetSender(sender)
+	// Set global fallback first (used by syslog capture and sockets with no transport_profile)
+	sniff.SetSender(globalSender)
+	for _, sock := range cfg.SocketSettings {
+		s := buildSenderForSocket(cfg, sock)
+		sniff.SetSenderForSocket(sock.Name, s)
+	}
 	if err := sniff.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start sniffer")
 	}
 	log.Info().Msg("Started packet capture")
 
+	// Register web stats getter for /api/stats endpoint
+	if cfg.ApiSettings.Active {
+		apiserver.RegisterStatsGetter(func() apiserver.WebStats {
+			snap := sniff.GetStats().Snapshot()
+			ifaces := make([]string, 0, len(cfg.SocketSettings))
+			capModes := make(map[string][]string)
+			for _, s := range cfg.SocketSettings {
+				ifaces = append(ifaces, s.Device)
+				capModes[s.Device] = s.CaptureMode
+			}
+			ws := apiserver.WebStats{
+				NodeName:      cfg.SystemSettings.NodeName,
+				NodeID:        int(cfg.SystemSettings.NodeID),
+				UUID:          cfg.SystemSettings.UUID,
+				Interfaces:    ifaces,
+				CaptureModes:  capModes,
+				UptimeSeconds: snap.UptimeSeconds,
+				Uptime:        sniffer.FormatUptime(snap.UptimeSeconds),
+			}
+			ws.Packets.Total = snap.Total
+			ws.Packets.SIP = snap.SIP
+			ws.Packets.RTCP = snap.RTCP
+			ws.Packets.RTCPFail = snap.RTCPFail
+			ws.Packets.RTP = snap.RTP
+			ws.Packets.DNS = snap.DNS
+			ws.Packets.Log = snap.Log
+			ws.Packets.HEPSent = snap.HEPSent
+			ws.Packets.Duplicates = snap.Duplicates
+			ws.Packets.Unknown = snap.Unknown
+			return ws
+		})
+	}
+
 	// Start collector if configured, wire sender
 	coll := collector.New(cfg)
-	coll.SetSender(sender)
+	coll.SetSender(globalSender)
 	if err := coll.Start(); err != nil {
 		log.Error().Err(err).Msg("Failed to start collector")
 	}
@@ -312,8 +357,8 @@ func main() {
 	if coll != nil {
 		coll.Stop()
 	}
-	if sender != nil {
-		sender.Close()
+	if globalSender != nil {
+		globalSender.Close()
 	}
 	if scriptEngine != nil {
 		scriptEngine.Close()
@@ -401,42 +446,37 @@ func buildConfigFromFlags() *config.Config {
 	}
 
 	// Parse collector address
-	collectorHost := ""
-	collectorPort := 0
-	collectorProto := ""
 	if collectorAddr != "" {
-		// Format: proto:host:port
+		// Format: proto:host:port  e.g. "udp:0.0.0.0:9060"
 		parts := strings.Split(collectorAddr, ":")
 		if len(parts) >= 3 {
-			collectorProto = parts[0]
-			collectorHost = parts[1]
+			cfg.CollectorSettings.Active = true
+			cfg.CollectorSettings.Proto = parts[0]
+			cfg.CollectorSettings.Host = parts[1]
 			if p, err := strconv.Atoi(parts[2]); err == nil {
-				collectorPort = p
+				cfg.CollectorSettings.Port = p
 			}
 		}
 	}
 
 	cfg.SocketSettings = []config.SocketSettings{
 		{
-			Name:           "capture",
-			Active:         true,
-			SocketType:     socketType,
-			Device:         device,
-			Promisc:        promisc,
-			SnapLen:        snaplen,
-			BufferSizeMB:   bufferSizeMB,
-			Vlan:           withVlan,
-			Erspan:         withErspan,
-			BPFFilter:      bpfFilter,
-			PcapFile:       readFile,
-			FanoutID:       uint16(fanoutID),
-			FanoutWorkers:  fanoutWorkers,
-			TcpReasm:       tcpAssembly,
-			SIPReasm:       sipAssembly,
-			CaptureMode:    parseCaptureMode(captureMode),
-			CollectorHost:  collectorHost,
-			CollectorPort:  collectorPort,
-			CollectorProto: collectorProto,
+			Name:          "capture",
+			Active:        true,
+			SocketType:    socketType,
+			Device:        device,
+			Promisc:       promisc,
+			SnapLen:       snaplen,
+			BufferSizeMB:  bufferSizeMB,
+			Vlan:          withVlan,
+			Erspan:        withErspan,
+			BPFFilter:     bpfFilter,
+			PcapFile:      readFile,
+			FanoutID:      uint16(fanoutID),
+			FanoutWorkers: fanoutWorkers,
+			TcpReasm:      tcpAssembly,
+			SIPReasm:      sipAssembly,
+			CaptureMode:   parseCaptureMode(captureMode),
 		},
 	}
 
@@ -466,6 +506,9 @@ func buildConfigFromFlags() *config.Config {
 		hostname, _ := os.Hostname()
 		cfg.SystemSettings.NodeName = hostname
 	}
+	if cfg.SystemSettings.UUID == "" {
+		cfg.SystemSettings.UUID = generateUUID()
+	}
 
 	// Filter settings
 	if filterInclude != "" {
@@ -488,16 +531,38 @@ func buildConfigFromFlags() *config.Config {
 	// Prometheus settings
 	cfg.PrometheusSettings.Active = prometheusAddr != ""
 	if prometheusAddr != "" {
-		parts := strings.Split(prometheusAddr, ":")
-		if len(parts) >= 2 {
-			cfg.PrometheusSettings.Host = parts[0]
-			if p, err := strconv.Atoi(parts[1]); err == nil {
+		full := prometheusAddr
+		if strings.HasPrefix(prometheusAddr, ":") {
+			full = "0.0.0.0" + prometheusAddr
+		}
+		hostPort := strings.SplitN(full, ":", 2)
+		cfg.PrometheusSettings.Host = hostPort[0]
+		if len(hostPort) == 2 {
+			if p, err := strconv.Atoi(hostPort[1]); err == nil {
 				cfg.PrometheusSettings.Port = p
 			}
 		}
-		if cfg.PrometheusSettings.Port == 0 {
-			cfg.PrometheusSettings.Port = 9096
+	}
+
+	// API / Web stats settings
+	cfg.ApiSettings.Active = apiAddr != ""
+	if apiAddr != "" {
+		full := apiAddr
+		if strings.HasPrefix(apiAddr, ":") {
+			full = "0.0.0.0" + apiAddr
 		}
+		hostPort := strings.SplitN(full, ":", 2)
+		cfg.ApiSettings.Host = hostPort[0]
+		if len(hostPort) == 2 {
+			if p, err := strconv.Atoi(hostPort[1]); err == nil {
+				cfg.ApiSettings.Port = p
+			}
+		}
+		if cfg.ApiSettings.Port == 0 {
+			cfg.ApiSettings.Port = 9060
+		}
+		cfg.ApiSettings.Username = apiUser
+		cfg.ApiSettings.Password = apiPass
 	}
 
 	// Script settings
@@ -650,4 +715,31 @@ func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.Proto
 		}
 	}
 	return ps
+}
+
+// buildSenderForSocket creates a Sender for the given socket.
+// If socket.TransportProfile is non-empty, only the named transports are used;
+// otherwise all active transports are used (backward-compatible behaviour).
+func buildSenderForSocket(cfg *config.Config, sock config.SocketSettings) *transport.Sender {
+	if len(sock.TransportProfile) == 0 {
+		return transport.New(cfg)
+	}
+	var selected []config.TransportSettings
+	for _, name := range sock.TransportProfile {
+		for _, t := range cfg.TransportSettings {
+			if t.Name == name {
+				selected = append(selected, t)
+				break
+			}
+		}
+	}
+	return transport.NewFromTransports(selected, cfg)
+}
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

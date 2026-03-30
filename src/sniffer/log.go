@@ -69,7 +69,7 @@ func (s *Sniffer) processSyslog(payload []byte, remote net.Addr) {
 	}
 
 	s.stats.Inc(StatLog)
-	s.sendHEP(pkt, 100)
+	s.sendHEP(pkt, 100, s.sender)
 }
 
 // extractSyslogCID tries to extract a SIP Call-ID from a syslog line.

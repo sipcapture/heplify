@@ -1,8 +1,6 @@
-package promstats
+package apiserver
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -104,11 +102,56 @@ func SetTransportConnected(addr, proto string, connected bool) {
 		value = 1
 	}
 	HepTransportConnected.WithLabelValues(addr, proto).Set(value)
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Connected = connected
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Connected: connected}
+	}
+	transportsMu.Unlock()
+
 	refreshConnectedTotal()
 }
 
 func IncReconnect(addr, proto string) {
 	HepReconnectCount.WithLabelValues(addr, proto).Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Reconnects++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Reconnects: 1}
+	}
+	transportsMu.Unlock()
+}
+
+func IncTransportSent(addr, proto string) {
+	HepSentCount.Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Sent++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Sent: 1}
+	}
+	transportsMu.Unlock()
+}
+
+func IncTransportError(addr, proto string) {
+	HepErrorCount.Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Errors++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Errors: 1}
+	}
+	transportsMu.Unlock()
 }
 
 func refreshConnectedTotal() {
@@ -132,41 +175,19 @@ func refreshConnectedTotal() {
 	healthMu.Unlock()
 }
 
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	healthMu.RLock()
-	payload := map[string]interface{}{
-		"status":               "ok",
-		"connected_transports": healthConnectedTotal,
-		"queue_size":           healthQueueSize,
-		"buffer_size_bytes":    healthBufferSize,
-	}
-	healthMu.RUnlock()
-
-	if healthConnectedTotal == 0 {
-		payload["status"] = "degraded"
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func StartMetrics(cfg *config.Config) {
+// registerPrometheus mounts the /metrics endpoint on mux when prometheus is active.
+func registerPrometheus(mux *http.ServeMux, cfg *config.Config, user, pass string) {
 	if !cfg.PrometheusSettings.Active {
 		return
 	}
-
-	addr := fmt.Sprintf("%s:%d", cfg.PrometheusSettings.Host, cfg.PrometheusSettings.Port)
-	if cfg.PrometheusSettings.Port == 0 {
-		addr = ":9096"
+	if cfg.PrometheusSettings.Auth && user == "" {
+		log.Warn().Msg("prometheus_settings.auth is true but api_settings.username is empty — /metrics will NOT be protected")
 	}
-
-	log.Info().Str("addr", addr).Msg("Starting Prometheus Metrics Server")
-
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/health", healthHandler)
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Error().Err(err).Msg("Failed to start Prometheus Metrics Server")
-		}
-	}()
+	handler := promhttp.Handler()
+	if cfg.PrometheusSettings.Auth {
+		mux.Handle("/metrics", basicAuth(user, pass, handler.ServeHTTP))
+	} else {
+		mux.Handle("/metrics", handler)
+	}
+	log.Info().Bool("auth", cfg.PrometheusSettings.Auth).Msg("Prometheus /metrics endpoint enabled")
 }
