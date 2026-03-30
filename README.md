@@ -5,9 +5,17 @@
 <img src="https://img.shields.io/docker/pulls/sipcapture/heplify">
 
 **heplify** is captagent's little brother, optimized for speed and simplicity. It's a single binary which you can run
-on Linux, ARM, MIPS to capture IPv4 or IPv6 packets and send them to Homer. Heplify can send
+on Linux, macOS and Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify can send
 SIP, correlated RTCP, RTCPXR, DNS and Logs into homer.
 It handles fragmented and duplicate packets out of the box.
+
+## Platform Support
+
+| OS | Architecture | Capture method |
+|---|---|---|
+| Linux | amd64, arm64 | AF_PACKET (default), libpcap |
+| macOS | arm64 (Apple Silicon) | libpcap |
+| Windows | amd64 | [Npcap](https://npcap.com/) |
 
 ## What's new in v2
 
@@ -32,6 +40,19 @@ It handles fragmented and duplicate packets out of the box.
 
 None if you use the binary from the [releases](https://github.com/sipcapture/heplify/releases).
 
+### macOS
+
+None if you use the binary from the [releases](https://github.com/sipcapture/heplify/releases).
+
+> **Note:** Live packet capture requires root or granting capture permissions:
+> ```bash
+> sudo ./heplify_darwin_arm64 -config heplify.json
+> ```
+
+### Windows
+
+Install [Npcap](https://npcap.com/#download) before running heplify (required for packet capture).
+
 ## Installation
 
 ### Linux
@@ -39,8 +60,27 @@ None if you use the binary from the [releases](https://github.com/sipcapture/hep
 Download [heplify](https://github.com/sipcapture/heplify/releases) and run:
 
 ```bash
-chmod +x heplify
-./heplify -config heplify.json
+chmod +x heplify_linux_amd64
+./heplify_linux_amd64 -config heplify.json
+```
+
+### macOS (Apple Silicon)
+
+Download [heplify](https://github.com/sipcapture/heplify/releases) and run:
+
+```bash
+chmod +x heplify_darwin_arm64
+sudo ./heplify_darwin_arm64 -config heplify.json
+```
+
+### Windows
+
+1. Install [Npcap](https://npcap.com/#download)
+2. Download `heplify_windows_amd64.exe` from [releases](https://github.com/sipcapture/heplify/releases)
+3. Run from an Administrator command prompt:
+
+```cmd
+heplify_windows_amd64.exe -config heplify.json
 ```
 
 ### Build from source
