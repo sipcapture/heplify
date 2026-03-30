@@ -49,6 +49,7 @@ type Config struct {
 		Port     int    `json:"port" mapstructure:"port"`
 		Username string `json:"username" mapstructure:"username"`
 		Password string `json:"password" mapstructure:"password"`
+		UIFile   string `json:"ui_file" mapstructure:"ui_file"`
 	} `json:"api_settings" mapstructure:"api_settings"`
 
 	DebugSettings struct {

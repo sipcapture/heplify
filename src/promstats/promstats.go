@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -242,7 +243,21 @@ func webUIHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(statsPage))
 }
 
-// basicAuth wraps h with HTTP Basic Auth when username is non-empty.
+func makeWebUIHandler(uiFile string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if uiFile != "" {
+			data, err := os.ReadFile(uiFile)
+			if err == nil {
+				_, _ = w.Write(data)
+				return
+			}
+			log.Warn().Str("ui_file", uiFile).Err(err).Msg("Failed to read ui_file, falling back to embedded stats.html")
+		}
+		_, _ = w.Write([]byte(statsPage))
+	}
+}
+
 // /health is always open. /metrics auth is controlled separately via prometheus_settings.auth.
 func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	if username == "" {
@@ -295,7 +310,7 @@ func StartMetrics(cfg *config.Config) {
 	}
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/stats", basicAuth(user, pass, apiStatsHandler))
-	mux.HandleFunc("/", basicAuth(user, pass, webUIHandler))
+	mux.HandleFunc("/", basicAuth(user, pass, makeWebUIHandler(cfg.ApiSettings.UIFile)))
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Error().Err(err).Msg("Failed to start API Server")
