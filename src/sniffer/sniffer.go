@@ -56,7 +56,8 @@ func (p *pcapWrapper) LinkType() layers.LinkType {
 type Sniffer struct {
 	cfg        *config.Config
 	lua        *script.Engine
-	sender     Sender
+	sender     Sender            // global fallback sender (used by SetSender / syslog)
+	senders    map[string]Sender // per-socket senders keyed by socket.Name
 	dedupCache *lru.Cache
 	stats      *Stats
 	debug      debugFlags
@@ -109,15 +110,31 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 	return &Sniffer{
 		cfg:        cfg,
 		lua:        lua,
+		senders:    make(map[string]Sender),
 		dedupCache: cache,
 		stats:      NewStats(),
 		debug:      dbg,
 	}
 }
 
-// SetSender wires the sender so captured packets are forwarded as HEP.
+// SetSender wires the global fallback sender — used when no per-socket sender is configured.
 func (s *Sniffer) SetSender(sender Sender) {
 	s.sender = sender
+}
+
+// SetSenderForSocket wires a dedicated sender for the socket identified by name.
+// Packets captured on that socket are forwarded only through this sender.
+// If name is not found at runtime the global fallback sender is used.
+func (s *Sniffer) SetSenderForSocket(name string, sender Sender) {
+	s.senders[name] = sender
+}
+
+// senderForSocket returns the per-socket sender if registered, otherwise the global fallback.
+func (s *Sniffer) senderForSocket(name string) Sender {
+	if snd, ok := s.senders[name]; ok {
+		return snd
+	}
+	return s.sender
 }
 
 // GetStats returns the Stats instance for external access (e.g. web stats endpoint).
@@ -180,7 +197,7 @@ func (s *Sniffer) capture(socket config.SocketSettings) {
 		dumpCh = ch
 	}
 
-	s.processPackets(source, socket, dumpCh)
+	s.processPackets(source, socket, dumpCh, s.senderForSocket(socket.Name))
 }
 
 func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
@@ -202,7 +219,7 @@ func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
 		dumpCh = ch
 	}
 
-	s.processPackets(source, socket, dumpCh)
+	s.processPackets(source, socket, dumpCh, s.senderForSocket(socket.Name))
 }
 
 func (s *Sniffer) createPcapSource(socket config.SocketSettings, snapLen int) (PacketSource, error) {
@@ -314,7 +331,7 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 	return filter
 }
 
-func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings, dumpCh chan<- dumpPacket) {
+func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings, dumpCh chan<- dumpPacket, sender Sender) {
 	dec := decoder.NewDecoder(source.LinkType())
 	packetCount := 0
 
@@ -326,7 +343,7 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 	// TCP reassembly: enabled by default, disabled via disable_tcp_reassembly.
 	if !s.cfg.DebugSettings.DisableTcpReassembly {
 		dec.TCPAssembler = decoder.NewSIPAssembler(func(pkt *decoder.Packet) {
-			s.handleSIP(pkt)
+			s.handleSIP(pkt, sender)
 		})
 		// Flush streams that have been silent for >30 s, checked every second.
 		go func() {
@@ -397,11 +414,11 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 			}
 		}
 
-		s.processPacket(data, ci, dec, socket)
+		s.processPacket(data, ci, dec, socket, sender)
 	}
 }
 
-func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decoder.Decoder, socket config.SocketSettings) {
+func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decoder.Decoder, socket config.SocketSettings, sender Sender) {
 	processedNum := atomic.AddUint64(&processedPacketsForDebug, 1)
 	pkt, err := dec.Decode(data, ci)
 	if err != nil || pkt == nil {
@@ -499,14 +516,14 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 				Msg("Packet matched configured protocol")
 		}
 
-		s.handleProtocol(pkt, protoSetting, socket)
+		s.handleProtocol(pkt, protoSetting, socket, sender)
 		return
 	}
 
 	// DNS handling (port 53, any protocol)
 	if hasCaptureMode(socket.CaptureMode, "DNS") {
 		if pkt.SrcPort == 53 || pkt.DstPort == 53 {
-			s.handleDNS(pkt)
+			s.handleDNS(pkt, sender)
 			return
 		}
 	}
@@ -529,27 +546,27 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 	}
 }
 
-func (s *Sniffer) handleProtocol(pkt *decoder.Packet, proto config.ProtocolSettings, _ config.SocketSettings) {
+func (s *Sniffer) handleProtocol(pkt *decoder.Packet, proto config.ProtocolSettings, _ config.SocketSettings, sender Sender) {
 	switch proto.Name {
 	case "SIP":
-		s.handleSIP(pkt)
+		s.handleSIP(pkt, sender)
 	case "RTCP":
-		s.handleRTCP(pkt)
+		s.handleRTCP(pkt, sender)
 	case "RTP":
-		s.handleRTP(pkt)
+		s.handleRTP(pkt, sender)
 	case "DNS":
-		s.handleDNS(pkt)
+		s.handleDNS(pkt, sender)
 	case "HEP":
 		// Incoming HEP in sniffer mode — forward as-is
-		if s.sender != nil {
-			s.sender.SendNoErr(pkt.Payload)
+		if sender != nil {
+			sender.SendNoErr(pkt.Payload)
 		}
 	default:
-		s.sendHEP(pkt, 99)
+		s.sendHEP(pkt, 99, sender)
 	}
 }
 
-func (s *Sniffer) handleSIP(pkt *decoder.Packet) {
+func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 	sipNum := atomic.AddUint64(&sipProcessingDebug, 1)
 
 	if s.debug.logPayload && len(pkt.Payload) > 0 {
@@ -612,10 +629,10 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet) {
 	pkt.ProtoType = 1
 	s.callLua(pkt)
 	s.stats.Inc(StatSIP)
-	s.sendHEP(pkt, 1)
+	s.sendHEP(pkt, 1, sender)
 }
 
-func (s *Sniffer) handleRTCP(pkt *decoder.Packet) {
+func (s *Sniffer) handleRTCP(pkt *decoder.Packet, sender Sender) {
 	if !s.cfg.RtcpSettings.Active {
 		return
 	}
@@ -636,16 +653,16 @@ func (s *Sniffer) handleRTCP(pkt *decoder.Packet) {
 	pkt.Payload = jsonData
 	pkt.CID = cid
 	s.stats.Inc(StatRTCP)
-	s.sendHEPWithMOS(pkt, 5, mos)
+	s.sendHEPWithMOS(pkt, 5, mos, sender)
 }
 
-func (s *Sniffer) handleRTP(pkt *decoder.Packet) {
+func (s *Sniffer) handleRTP(pkt *decoder.Packet, sender Sender) {
 	// RFC 5761 rtcp-mux: RTCP multiplexed on the RTP port.
 	// Detect by RTP version==2 and RTCP payload type range [200,223].
 	if len(pkt.Payload) >= 2 &&
 		(pkt.Payload[0]&0xC0)>>6 == 2 &&
 		pkt.Payload[1] >= 200 && pkt.Payload[1] <= 223 {
-		s.handleRTCP(pkt)
+		s.handleRTCP(pkt, sender)
 		return
 	}
 	if s.debug.rtp {
@@ -654,7 +671,7 @@ func (s *Sniffer) handleRTP(pkt *decoder.Packet) {
 	s.stats.Inc(StatRTP)
 }
 
-func (s *Sniffer) handleDNS(pkt *decoder.Packet) {
+func (s *Sniffer) handleDNS(pkt *decoder.Packet, sender Sender) {
 	jsonData := decoder.ParseDNS(pkt.Payload)
 	if jsonData == nil {
 		return
@@ -662,7 +679,7 @@ func (s *Sniffer) handleDNS(pkt *decoder.Packet) {
 	pkt.ProtoType = 53
 	pkt.Payload = jsonData
 	s.stats.Inc(StatDNS)
-	s.sendHEP(pkt, 53)
+	s.sendHEP(pkt, 53, sender)
 }
 
 func (s *Sniffer) callLua(pkt *decoder.Packet) {
@@ -673,12 +690,12 @@ func (s *Sniffer) callLua(pkt *decoder.Packet) {
 	s.lua.OnPacket(fmt.Sprintf("%d", pkt.ProtoType))
 }
 
-func (s *Sniffer) sendHEP(pkt *decoder.Packet, protoType byte) {
-	s.sendHEPWithMOS(pkt, protoType, 0)
+func (s *Sniffer) sendHEP(pkt *decoder.Packet, protoType byte, sender Sender) {
+	s.sendHEPWithMOS(pkt, protoType, 0, sender)
 }
 
-func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16) {
-	if s.sender == nil {
+func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16, sender Sender) {
+	if sender == nil {
 		return
 	}
 
@@ -696,9 +713,9 @@ func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16
 	}
 
 	// Arrow Flight path: send structured record, skip HEP encoding entirely.
-	if s.sender.HasFlightClients() {
+	if sender.HasFlightClients() {
 		ts := uint64(pkt.Tsec)*1_000_000 + uint64(pkt.Tmsec)
-		s.sender.SendRecord(transport.PacketRecord{
+		sender.SendRecord(transport.PacketRecord{
 			TimestampUs: ts,
 			SrcIP:       pkt.SrcIP,
 			DstIP:       pkt.DstIP,
@@ -742,7 +759,7 @@ func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16
 		log.Debug().Str("payload", string(pkt.Payload[:min(200, len(pkt.Payload))])).Msg("[payload]")
 	}
 
-	s.sender.SendNoErr(hep.Encode(msg))
+	sender.SendNoErr(hep.Encode(msg))
 	s.stats.Inc(StatHEPSent)
 }
 

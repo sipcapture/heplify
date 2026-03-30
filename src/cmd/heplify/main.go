@@ -290,11 +290,17 @@ func main() {
 	}
 
 	// Initialize transport (HEP sender)
-	sender := transport.New(cfg)
+	// globalSender uses all active transports; used by the collector and as fallback.
+	globalSender := transport.New(cfg)
 
-	// Start sniffer and wire sender
+	// Start sniffer and wire per-socket senders
 	sniff := sniffer.New(cfg, scriptEngine)
-	sniff.SetSender(sender)
+	// Set global fallback first (used by syslog capture and sockets with no transport_profile)
+	sniff.SetSender(globalSender)
+	for _, sock := range cfg.SocketSettings {
+		s := buildSenderForSocket(cfg, sock)
+		sniff.SetSenderForSocket(sock.Name, s)
+	}
 	if err := sniff.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start sniffer")
 	}
@@ -335,7 +341,7 @@ func main() {
 
 	// Start collector if configured, wire sender
 	coll := collector.New(cfg)
-	coll.SetSender(sender)
+	coll.SetSender(globalSender)
 	if err := coll.Start(); err != nil {
 		log.Error().Err(err).Msg("Failed to start collector")
 	}
@@ -351,8 +357,8 @@ func main() {
 	if coll != nil {
 		coll.Stop()
 	}
-	if sender != nil {
-		sender.Close()
+	if globalSender != nil {
+		globalSender.Close()
 	}
 	if scriptEngine != nil {
 		scriptEngine.Close()
@@ -711,7 +717,24 @@ func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.Proto
 	return ps
 }
 
-// generateUUID returns a random UUID v4 string using crypto/rand (no external deps).
+// buildSenderForSocket creates a Sender for the given socket.
+// If socket.TransportProfile is non-empty, only the named transports are used;
+// otherwise all active transports are used (backward-compatible behaviour).
+func buildSenderForSocket(cfg *config.Config, sock config.SocketSettings) *transport.Sender {
+	if len(sock.TransportProfile) == 0 {
+		return transport.New(cfg)
+	}
+	var selected []config.TransportSettings
+	for _, name := range sock.TransportProfile {
+		for _, t := range cfg.TransportSettings {
+			if t.Name == name {
+				selected = append(selected, t)
+				break
+			}
+		}
+	}
+	return transport.NewFromTransports(selected, cfg)
+}
 func generateUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)

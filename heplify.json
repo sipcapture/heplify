@@ -5,6 +5,7 @@
             "active": true,
             "socket_type": "afpacket",
             "sequential_processing": false,
+            "transport_profile": ["hepsocket"],
             "device": "any",
             "promisc": true,
             "tcp_reasm": true,

@@ -213,3 +213,38 @@ scrape_configs:
 -prometheus :9096        Prometheus /metrics server address (empty = disabled)
 -hin        ""           Inbound HEP collector address, e.g. udp:0.0.0.0:9060 (empty = disabled)
 ```
+
+---
+
+## Socket settings — `transport_profile`
+
+Each entry in `socket[]` can declare which named transports it sends captured data to:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `transport_profile` | `[]string` | `[]` | Names of `transport[].name` entries this socket uses. Empty = all active transports (backward-compatible). |
+
+### Example
+
+```json
+"socket": [
+  {
+    "name": "lan",
+    "transport_profile": ["homer-prod"],
+    ...
+  },
+  {
+    "name": "wan",
+    "transport_profile": ["homer-prod", "homer-dev"],
+    ...
+  }
+],
+"transport": [
+  { "name": "homer-prod", "active": true, "host": "10.0.0.1", "port": 9060, ... },
+  { "name": "homer-dev",  "active": true, "host": "10.0.0.2", "port": 9060, ... }
+]
+```
+
+With an empty `transport_profile` the socket uses all currently active transports — the same behaviour as before this feature was introduced.
+
+The inbound HEP collector (`collector_settings`) always uses all active transports (global sender).

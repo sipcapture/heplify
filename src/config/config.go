@@ -101,26 +101,29 @@ type Config struct {
 }
 
 type SocketSettings struct {
-	Name                 string   `json:"name" mapstructure:"name"`
-	Active               bool     `json:"active" mapstructure:"active"`
-	SocketType           string   `json:"socket_type" mapstructure:"socket_type"` // "pcap" or "afpacket"
-	SequentialProcessing bool     `json:"sequential_processing" mapstructure:"sequential_processing"`
-	Device               string   `json:"device" mapstructure:"device"`
-	Promisc              bool     `json:"promisc" mapstructure:"promisc"`
-	TcpReasm             bool     `json:"tcp_reasm" mapstructure:"tcp_reasm"`
-	IpFragment           bool     `json:"ipfragments" mapstructure:"ipfragments"`
-	Vlan                 bool     `json:"vlan" mapstructure:"vlan"`
-	Erspan               bool     `json:"erspan" mapstructure:"erspan"`
-	Vxlan                bool     `json:"vxlan" mapstructure:"vxlan"`
-	PcapFile             string   `json:"pcap_file" mapstructure:"pcap_file"`
-	SnapLen              int      `json:"snap_len" mapstructure:"snap_len"`
-	CaptureMode          []string `json:"capture_mode" mapstructure:"capture_mode"`
-	FanoutID             uint16   `json:"fanout_id" mapstructure:"fanout_id"`
-	FanoutWorkers        int      `json:"fanout_workers" mapstructure:"fanout_workers"` // Number of AF_PACKET workers
-	BufferSizeMB         int      `json:"buffer_size_mb" mapstructure:"buffer_size_mb"` // AF_PACKET buffer size in MB
-	LimitCPU             int      `json:"cpu_limit" mapstructure:"cpu_limit"`
-	BPFFilter            string   `json:"bpf_filter" mapstructure:"bpf_filter"` // Custom BPF filter
-	SIPReasm             bool     `json:"sip_reasm" mapstructure:"sip_reasm"`
+	Name                 string `json:"name" mapstructure:"name"`
+	Active               bool   `json:"active" mapstructure:"active"`
+	SocketType           string `json:"socket_type" mapstructure:"socket_type"` // "pcap" or "afpacket"
+	SequentialProcessing bool   `json:"sequential_processing" mapstructure:"sequential_processing"`
+	// TransportProfile lists transport names (transport[].name) this socket sends to.
+	// If empty, all active transports are used.
+	TransportProfile []string `json:"transport_profile" mapstructure:"transport_profile"`
+	Device           string   `json:"device" mapstructure:"device"`
+	Promisc          bool     `json:"promisc" mapstructure:"promisc"`
+	TcpReasm         bool     `json:"tcp_reasm" mapstructure:"tcp_reasm"`
+	IpFragment       bool     `json:"ipfragments" mapstructure:"ipfragments"`
+	Vlan             bool     `json:"vlan" mapstructure:"vlan"`
+	Erspan           bool     `json:"erspan" mapstructure:"erspan"`
+	Vxlan            bool     `json:"vxlan" mapstructure:"vxlan"`
+	PcapFile         string   `json:"pcap_file" mapstructure:"pcap_file"`
+	SnapLen          int      `json:"snap_len" mapstructure:"snap_len"`
+	CaptureMode      []string `json:"capture_mode" mapstructure:"capture_mode"`
+	FanoutID         uint16   `json:"fanout_id" mapstructure:"fanout_id"`
+	FanoutWorkers    int      `json:"fanout_workers" mapstructure:"fanout_workers"` // Number of AF_PACKET workers
+	BufferSizeMB     int      `json:"buffer_size_mb" mapstructure:"buffer_size_mb"` // AF_PACKET buffer size in MB
+	LimitCPU         int      `json:"cpu_limit" mapstructure:"cpu_limit"`
+	BPFFilter        string   `json:"bpf_filter" mapstructure:"bpf_filter"` // Custom BPF filter
+	SIPReasm         bool     `json:"sip_reasm" mapstructure:"sip_reasm"`
 }
 
 type TransportSettings struct {

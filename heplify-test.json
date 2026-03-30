@@ -4,6 +4,7 @@
       "name": "test",
       "active": true,
       "socket_type": "afpacket",
+      "transport_profile": ["hepsocket"],
       "device": "any",
       "promisc": true,
       "ipfragments": true,

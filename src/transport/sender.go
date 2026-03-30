@@ -80,8 +80,15 @@ type Sender struct {
 	reconnectWG     sync.WaitGroup
 }
 
-// New creates a new Sender with connections to all active transports
+// New creates a new Sender with connections to all active transports in cfg.
 func New(cfg *config.Config) *Sender {
+	return NewFromTransports(cfg.TransportSettings, cfg)
+}
+
+// NewFromTransports creates a Sender using only the provided transport list.
+// Buffer and queue settings are taken from cfg. Transports that are not Active
+// in the provided list are skipped.
+func NewFromTransports(transports []config.TransportSettings, cfg *config.Config) *Sender {
 	bufferFile := cfg.BufferSettings.File
 	if bufferFile == "" {
 		bufferFile = "hep-buffer.dump"
@@ -103,8 +110,7 @@ func New(cfg *config.Config) *Sender {
 		stopCh:        make(chan struct{}),
 	}
 
-	// Initialize clients for all active transports
-	for _, t := range cfg.TransportSettings {
+	for _, t := range transports {
 		if !t.Active {
 			continue
 		}
