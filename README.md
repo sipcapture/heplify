@@ -6,7 +6,7 @@
 
 **heplify** is captagent's little brother, optimized for speed and simplicity. It's a single binary which you can run
 on Linux, macOS and Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify can send
-SIP, correlated RTCP, RTCPXR, DNS and Logs into homer.
+SIP, correlated RTCP, DNS and Logs into homer.
 It handles fragmented and duplicate packets out of the box.
 
 ## Platform Support
