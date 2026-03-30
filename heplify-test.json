@@ -90,7 +90,7 @@
     "auth": false
   },
   "api_settings": {
-    "active": true,
+    "active": false,
     "host": "0.0.0.0",
     "port": 8008,
     "username": "admin",
