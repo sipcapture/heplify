@@ -30,8 +30,8 @@ RUN apt-get update -qq && \
 
 COPY --from=builder /build/heplify /usr/local/bin/heplify
 
-COPY heplify.json  /etc/heplify/heplify.json
-COPY example.lua   /etc/heplify/example.lua
+COPY examples/heplify.json  /etc/heplify/heplify.json
+COPY examples/example.lua   /etc/heplify/example.lua
 
 ENV HEPLIFY_CONFIG=/etc/heplify/heplify.json
 
