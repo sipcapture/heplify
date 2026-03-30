@@ -3,14 +3,6 @@
 heplify includes a built-in HTTP server that serves a real-time statistics dashboard.  
 The UI auto-refreshes every 3 seconds and requires no external dependencies.
 
-## Screenshots
-
-### Light mode
-![heplify Web Stats — Light mode](assets/webui-light.png)
-
-### Dark mode
-![heplify Web Stats — Dark mode](assets/webui-dark.png)
-
 ## Enabling the UI
 
 Add `api_settings` to your `heplify.json`:
