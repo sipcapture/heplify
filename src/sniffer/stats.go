@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	StatTotal = iota
-	StatSIP
+	StatSIP = iota
 	StatRTCP
 	StatRTCPFail
 	StatRTP
@@ -23,6 +22,7 @@ const (
 )
 
 // StatsSnapshot holds a point-in-time read of all cumulative counters.
+// Total = SIP + RTCP + RTCPFail + RTP + DNS + Log + Duplicates + Unknown.
 type StatsSnapshot struct {
 	UptimeSeconds int64
 	Total         int64
@@ -57,19 +57,29 @@ func (s *Stats) Inc(idx int) {
 }
 
 // Snapshot returns cumulative counters since start without resetting them.
+// Total is the sum of all protocol counters — unknown packets are included via StatUnknown.
 func (s *Stats) Snapshot() StatsSnapshot {
+	sip := s.totals[StatSIP].Load()
+	rtcp := s.totals[StatRTCP].Load()
+	rtcpFail := s.totals[StatRTCPFail].Load()
+	rtp := s.totals[StatRTP].Load()
+	dns := s.totals[StatDNS].Load()
+	logPkts := s.totals[StatLog].Load()
+	hepSent := s.totals[StatHEPSent].Load()
+	dups := s.totals[StatDuplicates].Load()
+	unknown := s.totals[StatUnknown].Load()
 	return StatsSnapshot{
 		UptimeSeconds: int64(time.Since(s.startTime).Seconds()),
-		Total:         s.totals[StatTotal].Load(),
-		SIP:           s.totals[StatSIP].Load(),
-		RTCP:          s.totals[StatRTCP].Load(),
-		RTCPFail:      s.totals[StatRTCPFail].Load(),
-		RTP:           s.totals[StatRTP].Load(),
-		DNS:           s.totals[StatDNS].Load(),
-		Log:           s.totals[StatLog].Load(),
-		HEPSent:       s.totals[StatHEPSent].Load(),
-		Duplicates:    s.totals[StatDuplicates].Load(),
-		Unknown:       s.totals[StatUnknown].Load(),
+		Total:         sip + rtcp + rtcpFail + rtp + dns + logPkts + dups + unknown,
+		SIP:           sip,
+		RTCP:          rtcp,
+		RTCPFail:      rtcpFail,
+		RTP:           rtp,
+		DNS:           dns,
+		Log:           logPkts,
+		HEPSent:       hepSent,
+		Duplicates:    dups,
+		Unknown:       unknown,
 	}
 }
 
@@ -93,7 +103,6 @@ func (s *Stats) RunLogger() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		total := s.counters[StatTotal].Swap(0)
 		sip := s.counters[StatSIP].Swap(0)
 		rtcp := s.counters[StatRTCP].Swap(0)
 		rtcpFail := s.counters[StatRTCPFail].Swap(0)
@@ -103,6 +112,7 @@ func (s *Stats) RunLogger() {
 		hepSent := s.counters[StatHEPSent].Swap(0)
 		dups := s.counters[StatDuplicates].Swap(0)
 		unknown := s.counters[StatUnknown].Swap(0)
+		total := sip + rtcp + rtcpFail + rtp + dns + logPkts + dups + unknown
 
 		log.Info().
 			Int64("total", total).

@@ -397,7 +397,6 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 			}
 		}
 
-		s.stats.Inc(StatTotal)
 		s.processPacket(data, ci, dec, socket)
 	}
 }
@@ -406,6 +405,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 	processedNum := atomic.AddUint64(&processedPacketsForDebug, 1)
 	pkt, err := dec.Decode(data, ci)
 	if err != nil || pkt == nil {
+		s.stats.Inc(StatUnknown)
 		return
 	}
 
@@ -432,6 +432,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 	}
 
 	if len(pkt.Payload) == 0 {
+		s.stats.Inc(StatUnknown)
 		return
 	}
 
@@ -510,24 +511,21 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 		}
 	}
 
-	// If debug is enabled and a non-matching UDP/TCP packet was processed,
-	// emit a short trace to make it obvious why SIP wasn't handled.
-	if pkt.Protocol == 0x11 || pkt.Protocol == 0x06 {
-		s.stats.Inc(StatUnknown)
-		unmatchedNum := atomic.AddUint64(&unmatchedForDebug, 1)
-		if unmatchedNum <= 5 || unmatchedNum%100 == 0 {
-			log.Debug().
-				Uint64("num", unmatchedNum).
-				Str("source", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).
-				Str("destination", fmt.Sprintf("%s:%d", pkt.DstIP, pkt.DstPort)).
-				Uint16("src_port", pkt.SrcPort).
-				Uint16("dst_port", pkt.DstPort).
-				Uint8("proto", pkt.Protocol).
-				Str("reason", "no configured protocol/port match").
-				Int("payload", len(pkt.Payload)).
-				Str("payload_hex", formatPayloadHex(pkt.Payload)).
-				Msg("Packet ignored by protocol filter")
-		}
+	// Packet decoded and non-empty but matched no configured protocol — count as unknown.
+	s.stats.Inc(StatUnknown)
+	unmatchedNum := atomic.AddUint64(&unmatchedForDebug, 1)
+	if unmatchedNum <= 5 || unmatchedNum%100 == 0 {
+		log.Debug().
+			Uint64("num", unmatchedNum).
+			Str("source", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).
+			Str("destination", fmt.Sprintf("%s:%d", pkt.DstIP, pkt.DstPort)).
+			Uint16("src_port", pkt.SrcPort).
+			Uint16("dst_port", pkt.DstPort).
+			Uint8("proto", pkt.Protocol).
+			Str("reason", "no configured protocol/port match").
+			Int("payload", len(pkt.Payload)).
+			Str("payload_hex", formatPayloadHex(pkt.Payload)).
+			Msg("Packet ignored by protocol filter")
 	}
 }
 
