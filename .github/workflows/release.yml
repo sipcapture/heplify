@@ -34,9 +34,6 @@ jobs:
           - goarch: arm64
             goos: linux
             runner: ubuntu-24.04-arm
-          - goarch: amd64
-            goos: darwin
-            runner: macos-latest
           - goarch: arm64
             goos: darwin
             runner: macos-latest
