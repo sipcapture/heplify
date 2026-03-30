@@ -66,12 +66,58 @@ var (
 	)
 )
 
+// TransportInfo holds live status of a single HEP transport connection.
+type TransportInfo struct {
+	Addr       string `json:"addr"`
+	Proto      string `json:"proto"`
+	Connected  bool   `json:"connected"`
+	Reconnects int64  `json:"reconnects"`
+}
+
+// WebStats is the payload returned by GET /api/stats.
+type WebStats struct {
+	NodeName     string              `json:"node_name"`
+	NodeID       int                 `json:"node_id"`
+	Interfaces   []string            `json:"interfaces"`
+	CaptureModes map[string][]string `json:"capture_modes"`
+	UptimeSeconds int64              `json:"uptime_seconds"`
+	Uptime       string              `json:"uptime"`
+	Packets      struct {
+		Total      int64 `json:"total"`
+		SIP        int64 `json:"sip"`
+		RTCP       int64 `json:"rtcp"`
+		RTCPFail   int64 `json:"rtcp_fail"`
+		RTP        int64 `json:"rtp"`
+		DNS        int64 `json:"dns"`
+		Log        int64 `json:"log"`
+		HEPSent    int64 `json:"hep_sent"`
+		Duplicates int64 `json:"duplicates"`
+		Unknown    int64 `json:"unknown"`
+	} `json:"packets"`
+	Transport []TransportInfo `json:"transport"`
+}
+
 var (
 	healthMu             sync.RWMutex
 	healthQueueSize      int
 	healthConnectedTotal int
 	healthBufferSize     int64
+
+	// transportsMu guards the transports map used for /api/stats.
+	transportsMu sync.RWMutex
+	transports   = map[string]*TransportInfo{}
+
+	statsGetterMu sync.RWMutex
+	statsGetter   func() WebStats
 )
+
+// RegisterStatsGetter registers a callback that provides live WebStats.
+// It is called on every /api/stats request.
+func RegisterStatsGetter(fn func() WebStats) {
+	statsGetterMu.Lock()
+	statsGetter = fn
+	statsGetterMu.Unlock()
+}
 
 func init() {
 	prometheus.MustRegister(PacketCount)
@@ -104,11 +150,30 @@ func SetTransportConnected(addr, proto string, connected bool) {
 		value = 1
 	}
 	HepTransportConnected.WithLabelValues(addr, proto).Set(value)
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Connected = connected
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Connected: connected}
+	}
+	transportsMu.Unlock()
+
 	refreshConnectedTotal()
 }
 
 func IncReconnect(addr, proto string) {
 	HepReconnectCount.WithLabelValues(addr, proto).Inc()
+
+	key := proto + "://" + addr
+	transportsMu.Lock()
+	if t, ok := transports[key]; ok {
+		t.Reconnects++
+	} else {
+		transports[key] = &TransportInfo{Addr: addr, Proto: proto, Reconnects: 1}
+	}
+	transportsMu.Unlock()
 }
 
 func refreshConnectedTotal() {
@@ -149,6 +214,34 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+func apiStatsHandler(w http.ResponseWriter, _ *http.Request) {
+	statsGetterMu.RLock()
+	fn := statsGetter
+	statsGetterMu.RUnlock()
+
+	var ws WebStats
+	if fn != nil {
+		ws = fn()
+	}
+
+	// Merge live transport info from the registry.
+	transportsMu.RLock()
+	ws.Transport = make([]TransportInfo, 0, len(transports))
+	for _, t := range transports {
+		ws.Transport = append(ws.Transport, *t)
+	}
+	transportsMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	_ = json.NewEncoder(w).Encode(ws)
+}
+
+func webUIHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(statsPage))
+}
+
 func StartMetrics(cfg *config.Config) {
 	if !cfg.PrometheusSettings.Active {
 		return
@@ -159,11 +252,13 @@ func StartMetrics(cfg *config.Config) {
 		addr = ":9096"
 	}
 
-	log.Info().Str("addr", addr).Msg("Starting Prometheus Metrics Server")
+	log.Info().Str("addr", addr).Msg("Starting Prometheus / Web Stats Server")
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/api/stats", apiStatsHandler)
+	mux.HandleFunc("/", webUIHandler)
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Error().Err(err).Msg("Failed to start Prometheus Metrics Server")

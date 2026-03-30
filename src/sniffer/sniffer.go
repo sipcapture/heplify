@@ -120,6 +120,11 @@ func (s *Sniffer) SetSender(sender Sender) {
 	s.sender = sender
 }
 
+// GetStats returns the Stats instance for external access (e.g. web stats endpoint).
+func (s *Sniffer) GetStats() *Stats {
+	return s.stats
+}
+
 // Start begins packet capture for all active socket settings.
 func (s *Sniffer) Start() error {
 	for _, socket := range s.cfg.SocketSettings {

@@ -294,6 +294,38 @@ func main() {
 	}
 	log.Info().Msg("Started packet capture")
 
+	// Register web stats getter for /api/stats endpoint
+	if cfg.PrometheusSettings.Active {
+		promstats.RegisterStatsGetter(func() promstats.WebStats {
+			snap := sniff.GetStats().Snapshot()
+			ifaces := make([]string, 0, len(cfg.SocketSettings))
+			capModes := make(map[string][]string)
+			for _, s := range cfg.SocketSettings {
+				ifaces = append(ifaces, s.Device)
+				capModes[s.Device] = s.CaptureMode
+			}
+			ws := promstats.WebStats{
+				NodeName:      cfg.SystemSettings.NodeName,
+				NodeID:        int(cfg.SystemSettings.NodeID),
+				Interfaces:    ifaces,
+				CaptureModes:  capModes,
+				UptimeSeconds: snap.UptimeSeconds,
+				Uptime:        sniffer.FormatUptime(snap.UptimeSeconds),
+			}
+			ws.Packets.Total = snap.Total
+			ws.Packets.SIP = snap.SIP
+			ws.Packets.RTCP = snap.RTCP
+			ws.Packets.RTCPFail = snap.RTCPFail
+			ws.Packets.RTP = snap.RTP
+			ws.Packets.DNS = snap.DNS
+			ws.Packets.Log = snap.Log
+			ws.Packets.HEPSent = snap.HEPSent
+			ws.Packets.Duplicates = snap.Duplicates
+			ws.Packets.Unknown = snap.Unknown
+			return ws
+		})
+	}
+
 	// Start collector if configured, wire sender
 	coll := collector.New(cfg)
 	coll.SetSender(sender)

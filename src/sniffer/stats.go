@@ -1,6 +1,7 @@
 package sniffer
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -21,22 +22,72 @@ const (
 	statCount
 )
 
-// Stats holds per-minute packet counters.
+// StatsSnapshot holds a point-in-time read of all cumulative counters.
+type StatsSnapshot struct {
+	UptimeSeconds int64
+	Total         int64
+	SIP           int64
+	RTCP          int64
+	RTCPFail      int64
+	RTP           int64
+	DNS           int64
+	Log           int64
+	HEPSent       int64
+	Duplicates    int64
+	Unknown       int64
+}
+
+// Stats holds per-minute packet counters (reset each minute) and
+// cumulative totals (never reset) for the web stats endpoint.
 type Stats struct {
-	counters [statCount]atomic.Int64
+	counters  [statCount]atomic.Int64
+	totals    [statCount]atomic.Int64
+	startTime time.Time
 }
 
 func NewStats() *Stats {
-	return &Stats{}
+	return &Stats{startTime: time.Now()}
 }
 
 func (s *Stats) Inc(idx int) {
 	if idx >= 0 && idx < statCount {
 		s.counters[idx].Add(1)
+		s.totals[idx].Add(1)
 	}
 }
 
-// RunLogger logs stats every minute and resets counters.
+// Snapshot returns cumulative counters since start without resetting them.
+func (s *Stats) Snapshot() StatsSnapshot {
+	return StatsSnapshot{
+		UptimeSeconds: int64(time.Since(s.startTime).Seconds()),
+		Total:         s.totals[StatTotal].Load(),
+		SIP:           s.totals[StatSIP].Load(),
+		RTCP:          s.totals[StatRTCP].Load(),
+		RTCPFail:      s.totals[StatRTCPFail].Load(),
+		RTP:           s.totals[StatRTP].Load(),
+		DNS:           s.totals[StatDNS].Load(),
+		Log:           s.totals[StatLog].Load(),
+		HEPSent:       s.totals[StatHEPSent].Load(),
+		Duplicates:    s.totals[StatDuplicates].Load(),
+		Unknown:       s.totals[StatUnknown].Load(),
+	}
+}
+
+// FormatUptime formats seconds into a human-readable string like "2h 5m 30s".
+func FormatUptime(secs int64) string {
+	h := secs / 3600
+	m := (secs % 3600) / 60
+	s := secs % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
+// RunLogger logs per-minute delta stats and resets the per-minute counters.
 func (s *Stats) RunLogger() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
