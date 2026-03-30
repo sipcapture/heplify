@@ -139,13 +139,6 @@
         "force_aleg_id": false,
         "dialog_timeout": 0
     },
-    "interception_settings": {
-        "active": false,
-        "interval": "10s",
-        "stats_interval": "10m",
-        "worker_count": 6,
-        "max_interceptions": 30
-    },
     "hep_settings": {
         "hepv2_active": true,
         "hepv3_active": true,
@@ -174,7 +167,6 @@
             "rtcp_packet_queue_size": 10000,
             "disconnect_queue_size": 10000,
             "sip_process_queue_size": 10000,
-            "interception_queue_size": 10000,
             "hep_queue_size": 10000,
             "publish_packet_queue_size": 10000,
             "ip_defragmenter": 5000,
@@ -195,7 +187,6 @@
         "disable_sip_stats": false,
         "disable_publish": false,
         "disable_disconnect": false,
-        "disable_interception": false,
         "disable_tcp_reassembly": false,
         "disable_ip_defrag": false
     },

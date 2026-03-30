@@ -44,14 +44,6 @@ type Config struct {
 		DialogTimeout int  `json:"dialog_timeout" mapstructure:"dialog_timeout"`
 	} `json:"sip_settings" mapstructure:"sip_settings"`
 
-	InterceptionSettings struct {
-		Active           bool   `json:"active" mapstructure:"active"`
-		Interval         string `json:"interval" mapstructure:"interval"`
-		StatsInterval    string `json:"stats_interval" mapstructure:"stats_interval"`
-		WorkerCount      int    `json:"worker_count" mapstructure:"worker_count"`
-		MaxInterceptions int    `json:"max_interceptions" mapstructure:"max_interceptions"`
-	} `json:"interception_settings" mapstructure:"interception_settings"`
-
 	HepSettings struct {
 		HepV2Active  bool `json:"hepv2_active" mapstructure:"hepv2_active"`
 		HepV3Active  bool `json:"hepv3_active" mapstructure:"hepv3_active"`
@@ -87,7 +79,6 @@ type Config struct {
 			RTCPPacketQueueSize    int `json:"rtcp_packet_queue_size" mapstructure:"rtcp_packet_queue_size"`
 			DisconnectQueueSize    int `json:"disconnect_queue_size" mapstructure:"disconnect_queue_size"`
 			SIPProcessQueueSize    int `json:"sip_process_queue_size" mapstructure:"sip_process_queue_size"`
-			InterceptionQueueSize  int `json:"interception_queue_size" mapstructure:"interception_queue_size"`
 			HEPQueueSize           int `json:"hep_queue_size" mapstructure:"hep_queue_size"`
 			PublishPacketQueueSize int `json:"publish_packet_queue_size" mapstructure:"publish_packet_queue_size"`
 			IPDefragmenter         int `json:"ip_defragmenter" mapstructure:"ip_defragmenter"`
@@ -111,7 +102,6 @@ type Config struct {
 		DisableSipStats      bool `json:"disable_sip_stats" mapstructure:"disable_sip_stats"`
 		DisablePublish       bool `json:"disable_publish" mapstructure:"disable_publish"`
 		DisableDisconnect    bool `json:"disable_disconnect" mapstructure:"disable_disconnect"`
-		DisableInterception  bool `json:"disable_interception" mapstructure:"disable_interception"`
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
 		DisableIPDefrag      bool `json:"disable_ip_defrag" mapstructure:"disable_ip_defrag"`
 	} `json:"debug_settings" mapstructure:"debug_settings"`
