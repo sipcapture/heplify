@@ -43,6 +43,7 @@ type Config struct {
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {
+		Active   bool   `json:"active" mapstructure:"active"`
 		Host     string `json:"host" mapstructure:"host"`
 		Port     int    `json:"port" mapstructure:"port"`
 		Username string `json:"username" mapstructure:"username"`
@@ -198,7 +199,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.PrometheusSettings.Active {
+	if c.ApiSettings.Active {
 		if c.ApiSettings.Port < 1 || c.ApiSettings.Port > 65535 {
 			return fmt.Errorf("api_settings.port has invalid value: %d", c.ApiSettings.Port)
 		}

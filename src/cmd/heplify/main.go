@@ -264,12 +264,12 @@ func main() {
 		log.Fatal().Err(err).Msg("Configuration validation failed")
 	}
 
-	// Start Prometheus metrics
-	if cfg.PrometheusSettings.Active {
+	// Start API / Prometheus metrics server
+	if cfg.ApiSettings.Active {
 		promstats.StartMetrics(cfg)
 		log.Info().
 			Str("addr", fmt.Sprintf("%s:%d", cfg.ApiSettings.Host, cfg.ApiSettings.Port)).
-			Msg("Started Prometheus metrics")
+			Msg("Started API server")
 	}
 
 	// Initialize Lua scripting
@@ -523,6 +523,7 @@ func buildConfigFromFlags() *config.Config {
 
 	// Prometheus / API settings
 	cfg.PrometheusSettings.Active = prometheusAddr != ""
+	cfg.ApiSettings.Active = prometheusAddr != ""
 	if prometheusAddr != "" {
 		parts := strings.Split(prometheusAddr, ":")
 		if len(parts) >= 2 {

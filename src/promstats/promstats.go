@@ -263,7 +263,7 @@ func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 }
 
 func StartMetrics(cfg *config.Config) {
-	if !cfg.PrometheusSettings.Active {
+	if !cfg.ApiSettings.Active {
 		return
 	}
 
@@ -272,7 +272,7 @@ func StartMetrics(cfg *config.Config) {
 		addr = ":9096"
 	}
 
-	log.Info().Str("addr", addr).Msg("Starting Prometheus / Web Stats Server")
+	log.Info().Str("addr", addr).Msg("Starting API / Web Stats Server")
 
 	user := cfg.ApiSettings.Username
 	pass := cfg.ApiSettings.Password
@@ -281,13 +281,16 @@ func StartMetrics(cfg *config.Config) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	if cfg.PrometheusSettings.Active {
+		mux.Handle("/metrics", promhttp.Handler())
+		log.Info().Str("addr", addr).Msg("Prometheus /metrics endpoint enabled")
+	}
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/stats", basicAuth(user, pass, apiStatsHandler))
 	mux.HandleFunc("/", basicAuth(user, pass, webUIHandler))
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Error().Err(err).Msg("Failed to start Prometheus Metrics Server")
+			log.Error().Err(err).Msg("Failed to start API Server")
 		}
 	}()
 }
