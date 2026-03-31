@@ -194,7 +194,7 @@ func init() {
 	flag.StringVar(&prometheusAddr, "prometheus", "", "Prometheus /metrics server address, e.g. :9096 (empty = disabled)")
 
 	// API / Web stats flags
-	flag.StringVar(&apiAddr, "api", "", "Web stats API server address, e.g. :9060 (empty = disabled)")
+	flag.StringVar(&apiAddr, "api", "", "API stats server address, e.g. :9060 (empty = disabled)")
 	flag.StringVar(&apiUser, "api-user", "", "Username for web stats Basic Auth (empty = no auth)")
 	flag.StringVar(&apiPass, "api-pass", "", "Password for web stats Basic Auth")
 

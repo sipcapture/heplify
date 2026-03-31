@@ -210,7 +210,7 @@ scrape_configs:
 ## CLI flags
 
 ```
--api        :9060        Web stats API server address (empty = disabled)
+-api        :9060        API stats server address (empty = disabled)
 -api-user   ""           HTTP Basic Auth username for the API server
 -api-pass   ""           HTTP Basic Auth password for the API server
 -prometheus :9096        Prometheus /metrics server address (empty = disabled)
