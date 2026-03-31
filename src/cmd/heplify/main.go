@@ -243,7 +243,7 @@ func init() {
 		fmt.Fprintf(os.Stderr, "  %s -i eth0 -hs 192.168.1.1:9060 -nt tls -skipverify\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -i eth0 -hs \"192.168.1.1:9060,192.168.2.2:9060\"\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -rf capture.pcap -hs 192.168.1.1:9060\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s -config /etc/heplify/config.json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -config /etc/heplify/heplify.json\n", os.Args[0])
 	}
 }
 
