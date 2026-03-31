@@ -228,9 +228,9 @@ func init() {
 	flag.BoolVar(&disableTcpReasm, "disable-tcp-reasm", false, "Disable TCP reassembly processing")
 
 	// API TLS flags
-	flag.BoolVar(&apiTLS, "api-tls", false, "Enable HTTPS for web stats API (requires -api-cert and -api-key)")
-	flag.StringVar(&apiCertFile, "api-cert", "", "TLS certificate file for web stats API")
-	flag.StringVar(&apiKeyFile, "api-key", "", "TLS key file for web stats API")
+	flag.BoolVar(&apiTLS, "api-tls", false, "Enable HTTPS for API (requires -api-cert and -api-key)")
+	flag.StringVar(&apiCertFile, "api-cert", "", "TLS certificate file for API")
+	flag.StringVar(&apiKeyFile, "api-key", "", "TLS key file for API")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "heplify v%s (built %s, commit %s)\n\n", Version, BuildDate, GitCommit)
