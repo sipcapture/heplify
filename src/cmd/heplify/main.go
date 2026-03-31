@@ -336,6 +336,12 @@ func main() {
 	// Set global fallback first (used by syslog capture and sockets with no transport_profile)
 	sniff.SetSender(globalSender)
 	for _, sock := range cfg.SocketSettings {
+		// Skip per-socket sender when the profile is empty or covers all active transports —
+		// in both cases the socket reuses globalSender via the fallback set above,
+		// avoiding a duplicate connection to the same HEP server.
+		if len(sock.TransportProfile) == 0 || coversAllActiveTransports(sock.TransportProfile, cfg.TransportSettings) {
+			continue
+		}
 		s := buildSenderForSocket(cfg, sock)
 		sniff.SetSenderForSocket(sock.Name, s)
 	}
@@ -782,6 +788,24 @@ func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.Proto
 		}
 	}
 	return ps
+}
+
+// coversAllActiveTransports returns true when every active transport in the config
+// is listed in profile — meaning the socket's profile is equivalent to "all transports"
+// and the socket can share globalSender instead of opening a duplicate connection.
+func coversAllActiveTransports(profile []string, transports []config.TransportSettings) bool {
+	profileSet := make(map[string]struct{}, len(profile))
+	for _, p := range profile {
+		profileSet[p] = struct{}{}
+	}
+	for _, t := range transports {
+		if t.Active {
+			if _, ok := profileSet[t.Name]; !ok {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // buildSenderForSocket creates a Sender for the given socket.
