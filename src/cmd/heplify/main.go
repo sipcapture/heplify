@@ -117,8 +117,8 @@ var (
 	logPayload bool
 
 	// Debug settings
-	disableDefrag      bool
-	disableTcpReasm    bool
+	disableDefrag   bool
+	disableTcpReasm bool
 
 	// API TLS
 	apiTLS      bool
