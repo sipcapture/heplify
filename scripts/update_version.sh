@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# update_version.sh — update src/cmd/heplify/version.go with the given version.
+# update_version.sh — update Version in src/cmd/heplify/version.go.
 #
 # Usage:
 #   ./scripts/update_version.sh [VERSION]
@@ -33,15 +33,6 @@ VERSION="${VERSION#v}"
 
 echo "Updating ${VERSION_FILE} → v${VERSION}"
 
-cat > "${VERSION_FILE}" <<EOF
-package main
-
-// Version is the application version. Updated by the release build process via scripts/update_version.sh.
-// Overridden at build time with -X main.Version=<ver> ldflags by GoReleaser and Makefile.
-var Version = "${VERSION}"
-
-// BuildDate is the UTC build timestamp. Set via -X main.BuildDate=<date> ldflags at build time.
-var BuildDate = "unknown"
-EOF
+sed -i "s/var Version = \".*\"/var Version = \"${VERSION}\"/" "${VERSION_FILE}"
 
 echo "Done."

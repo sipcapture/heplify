@@ -21,6 +21,7 @@ All sections are optional — omitted fields fall back to their defaults.
 - [pcap\_settings](#pcap_settings)
 - [buffer\_settings](#buffer_settings)
 - [script\_settings](#script_settings)
+- [collector\_settings](#collector_settings)
 
 ---
 
@@ -50,9 +51,8 @@ Array of capture interfaces. At least one active entry is required for packet sn
 | `buffer_size_mb` | int | `0` | AF_PACKET ring buffer size in MB. `0` = OS default |
 | `cpu_limit` | int | `0` | Max CPU cores to use. `0` = no limit |
 | `pcap_file` | string | `""` | Read from a pcap file instead of a live interface |
-| `collector_host` | string | `"0.0.0.0"` | Listen address for HEP Collector mode |
-| `collector_port` | int | `9060` | Listen port for HEP Collector mode |
-| `collector_proto` | string | `"udp"` | Protocol for HEP Collector mode: `udp` or `tcp` |
+
+> **Note:** To receive incoming HEP from other agents (collector/proxy mode), use the top-level [`collector_settings`](#collector_settings) section, not `socket`.
 
 **Example:**
 
@@ -266,6 +266,9 @@ HTTP server that serves the web stats dashboard, JSON API and Prometheus metrics
 | `port` | int | `8008` | Listen port |
 | `username` | string | `""` | HTTP Basic Auth username. Empty = auth disabled |
 | `password` | string | `""` | HTTP Basic Auth password |
+| `tls` | bool | `false` | Enable HTTPS. Requires `cert_file` and `key_file` |
+| `cert_file` | string | `""` | TLS certificate file path |
+| `key_file` | string | `""` | TLS private key file path |
 
 The following endpoints are always available when the server is running:
 
@@ -404,5 +407,31 @@ Lua scripting engine for per-packet custom processing and filtering.
     "level": "info",
     "stdout": true
   }
+}
+```
+
+---
+
+## `collector_settings`
+
+Configures heplify as a HEP relay/proxy. When active, heplify listens for incoming HEP packets from other agents and re-forwards them via the `transport` section.
+
+Equivalent CLI flag: `-hin proto:host:port`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `active` | bool | `false` | Enable the HEP collector listener |
+| `host` | string | `"0.0.0.0"` | Listen host |
+| `port` | int | `9060` | Listen port |
+| `proto` | string | `"udp"` | Listen protocol: `udp`, `tcp`, `both`, or `http2` |
+
+**Example:**
+
+```json
+"collector_settings": {
+  "active": true,
+  "host": "0.0.0.0",
+  "port": 9060,
+  "proto": "udp"
 }
 ```

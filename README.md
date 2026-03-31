@@ -105,7 +105,7 @@ heplify:
   cap_add:
     - CAP_NET_ADMIN
     - CAP_NET_RAW
-  command: ./heplify -hs 192.168.1.1:9060 -m SIP -dd -l info -S
+  command: ["-hs", "192.168.1.1:9060", "-m", "SIP", "-dd", "-l", "info", "-S"]
   network_mode: host
   restart: unless-stopped
 ```
@@ -155,10 +155,12 @@ Config:
         Show version and exit
 
 Logging:
-  -l, -x value
+  -l string
         Log level [debug, info, warn, error] (default "info")
   -log-format string
         Log format [text|json] (default "text")
+  -log-payload
+        Print SIP payload as plain text in debug logs
   -e    Log to stderr (default)
   -S    Log to stdout
 
@@ -173,6 +175,8 @@ Capture:
         Interface buffer size (MB) (default 32)
   -promisc
         Enable promiscuous mode (default true)
+  -ipfragment
+        Enable IP fragment reassembly
   -bpf string
         Custom BPF filter
   -pr string
@@ -202,7 +206,11 @@ HEP server:
 
 HEP Collector (receive HEP from agents):
   -hin string
-        Listen address for incoming HEP [udp:0.0.0.0:9060]
+        Listen address for incoming HEP, format: proto:host:port [udp:0.0.0.0:9060]
+  -collectonlysip
+        In collector mode, accept only HEP ProtoType=1 (SIP)
+  -replacetoken
+        Replace NodePW in forwarded HEP packets (collector mode)
 
 Filtering:
   -dd
@@ -252,6 +260,12 @@ TCP:
   -tcpsendretries int
         Max TCP reconnect attempts, 0 = unlimited
 
+Debug:
+  -disable-defrag
+        Disable IP defragmentation
+  -disable-tcp-reasm
+        Disable TCP reassembly processing
+
 HEP buffer (offline/failover):
   -hep-buffer-activate
         Enable HEP buffer on connection failure
@@ -268,13 +282,23 @@ Lua scripting:
   -script-hep-filter string
         HEP types to pass to Lua script, comma-separated (default "1")
 
-Prometheus / Web stats:
+Prometheus metrics:
   -prometheus string
-        HTTP server listen address for metrics and web UI (default ":9096")
-  -prometheus-user string
-        Username for web stats Basic Auth (empty = no auth)
-  -prometheus-pass string
-        Password for web stats Basic Auth
+        Listen address for Prometheus /metrics endpoint, e.g. :9096 (empty = disabled)
+
+Web stats API:
+  -api string
+        Listen address for web stats API and dashboard, e.g. :8008 (empty = disabled)
+  -api-user string
+        Username for HTTP Basic Auth (empty = no auth)
+  -api-pass string
+        Password for HTTP Basic Auth
+  -api-tls
+        Enable HTTPS for web stats API (requires -api-cert and -api-key)
+  -api-cert string
+        TLS certificate file for web stats API
+  -api-key string
+        TLS key file for web stats API
 ```
 
 ---
@@ -301,7 +325,7 @@ Prometheus / Web stats:
 ./heplify -hs 192.168.1.1:9060 -dd -dim OPTIONS,NOTIFY
 
 # Log to stdout in JSON format at debug level
-./heplify -hs 192.168.1.1:9060 -S -log-format=json -x debug
+./heplify -hs 192.168.1.1:9060 -S -log-format=json -l debug
 
 # Enable TCP SIP reassembly (Skype for Business / Lync)
 ./heplify -hs 192.168.1.1:9060 -tcpassembly -sipassembly
@@ -318,11 +342,14 @@ Prometheus / Web stats:
 # Read from pcap file and replay at max speed
 ./heplify -rf capture.pcap -hs 192.168.1.1:9060 -rs
 
-# Export Prometheus metrics and open web stats UI on port 9096
+# Export Prometheus metrics on port 9096
 ./heplify -hs 192.168.1.1:9060 -prometheus :9096
 
-# Web stats UI with Basic Auth (http://host:9096/ requires login)
-./heplify -hs 192.168.1.1:9060 -prometheus :9096 -prometheus-user admin -prometheus-pass secret
+# Web stats dashboard and JSON API on port 8008
+./heplify -hs 192.168.1.1:9060 -api :8008
+
+# Web stats dashboard with Basic Auth (http://host:8008/ requires login)
+./heplify -hs 192.168.1.1:9060 -api :8008 -api-user admin -api-pass secret
 
 # Use Lua script to filter/modify packets
 ./heplify -hs 192.168.1.1:9060 -script-file filter.lua -script-hep-filter 1,5

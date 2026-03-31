@@ -5,10 +5,11 @@ import (
 	"runtime"
 )
 
-// Version is set at build time via -X main.Version=<ver> ldflags.
-var Version = "2.0.4"
+// Version is the application version. Updated by the release build process via scripts/update_version.sh.
+// Overridden at build time with -X main.Version=<ver> ldflags by GoReleaser and Makefile.
+var Version = "2.0.5"
 
-// BuildDate is set at build time via -X main.BuildDate=<date> ldflags.
+// BuildDate is the UTC build timestamp. Set via -X main.BuildDate=<date> ldflags at build time.
 var BuildDate = "unknown"
 
 // GitCommit is set at build time via -X main.GitCommit=<sha> ldflags.

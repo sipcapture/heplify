@@ -99,7 +99,7 @@ var (
 	tcpAssembly bool
 	sipAssembly bool
 
-	// New flags
+	// Filter / debug
 	filterInclude  string
 	filterExclude  string
 	debugSelectors string
@@ -109,22 +109,37 @@ var (
 	collectOnlySIP bool
 	replaceToken   bool
 	tcpSendRetries int
+
+	// Socket extras
+	ipFragment bool
+
+	// Logging extras
+	logPayload bool
+
+	// Debug settings
+	disableDefrag      bool
+	disableTcpReasm    bool
+
+	// API TLS
+	apiTLS      bool
+	apiCertFile string
+	apiKeyFile  string
 )
 
 func init() {
 	// General flags
 	flag.BoolVar(&showVersion, "version", false, "Show version and exit")
 	flag.BoolVar(&showHelp, "h", false, "Show help")
+	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.StringVar(&configFile, "config", "", "Path to JSON config file (overrides command line flags)")
 	flag.StringVar(&logLevel, "l", "info", "Log level [debug, info, warn, error]")
-	flag.StringVar(&logLevel, "x", "info", "Log level [debug, info, warn, error]")
 	flag.BoolVar(&logStderr, "e", true, "Log to stderr")
 	flag.BoolVar(&logStdout, "S", false, "Log to stdout")
 	flag.StringVar(&logFormat, "log-format", "text", "Log format [text|json]")
 
 	// Interface flags
 	flag.StringVar(&device, "i", "any", "Listen on interface")
-	flag.StringVar(&captureType, "t", "af_packet", "Capture type [pcap, afpacket]")
+	flag.StringVar(&captureType, "t", "afpacket", "Capture type [pcap, afpacket]")
 	flag.IntVar(&snaplen, "s", 8192, "Snap length")
 	flag.IntVar(&bufferSizeMB, "b", 32, "Interface buffer size (MB)")
 	flag.BoolVar(&promisc, "promisc", true, "Enable promiscuous mode")
@@ -202,6 +217,21 @@ func init() {
 	flag.BoolVar(&collectOnlySIP, "collectonlysip", false, "In collector mode, accept only HEP ProtoType=1 (SIP)")
 	flag.BoolVar(&replaceToken, "replacetoken", false, "Replace NodePW in forwarded HEP packets (collector mode)")
 
+	// Socket extras
+	flag.BoolVar(&ipFragment, "ipfragment", false, "Enable IP fragment reassembly")
+
+	// Logging extras
+	flag.BoolVar(&logPayload, "log-payload", false, "Print SIP payload as plain text in debug logs")
+
+	// Debug settings
+	flag.BoolVar(&disableDefrag, "disable-defrag", false, "Disable IP defragmentation")
+	flag.BoolVar(&disableTcpReasm, "disable-tcp-reasm", false, "Disable TCP reassembly processing")
+
+	// API TLS flags
+	flag.BoolVar(&apiTLS, "api-tls", false, "Enable HTTPS for web stats API (requires -api-cert and -api-key)")
+	flag.StringVar(&apiCertFile, "api-cert", "", "TLS certificate file for web stats API")
+	flag.StringVar(&apiKeyFile, "api-key", "", "TLS key file for web stats API")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "heplify v%s (built %s, commit %s)\n\n", Version, BuildDate, GitCommit)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
@@ -255,6 +285,14 @@ func main() {
 
 	var cfg *config.Config
 	var err error
+
+	// Honor HEPLIFY_CONFIG env var as fallback when -config is not set
+	if configFile == "" {
+		configFile = os.Getenv("HEPLIFY_CONFIG")
+		if configFile != "" {
+			log.Info().Str("file", configFile).Msg("Using config file from HEPLIFY_CONFIG env var")
+		}
+	}
 
 	// Load config from file or build from flags
 	if configFile != "" {
@@ -441,21 +479,35 @@ func buildConfigFromFlags() *config.Config {
 
 	// Socket settings
 	socketType := "afpacket"
-	if captureType == "pcap" {
+	switch strings.ToLower(captureType) {
+	case "pcap":
 		socketType = "pcap"
+	case "afpacket", "af_packet":
+		socketType = "afpacket"
+	default:
+		log.Warn().Str("value", captureType).Msg("Unknown capture type, falling back to afpacket. Valid values: pcap, afpacket")
 	}
 
-	// Parse collector address
+	// Parse collector address: format is proto:host:port, e.g. "udp:0.0.0.0:9060" or "tcp:::1:9060"
 	if collectorAddr != "" {
-		// Format: proto:host:port  e.g. "udp:0.0.0.0:9060"
-		parts := strings.Split(collectorAddr, ":")
-		if len(parts) >= 3 {
-			cfg.CollectorSettings.Active = true
-			cfg.CollectorSettings.Proto = parts[0]
-			cfg.CollectorSettings.Host = parts[1]
-			if p, err := strconv.Atoi(parts[2]); err == nil {
-				cfg.CollectorSettings.Port = p
+		protoEnd := strings.Index(collectorAddr, ":")
+		if protoEnd > 0 {
+			proto := collectorAddr[:protoEnd]
+			rest := collectorAddr[protoEnd+1:]
+			// rest is "host:port" — use net.SplitHostPort for correct IPv6 handling
+			host, portStr, splitErr := net.SplitHostPort(rest)
+			if splitErr != nil {
+				log.Warn().Err(splitErr).Str("addr", collectorAddr).Msg("Invalid -hin address, expected proto:host:port")
+			} else {
+				cfg.CollectorSettings.Active = true
+				cfg.CollectorSettings.Proto = proto
+				cfg.CollectorSettings.Host = host
+				if p, err := strconv.Atoi(portStr); err == nil {
+					cfg.CollectorSettings.Port = p
+				}
 			}
+		} else {
+			log.Warn().Str("addr", collectorAddr).Msg("Invalid -hin address, expected proto:host:port e.g. udp:0.0.0.0:9060")
 		}
 	}
 
@@ -589,6 +641,21 @@ func buildConfigFromFlags() *config.Config {
 	cfg.LogSettings.Level = logLevel
 	cfg.LogSettings.Stdout = logStdout
 	cfg.LogSettings.Json = logJSON
+	cfg.LogSettings.LogPayload = logPayload
+
+	// Socket extras
+	cfg.SocketSettings[0].IpFragment = ipFragment
+
+	// Debug settings
+	cfg.DebugSettings.DisableIPDefrag = disableDefrag
+	cfg.DebugSettings.DisableTcpReassembly = disableTcpReasm
+
+	// API TLS settings
+	if apiTLS {
+		cfg.ApiSettings.TLS = true
+		cfg.ApiSettings.CertFile = apiCertFile
+		cfg.ApiSettings.KeyFile = apiKeyFile
+	}
 
 	return cfg
 }
