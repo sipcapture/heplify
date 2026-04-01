@@ -49,8 +49,8 @@ func TestDetectLinkType(t *testing.T) {
 }
 
 func TestDetectLinkTypeAny(t *testing.T) {
-	if got := detectLinkType("any"); got != layers.LinkTypeLinuxSLL {
-		t.Fatalf("detectLinkType(\"any\") = %v, want LinuxSLL", got)
+	if got := detectLinkType("any"); got != layers.LinkTypeEthernet {
+		t.Fatalf("detectLinkType(\"any\") = %v, want Ethernet", got)
 	}
 }
 

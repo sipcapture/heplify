@@ -27,16 +27,14 @@ var sysfsNetPath = "/sys/class/net"
 // corresponding gopacket LinkType. Falls back to Ethernet on any error or for
 // unknown types so that existing behaviour is preserved.
 //
-// Special case: "any" pseudo-interface uses SOCK_DGRAM (cooked socket) which
-// wraps every packet in a Linux SLL header regardless of the originating
-// interface. This allows a single decoder to handle packets from Ethernet,
-// tunnel (raw-IP), and loopback interfaces simultaneously.
+// For the "any" pseudo-interface AF_PACKET delivers raw frames in their native
+// framing (Ethernet for most physical interfaces). SOCK_DGRAM + TPACKET_V3
+// does not prepend SLL headers in the ring buffer, so we stay with Ethernet
+// as the root link type for "any". Tunnel interfaces should be captured
+// explicitly (e.g. -i tunl0) where detectLinkType returns LinkTypeRaw.
 func detectLinkType(device string) layers.LinkType {
-	if device == "" {
+	if device == "" || device == "any" {
 		return layers.LinkTypeEthernet
-	}
-	if device == "any" {
-		return layers.LinkTypeLinuxSLL
 	}
 	data, err := os.ReadFile(fmt.Sprintf("%s/%s/type", sysfsNetPath, device))
 	if err != nil {
@@ -124,13 +122,13 @@ func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
 	var err error
 
 	if device == "any" {
-		// Use SOCK_DGRAM (cooked socket) for the "any" pseudo-interface so that
-		// the kernel normalises every packet — regardless of its originating
-		// interface (Ethernet, tunnel, loopback, …) — into a Linux SLL frame.
-		// This lets a single DecodingLayerParser with a LinuxSLL root handle all
-		// interface types simultaneously, including raw-IP tunnel interfaces
-		// (ipip, sit, gre) that would otherwise produce frames without any
-		// link-layer header.
+		// Use SOCK_RAW for the "any" pseudo-interface: the kernel delivers raw
+		// frames from each interface in their native framing. SOCK_DGRAM +
+		// TPACKET_V3 does NOT prepend SLL headers in the ring buffer, making
+		// the LinkTypeLinuxSLL decoder root useless. With SOCK_RAW the majority
+		// of physical interfaces (Ethernet, WiFi) are handled correctly by the
+		// Ethernet-rooted parser. Tunnel/raw-IP interfaces require explicit
+		// capture (-i tunl0) where detectLinkType returns LinkTypeRaw.
 		h.TPacket, err = afpacket.NewTPacket(
 			afpacket.OptFrameSize(snaplen),
 			afpacket.OptBlockSize(blockSize),
@@ -138,7 +136,7 @@ func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
 			afpacket.OptPollTimeout(10*time.Second),
 			afpacket.OptBlockTimeout(timeout),
 			afpacket.OptAddVLANHeader(vlan),
-			afpacket.SocketDgram,
+			afpacket.SocketRaw,
 			afpacket.TPacketVersion3)
 	} else {
 		h.TPacket, err = afpacket.NewTPacket(
