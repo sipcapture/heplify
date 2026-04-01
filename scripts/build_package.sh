@@ -44,13 +44,23 @@ log_info "Building packages for ${PACKAGE} v${VERSION} (${ARCH})"
 
 # --- Check binary ---
 if [ ! -f "${ROOT_DIR}/${PACKAGE}" ]; then
-    log_warn "Binary '${PACKAGE}' not found — building now..."
+    log_warn "Binary '${PACKAGE}' not found — building static binary now..."
+    LIBPCAP_DIR="${ROOT_DIR}/build/libpcap"
+    if [ ! -f "${LIBPCAP_DIR}/lib/libpcap.a" ]; then
+        log_info "Building local libpcap (no DBus/RDMA)..."
+        chmod +x "${SCRIPT_DIR}/build_libpcap.sh"
+        "${SCRIPT_DIR}/build_libpcap.sh"
+    fi
     BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    CGO_ENABLED=1 \
+    CGO_CFLAGS="-I${LIBPCAP_DIR}/include" \
+    CGO_LDFLAGS="-L${LIBPCAP_DIR}/lib" \
     go build \
-        -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE}" \
+        -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -linkmode external -extldflags '-static'" \
+        -trimpath \
         -o "${PACKAGE}" \
         ./src/cmd/heplify
-    log_info "Build complete: ${PACKAGE}"
+    log_info "Static build complete: ${PACKAGE}"
 fi
 
 # --- Check Docker ---

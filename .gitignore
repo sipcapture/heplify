@@ -9,6 +9,9 @@ coverage.out
 # GoReleaser output
 dist/
 
+# Locally built libpcap (make libpcap-local / make linux-static)
+build/
+
 # Local test configs (may contain real hosts/passwords)
 *-test.json
 *.local.json

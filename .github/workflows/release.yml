@@ -63,7 +63,7 @@ jobs:
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y libpcap-dev
+          sudo apt-get install -y flex bison
 
       - name: Install build dependencies (macOS)
         if: matrix.goos == 'darwin'
@@ -79,6 +79,20 @@ jobs:
           Expand-Archive -Path npcap-sdk.zip -DestinationPath C:\npcap-sdk
           echo "CGO_CFLAGS=-IC:/npcap-sdk/Include" >> $env:GITHUB_ENV
           echo "CGO_LDFLAGS=-LC:/npcap-sdk/Lib/x64 -lwpcap" >> $env:GITHUB_ENV
+
+      - name: Cache local libpcap
+        if: matrix.goos == 'linux'
+        id: cache-libpcap
+        uses: actions/cache@v4
+        with:
+          path: build/libpcap
+          key: libpcap-1.10.4-${{ matrix.goarch }}-${{ runner.os }}
+
+      - name: Build static libpcap
+        if: matrix.goos == 'linux' && steps.cache-libpcap.outputs.cache-hit != 'true'
+        run: |
+          chmod +x scripts/build_libpcap.sh
+          ./scripts/build_libpcap.sh
 
       - name: Resolve version
         id: version
@@ -131,21 +145,26 @@ jobs:
           BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
           LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}"
           EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
-          CGO_ENABLED=1 GOOS=${{ matrix.goos }} go build -ldflags "${LDFLAGS}" -trimpath \
-            -o heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} \
-            ./src/cmd/heplify
+
+          if [ "${{ matrix.goos }}" = "linux" ]; then
+            CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            CGO_CFLAGS="-I$(pwd)/build/libpcap/include" \
+            CGO_LDFLAGS="-L$(pwd)/build/libpcap/lib" \
+            go build \
+              -ldflags "${LDFLAGS} -linkmode external -extldflags '-static'" \
+              -trimpath \
+              -o heplify_${{ matrix.goos }}_${{ matrix.goarch }} \
+              ./src/cmd/heplify
+          else
+            CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags "${LDFLAGS}" -trimpath \
+              -o heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} \
+              ./src/cmd/heplify
+          fi
+
           echo "=== Version dump ==="
           ./heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} -version
         shell: bash
-
-      - name: glibc polyfill
-        if: matrix.goos == 'linux'
-        run: |
-          CONTAINER_ID=$(docker create ghcr.io/lmangani/polyfill-glibc-action:latest)
-          docker cp $CONTAINER_ID:/usr/local/bin/polyfill-glibc ./polyfill-glibc
-          docker rm $CONTAINER_ID
-          chmod +x ./polyfill-glibc
-          ./polyfill-glibc --target-glibc=2.17 ./heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
       - name: Get nfpm
         if: matrix.goos == 'linux'
@@ -160,6 +179,8 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           cp heplify_${{ matrix.goos }}_${{ matrix.goarch }} heplify
+          echo "=== Binary type ==="
+          file heplify
           ARCH="${{ matrix.goarch }}"
           sed -i "s|arch: \"amd64\"|arch: \"${ARCH}\"|g" nfpm.yaml
           VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
