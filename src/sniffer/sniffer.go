@@ -294,10 +294,10 @@ func (s *Sniffer) createPcapSource(socket config.SocketSettings, snapLen int) (P
 	if socket.PcapFile != "" {
 		handle, err = pcap.OpenOffline(socket.PcapFile)
 	} else {
-	readTimeout := time.Duration(socket.ReadTimeoutMs) * time.Millisecond
-	if readTimeout <= 0 {
-		readTimeout = 10 * time.Millisecond
-	}
+		readTimeout := time.Duration(socket.ReadTimeoutMs) * time.Millisecond
+		if readTimeout <= 0 {
+			readTimeout = 10 * time.Millisecond
+		}
 		handle, err = pcap.OpenLive(socket.Device, int32(snapLen), socket.Promisc, readTimeout)
 	}
 	if err != nil {

@@ -45,7 +45,7 @@ func detectLinkType(device string) layers.LinkType {
 		return layers.LinkTypeEthernet
 	}
 	switch arphrd {
-	case 1:   // ARPHRD_ETHER
+	case 1: // ARPHRD_ETHER
 		return layers.LinkTypeEthernet
 	case 772: // ARPHRD_LOOPBACK
 		return layers.LinkTypeEthernet
