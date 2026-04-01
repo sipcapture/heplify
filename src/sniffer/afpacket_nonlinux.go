@@ -15,7 +15,7 @@ type afpacketHandle struct{}
 
 // newAfpacketHandle returns an error on non-Linux systems
 func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
-	timeout time.Duration, vlan bool) (*afpacketHandle, error) {
+	timeout time.Duration, vlan bool, promisc bool, promiscIfaces []string) (*afpacketHandle, error) {
 	return nil, fmt.Errorf("AF_PACKET is only supported on Linux")
 }
 
