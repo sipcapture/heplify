@@ -65,10 +65,16 @@ type sipStream struct {
 func (s *sipStream) Reassembled(reassemblies []tcpassembly.Reassembly) {
 	for _, r := range reassemblies {
 		if r.Skip != 0 {
-			// Lost / out-of-order gap — discard accumulated data and restart.
+			// Gap (or half-open stream — no SYN captured). The accumulated
+			// buffer is no longer contiguous so discard it, but do NOT skip
+			// r.Bytes. The bytes that follow the gap often start at a SIP
+			// message boundary (each SIP request/response is typically the
+			// first payload in a TCP segment). Falling through lets us resync
+			// immediately instead of waiting for the connection to be torn
+			// down and a new SYN to be captured.
 			s.buf = s.buf[:0]
 			s.ts = time.Time{}
-			continue
+			// fall through ↓
 		}
 		if len(r.Bytes) == 0 {
 			continue
@@ -135,7 +141,13 @@ func (s *sipStream) process() {
 			s.cb(pkt)
 		}
 		s.buf = s.buf[len(payload):]
-		s.ts = time.Time{}
+		// When the buffer is empty, clear the timestamp so the next
+		// Reassembled() call picks up a fresh r.Seen for the next message.
+		// Do NOT clear it while data still remains — consecutive SIP messages
+		// inside the same TCP segment share the segment's capture timestamp.
+		if len(s.buf) == 0 {
+			s.ts = time.Time{}
+		}
 	}
 }
 

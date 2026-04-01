@@ -9,6 +9,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/tcpassembly"
 )
 
 func TestBoolToUint8(t *testing.T) {
@@ -402,5 +403,44 @@ func TestGREWithIPv4Payload(t *testing.T) {
 	}
 	if string(pkt.Payload) != string(payload) {
 		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+}
+
+// TestTCPSIPMidStreamResync verifies that a SIP message delivered with
+// r.Skip != 0 (half-open stream — heplify started after the SYN) is still
+// decoded rather than silently dropped.
+func TestTCPSIPMidStreamResync(t *testing.T) {
+	sipMsg := []byte("SIP/2.0 200 OK\r\n" +
+		"Via: SIP/2.0/TCP 10.0.0.1;branch=z9hG4bK1\r\n" +
+		"From: <sip:alice@example.com>;tag=1\r\n" +
+		"To: <sip:bob@example.com>;tag=2\r\n" +
+		"Call-ID: mid-stream-test@10.0.0.1\r\n" +
+		"CSeq: 1 INVITE\r\n" +
+		"Content-Length: 0\r\n" +
+		"\r\n")
+
+	var received []*Packet
+	cb := func(pkt *Packet) { received = append(received, pkt) }
+
+	s := &sipStream{
+		net:       gopacket.NewFlow(0, []byte{10, 0, 0, 1}, []byte{10, 0, 0, 2}),
+		transport: gopacket.NewFlow(0, []byte{0x13, 0xc4}, []byte{0x13, 0xc4}), // 5060→5060
+		cb:        cb,
+		buf:       make([]byte, 0, 4096),
+	}
+
+	ts := time.Now()
+	// Simulate what gopacket sends when heplify missed the SYN:
+	// r.Skip != 0 and r.Bytes contains the start of the SIP response.
+	s.Reassembled([]tcpassembly.Reassembly{
+		{
+			Bytes: sipMsg,
+			Skip:  -1, // non-zero → gap / half-open
+			Seen:  ts,
+		},
+	})
+
+	if len(received) != 1 {
+		t.Fatalf("expected 1 SIP packet, got %d (mid-stream resync failed)", len(received))
 	}
 }

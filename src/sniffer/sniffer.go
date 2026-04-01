@@ -193,6 +193,20 @@ func (s *Sniffer) Start() error {
 		}
 
 		if socket.SocketType == "afpacket" && socket.FanoutWorkers > 1 {
+			if socket.FanoutID == 0 {
+				// Without a shared non-zero FanoutID the kernel never creates
+				// a fanout group, so every socket receives the full traffic
+				// stream independently — causing N-fold packet duplication.
+				// Derive a stable, non-zero ID from the process PID so that
+				// all workers in this run share the same fanout group while
+				// being unlikely to collide with another heplify process.
+				socket.FanoutID = uint16(os.Getpid()%65535) + 1
+				log.Debug().
+					Uint16("fanout_id", socket.FanoutID).
+					Int("workers", socket.FanoutWorkers).
+					Str("interface", socket.Device).
+					Msg("Auto-assigned fanout group ID")
+			}
 			for i := 0; i < socket.FanoutWorkers; i++ {
 				go s.captureAFPacket(socket, i)
 			}
@@ -425,12 +439,18 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 		// Capture the assembler in a local variable so that the goroutine is not
 		// affected when dec is reassigned during pcap replay loops.
 		assembler := dec.TCPAssembler
-		// Flush streams that have been silent for >30 s, checked every second.
+		// Flush streams that have been silent for >1 s, checked every 200 ms.
+		// The short window is intentional: it lets the assembler deliver data
+		// from half-open streams (no SYN captured) within ~1 s instead of
+		// waiting the full 30 s that would otherwise be needed.  For fully
+		// established streams, in-order segments are delivered immediately on
+		// arrival, so the flush timer only affects streams with gaps/loss;
+		// a 1 s patience is sufficient for typical TCP retransmission timers.
 		go func() {
-			ticker := time.NewTicker(time.Second)
+			ticker := time.NewTicker(200 * time.Millisecond)
 			defer ticker.Stop()
 			for range ticker.C {
-				assembler.FlushOlderThan(time.Now().Add(-30 * time.Second))
+				assembler.FlushOlderThan(time.Now().Add(-time.Second))
 			}
 		}()
 	}
@@ -479,6 +499,7 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 				Int("length", len(data)).
 				Int("caplen", ci.Length).
 				Int("num", packetCount).
+				Str("cap_ts", ci.Timestamp.Format("15:04:05.000000")).
 				Msg("Received packet from interface")
 		}
 
@@ -656,6 +677,11 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 			Str("payload", string(pkt.Payload)).
 			Msg("SIP packet")
 	} else if sipNum <= 20 || sipNum%50 == 0 {
+		capTime := time.Unix(int64(pkt.Tsec), int64(pkt.Tmsec)*1000)
+		var lagMs int64
+		if pkt.Tsec > 0 {
+			lagMs = time.Since(capTime).Milliseconds()
+		}
 		log.Debug().
 			Uint64("num", sipNum).
 			Str("source", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).
@@ -663,6 +689,8 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 			Uint8("proto", pkt.Protocol).
 			Str("proto_type", "1").
 			Int("payload", len(pkt.Payload)).
+			Str("cap_ts", capTime.Format("15:04:05.000000")).
+			Int64("lag_ms", lagMs).
 			Str("payload_hex", formatPayloadHex(pkt.Payload)).
 			Msg("Handling SIP packet")
 	}
