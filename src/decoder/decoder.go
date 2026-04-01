@@ -459,7 +459,6 @@ func (d *Decoder) decodeInnerIPPacket(data []byte, ci gopacket.CaptureInfo) *Pac
 	return pkt
 }
 
-
 func (p *Packet) GetSrcIP() string {
 	return p.SrcIP.String()
 }

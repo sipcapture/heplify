@@ -35,14 +35,14 @@ var (
 	logJSON     bool
 
 	// Interface
-	device       string
-	captureType  string
-	snaplen      int
-	bufferSizeMB int
-	promisc      bool
+	device        string
+	captureType   string
+	snaplen       int
+	bufferSizeMB  int
+	promisc       bool
 	promiscIfaces string
-	bpfFilter    string
-	portRange    string
+	bpfFilter     string
+	portRange     string
 
 	// Modes
 	captureMode string
@@ -523,23 +523,23 @@ func buildConfigFromFlags() *config.Config {
 
 	cfg.SocketSettings = []config.SocketSettings{
 		{
-			Name:          "capture",
-			Active:        true,
-			SocketType:    socketType,
-			Device:        device,
-			Promisc:       promisc,
+			Name:              "capture",
+			Active:            true,
+			SocketType:        socketType,
+			Device:            device,
+			Promisc:           promisc,
 			PromiscInterfaces: parseCSV(promiscIfaces),
-			SnapLen:       snaplen,
-			BufferSizeMB:  bufferSizeMB,
-			Vlan:          withVlan,
-			Erspan:        withErspan,
-			BPFFilter:     bpfFilter,
-			PcapFile:      readFile,
-			FanoutID:      uint16(fanoutID),
-			FanoutWorkers: fanoutWorkers,
-			TcpReasm:      tcpAssembly,
-			SIPReasm:      sipAssembly,
-			CaptureMode:   parseCaptureMode(captureMode),
+			SnapLen:           snaplen,
+			BufferSizeMB:      bufferSizeMB,
+			Vlan:              withVlan,
+			Erspan:            withErspan,
+			BPFFilter:         bpfFilter,
+			PcapFile:          readFile,
+			FanoutID:          uint16(fanoutID),
+			FanoutWorkers:     fanoutWorkers,
+			TcpReasm:          tcpAssembly,
+			SIPReasm:          sipAssembly,
+			CaptureMode:       parseCaptureMode(captureMode),
 		},
 	}
 
