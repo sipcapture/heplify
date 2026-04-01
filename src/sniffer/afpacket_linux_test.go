@@ -16,13 +16,13 @@ func TestDetectLinkType(t *testing.T) {
 		device   string
 		wantType layers.LinkType
 	}{
-		{"1", "eth0", layers.LinkTypeEthernet},   // ARPHRD_ETHER
-		{"772", "lo", layers.LinkTypeEthernet},   // ARPHRD_LOOPBACK
-		{"768", "tunl0", layers.LinkTypeRaw},      // ARPHRD_TUNNEL (ipip)
-		{"776", "sit0", layers.LinkTypeRaw},       // ARPHRD_SIT
-		{"778", "gre0", layers.LinkTypeRaw},       // ARPHRD_IPGRE
-		{"823", "ip6gre0", layers.LinkTypeRaw},    // ARPHRD_IP6GRE
-		{"65534", "dummy0", layers.LinkTypeRaw},   // ARPHRD_NONE
+		{"1", "eth0", layers.LinkTypeEthernet},       // ARPHRD_ETHER
+		{"772", "lo", layers.LinkTypeEthernet},       // ARPHRD_LOOPBACK
+		{"768", "tunl0", layers.LinkTypeRaw},         // ARPHRD_TUNNEL (ipip)
+		{"776", "sit0", layers.LinkTypeRaw},          // ARPHRD_SIT
+		{"778", "gre0", layers.LinkTypeRaw},          // ARPHRD_IPGRE
+		{"823", "ip6gre0", layers.LinkTypeRaw},       // ARPHRD_IP6GRE
+		{"65534", "dummy0", layers.LinkTypeRaw},      // ARPHRD_NONE
 		{"999", "unknown0", layers.LinkTypeEthernet}, // unknown — safe fallback
 	}
 
