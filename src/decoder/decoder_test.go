@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
 
 func TestBoolToUint8(t *testing.T) {
@@ -251,5 +252,155 @@ func TestDecodeTransportUnknownProto(t *testing.T) {
 	_, _, _, _, _, ok := decodeTransport(layers.IPProtocolICMPv6, []byte{0, 1, 2, 3})
 	if ok {
 		t.Fatal("expected ok=false for unknown protocol")
+	}
+}
+
+// ─── raw-IP link type (ipip / sit tunnel interfaces) ─────────────────────────
+
+// buildRawIPv4UDP builds a raw IPv4+UDP datagram (no Ethernet header).
+func buildRawIPv4UDP(t *testing.T, srcPort, dstPort uint16, payload []byte) []byte {
+	t.Helper()
+	buf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolUDP,
+			TTL:      64,
+			SrcIP:    testSrcIP4,
+			DstIP:    testDstIP4,
+		},
+		&layers.UDP{SrcPort: layers.UDPPort(srcPort), DstPort: layers.UDPPort(dstPort)},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildRawIPv4UDP: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestRawIPv4LinkType(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeRaw)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	data := buildRawIPv4UDP(t, 5060, 5060, []byte("INVITE sip:bob@example.com SIP/2.0\r\n"))
+	pkt, err := d.Decode(data, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("expected decoded packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if pkt.Version != 0x02 {
+		t.Fatalf("expected IPv4 version 0x02, got 0x%02x", pkt.Version)
+	}
+}
+
+func TestRawIPv4FromPcap(t *testing.T) {
+	handle, err := pcap.OpenOffline("testdata/ipip0.pcap")
+	if err != nil {
+		t.Fatalf("open pcap: %v", err)
+	}
+	defer handle.Close()
+
+	// Use the link type reported by the pcap file — must produce a working decoder.
+	d := NewDecoder(handle.LinkType())
+	decoded := 0
+
+	for {
+		data, ci, err := handle.ReadPacketData()
+		if err != nil {
+			break // EOF or error
+		}
+		pkt, decErr := d.Decode(data, ci)
+		if decErr != nil {
+			t.Errorf("decode error: %v", decErr)
+			continue
+		}
+		if pkt == nil {
+			t.Errorf("packet %d: decode returned nil (expected UDP/SIP)", decoded+1)
+			continue
+		}
+		if pkt.Protocol != 0x11 {
+			t.Errorf("packet %d: expected UDP, got proto 0x%02x", decoded+1, pkt.Protocol)
+		}
+		decoded++
+	}
+
+	const wantPackets = 8
+	if decoded != wantPackets {
+		t.Fatalf("decoded %d packets, want %d", decoded, wantPackets)
+	}
+}
+
+// ─── GRE with IP payload ──────────────────────────────────────────────────────
+
+// buildGREIPv4UDP builds an Ethernet+IPv4+GRE+IPv4+UDP packet.
+func buildGREIPv4UDP(t *testing.T, innerSrcPort, innerDstPort uint16, payload []byte) []byte {
+	t.Helper()
+
+	// Build inner IPv4+UDP datagram first.
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolUDP,
+			TTL:      64,
+			SrcIP:    testSrcIP4,
+			DstIP:    testDstIP4,
+		},
+		&layers.UDP{SrcPort: layers.UDPPort(innerSrcPort), DstPort: layers.UDPPort(innerDstPort)},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildGREIPv4UDP inner: %v", err)
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolGRE,
+			TTL:      64,
+			SrcIP:    net.ParseIP("10.1.0.1").To4(),
+			DstIP:    net.ParseIP("10.1.0.2").To4(),
+		},
+		&layers.GRE{Protocol: layers.EthernetTypeIPv4},
+		gopacket.Payload(innerBuf.Bytes()),
+	); err != nil {
+		t.Fatalf("buildGREIPv4UDP outer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestGREWithIPv4Payload(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	payload := []byte("INVITE sip:bob@example.com SIP/2.0\r\n")
+	data := buildGREIPv4UDP(t, 5060, 5060, payload)
+
+	pkt, err := d.Decode(data, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("expected decoded inner packet from GRE, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(payload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
 	}
 }

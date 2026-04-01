@@ -3,6 +3,10 @@
 package sniffer
 
 import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/gopacket"
@@ -12,16 +16,58 @@ import (
 	"golang.org/x/net/bpf"
 )
 
+// sysfsNetPath is the base path for network interface attributes.
+// Overridden in tests.
+var sysfsNetPath = "/sys/class/net"
+
+// detectLinkType reads the ARPHRD hardware type from sysfs and maps it to the
+// corresponding gopacket LinkType. Falls back to Ethernet on any error or for
+// unknown types so that existing behaviour is preserved.
+func detectLinkType(device string) layers.LinkType {
+	if device == "" || device == "any" {
+		return layers.LinkTypeEthernet
+	}
+	data, err := os.ReadFile(fmt.Sprintf("%s/%s/type", sysfsNetPath, device))
+	if err != nil {
+		return layers.LinkTypeEthernet
+	}
+	arphrd, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return layers.LinkTypeEthernet
+	}
+	switch arphrd {
+	case 1:   // ARPHRD_ETHER
+		return layers.LinkTypeEthernet
+	case 772: // ARPHRD_LOOPBACK
+		return layers.LinkTypeEthernet
+	case 768: // ARPHRD_TUNNEL  (ipip / tunl0)
+		return layers.LinkTypeRaw
+	case 776: // ARPHRD_SIT     (sit0 — IPv6-in-IPv4)
+		return layers.LinkTypeRaw
+	case 778: // ARPHRD_IPGRE   (GRE over IPv4)
+		return layers.LinkTypeRaw
+	case 823: // ARPHRD_IP6GRE  (GRE over IPv6)
+		return layers.LinkTypeRaw
+	case 65534: // ARPHRD_NONE
+		return layers.LinkTypeRaw
+	default:
+		return layers.LinkTypeEthernet
+	}
+}
+
 // afpacketHandle wraps the afpacket.TPacket for packet capture
 type afpacketHandle struct {
-	TPacket *afpacket.TPacket
+	TPacket  *afpacket.TPacket
+	linkType layers.LinkType
 }
 
 // newAfpacketHandle creates a new AF_PACKET handle
 func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
 	timeout time.Duration, vlan bool) (*afpacketHandle, error) {
 
-	h := &afpacketHandle{}
+	h := &afpacketHandle{
+		linkType: detectLinkType(device),
+	}
 	var err error
 
 	if device == "any" {
@@ -76,9 +122,9 @@ func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
 	return h.TPacket.SetBPF(rawBPF)
 }
 
-// LinkType returns the link type (always Ethernet for AF_PACKET)
+// LinkType returns the actual link type of the captured interface.
 func (h *afpacketHandle) LinkType() layers.LinkType {
-	return layers.LinkTypeEthernet
+	return h.linkType
 }
 
 // Close closes the handle

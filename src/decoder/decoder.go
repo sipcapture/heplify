@@ -34,6 +34,10 @@ type Decoder struct {
 	layerType     gopacket.LayerType
 	decodedLayers []gopacket.LayerType
 	parser        *gopacket.DecodingLayerParser
+	// parserIPv6 is only set for raw-IP link types (DLT_RAW). It is used when
+	// the first nibble of a received packet indicates IPv6, since the main
+	// parser is rooted at IPv4.
+	parserIPv6 *gopacket.DecodingLayerParser
 
 	// Layer instances
 	sll     layers.LinuxSLL
@@ -60,17 +64,33 @@ type Decoder struct {
 	TCPAssembler *SIPAssembler
 }
 
+// isRawIPLinkType returns true for all gopacket LinkType values that represent
+// a raw-IP capture (no data-link framing). libpcap may report DLT_RAW as 12
+// (non-OpenBSD) or 14 (OpenBSD) in addition to the Linux-specific value 101.
+func isRawIPLinkType(datalink layers.LinkType) bool {
+	switch datalink {
+	case layers.LinkTypeRaw, layers.LinkTypeIPv4, layers.LinkTypeIPv6,
+		layers.LinkType(12), layers.LinkType(14):
+		return true
+	}
+	return false
+}
+
 // NewDecoder creates a new decoder for the given link type
 func NewDecoder(datalink layers.LinkType) *Decoder {
 	var lt gopacket.LayerType
-	switch datalink {
-	case layers.LinkTypeEthernet:
+	rawIP := isRawIPLinkType(datalink)
+	switch {
+	case datalink == layers.LinkTypeEthernet:
 		lt = layers.LayerTypeEthernet
-	case layers.LinkTypeLinuxSLL:
+	case datalink == layers.LinkTypeLinuxSLL:
 		lt = layers.LayerTypeLinuxSLL
-	case layers.LinkTypeRaw, layers.LinkTypeIPv4:
-		// Raw IP link type: used by ipip (tunl0), sit (sit0) and similar tunnel interfaces.
-		// The packet starts directly with an IP header — no Ethernet framing.
+	case datalink == layers.LinkTypeIPv6:
+		// Pure IPv6 raw interface (e.g. ip6gre without inner header).
+		lt = layers.LayerTypeIPv6
+	case rawIP:
+		// All other raw-IP variants default to IPv4. IPv6 packets on the same
+		// interface are handled by parserIPv6 selected in Decode().
 		lt = layers.LayerTypeIPv4
 	default:
 		lt = layers.LayerTypeEthernet
@@ -100,8 +120,22 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 	dlp.AddDecodingLayer(&d.tcp)
 	dlp.AddDecodingLayer(&d.payload)
 	dlp.IgnoreUnsupported = true
-
 	d.parser = dlp
+
+	// For raw-IP link types the main parser is rooted at IPv4. Build a
+	// companion parser rooted at IPv6 so that sit/ip6gre interfaces that
+	// deliver IPv6 packets are also handled correctly.
+	if rawIP && lt == layers.LayerTypeIPv4 {
+		dlp6 := gopacket.NewDecodingLayerParser(layers.LayerTypeIPv6)
+		dlp6.SetDecodingLayerContainer(gopacket.DecodingLayerSparse(nil))
+		dlp6.AddDecodingLayer(&d.ip6)
+		dlp6.AddDecodingLayer(&d.sctp)
+		dlp6.AddDecodingLayer(&d.udp)
+		dlp6.AddDecodingLayer(&d.tcp)
+		dlp6.AddDecodingLayer(&d.payload)
+		dlp6.IgnoreUnsupported = true
+		d.parserIPv6 = dlp6
+	}
 
 	return d
 }
@@ -110,7 +144,14 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) {
 	d.decodedLayers = d.decodedLayers[:0]
 
-	if err := d.parser.DecodeLayers(data, &d.decodedLayers); err != nil {
+	// For raw-IP interfaces the first nibble tells us the IP version.
+	// Route IPv6 packets to the dedicated IPv6 parser to avoid misparse.
+	parser := d.parser
+	if d.parserIPv6 != nil && len(data) > 0 && data[0]>>4 == 6 {
+		parser = d.parserIPv6
+	}
+
+	if err := parser.DecodeLayers(data, &d.decodedLayers); err != nil {
 		_ = err // unsupported layer types are intentionally ignored
 	}
 
@@ -187,10 +228,17 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 
 		case layers.LayerTypeGRE:
 			if d.gre.Protocol == layers.EthernetTypeTransparentEthernetBridging {
+				// NVGRE: inner Ethernet frame with an 8-byte key header.
 				if len(d.gre.Payload) >= 8 {
 					if innerPkt := d.decodeInnerPacket(d.gre.Payload[8:], ci); innerPkt != nil {
 						return innerPkt, nil
 					}
+				}
+			} else if d.gre.Protocol == layers.EthernetTypeIPv4 ||
+				d.gre.Protocol == layers.EthernetTypeIPv6 {
+				// Standard GRE carrying an IP payload (e.g. ip tunnel / gre interfaces).
+				if innerPkt := d.decodeInnerIPPacket(d.gre.Payload, ci); innerPkt != nil {
+					return innerPkt, nil
 				}
 			}
 		}
@@ -336,7 +384,82 @@ func (d *Decoder) decodeInnerPacket(data []byte, ci gopacket.CaptureInfo) *Packe
 	return pkt
 }
 
-// GetSrcIP returns source IP as string
+// decodeInnerIPPacket decodes an inner raw-IP payload (e.g., from standard GRE).
+// It starts directly from the IP header without any Ethernet framing.
+func (d *Decoder) decodeInnerIPPacket(data []byte, ci gopacket.CaptureInfo) *Packet {
+	if len(data) < 1 {
+		return nil
+	}
+	// Determine IP version from the first nibble.
+	var startLayer gopacket.LayerType
+	switch data[0] >> 4 {
+	case 4:
+		startLayer = layers.LayerTypeIPv4
+	case 6:
+		startLayer = layers.LayerTypeIPv6
+	default:
+		return nil
+	}
+
+	var ip4 layers.IPv4
+	var ip6 layers.IPv6
+	var tcp layers.TCP
+	var udp layers.UDP
+	var payload gopacket.Payload
+
+	parser := gopacket.NewDecodingLayerParser(
+		startLayer,
+		&ip4, &ip6, &tcp, &udp, &payload,
+	)
+	parser.IgnoreUnsupported = true
+
+	decoded := make([]gopacket.LayerType, 0, 6)
+	if err := parser.DecodeLayers(data, &decoded); err != nil {
+		_ = err
+	}
+
+	pkt := &Packet{
+		Tsec:  uint32(ci.Timestamp.Unix()),
+		Tmsec: uint32(ci.Timestamp.Nanosecond() / 1000),
+	}
+
+	var foundIP, foundTransport bool
+
+	for _, layerType := range decoded {
+		switch layerType {
+		case layers.LayerTypeIPv4:
+			pkt.Version = 0x02
+			pkt.SrcIP = ip4.SrcIP
+			pkt.DstIP = ip4.DstIP
+			pkt.IPTos = ip4.TOS
+			foundIP = true
+		case layers.LayerTypeIPv6:
+			pkt.Version = 0x0a
+			pkt.SrcIP = ip6.SrcIP
+			pkt.DstIP = ip6.DstIP
+			foundIP = true
+		case layers.LayerTypeUDP:
+			pkt.Protocol = 0x11
+			pkt.SrcPort = uint16(udp.SrcPort)
+			pkt.DstPort = uint16(udp.DstPort)
+			pkt.Payload = udp.Payload
+			foundTransport = true
+		case layers.LayerTypeTCP:
+			pkt.Protocol = 0x06
+			pkt.SrcPort = uint16(tcp.SrcPort)
+			pkt.DstPort = uint16(tcp.DstPort)
+			pkt.Payload = tcp.Payload
+			foundTransport = true
+		}
+	}
+
+	if !foundIP || !foundTransport {
+		return nil
+	}
+	return pkt
+}
+
+
 func (p *Packet) GetSrcIP() string {
 	return p.SrcIP.String()
 }

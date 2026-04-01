@@ -178,11 +178,16 @@ func (s *Sniffer) capture(socket config.SocketSettings) {
 	var source PacketSource
 	var err error
 
-	switch socket.SocketType {
-	case "afpacket":
-		source, err = s.createAFPacketSource(socket, snapLen, 0)
-	default:
+	// When a pcap file is specified, always use the pcap reader regardless of SocketType.
+	if socket.PcapFile != "" {
 		source, err = s.createPcapSource(socket, snapLen)
+	} else {
+		switch socket.SocketType {
+		case "afpacket":
+			source, err = s.createAFPacketSource(socket, snapLen, 0)
+		default:
+			source, err = s.createPcapSource(socket, snapLen)
+		}
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create packet source")
@@ -345,12 +350,15 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 		dec.TCPAssembler = decoder.NewSIPAssembler(func(pkt *decoder.Packet) {
 			s.handleSIP(pkt, sender)
 		})
+		// Capture the assembler in a local variable so that the goroutine is not
+		// affected when dec is reassigned during pcap replay loops.
+		assembler := dec.TCPAssembler
 		// Flush streams that have been silent for >30 s, checked every second.
 		go func() {
 			ticker := time.NewTicker(time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				dec.TCPAssembler.FlushOlderThan(time.Now().Add(-30 * time.Second))
+				assembler.FlushOlderThan(time.Now().Add(-30 * time.Second))
 			}
 		}()
 	}
