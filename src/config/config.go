@@ -128,6 +128,18 @@ type SocketSettings struct {
 	LimitCPU         int      `json:"cpu_limit" mapstructure:"cpu_limit"`
 	BPFFilter        string   `json:"bpf_filter" mapstructure:"bpf_filter"` // Custom BPF filter
 	SIPReasm         bool     `json:"sip_reasm" mapstructure:"sip_reasm"`
+	// ReadTimeoutMs controls how long the kernel may buffer captured packets before
+	// delivering them to userspace. Smaller values reduce capture-to-send latency
+	// at the cost of slightly higher CPU usage. Default: 10 ms.
+	// For pcap this sets the pcap_open_live timeout; for afpacket it sets
+	// the TPACKET_V3 block-retire timeout (tp_retire_blk_tov).
+	ReadTimeoutMs int `json:"read_timeout_ms" mapstructure:"read_timeout_ms"`
+	// PromiscInterfaces lists the interfaces to put into promiscuous mode when
+	// capturing on the "any" pseudo-interface. Ignored for specific interfaces
+	// (those always use the Promisc flag directly). When empty and device is
+	// "any", no promiscuous-mode changes are made to any interface.
+	// Example: ["eth0", "eth1"]
+	PromiscInterfaces []string `json:"promisc_interfaces" mapstructure:"promisc_interfaces"`
 }
 
 type TransportSettings struct {

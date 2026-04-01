@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -61,6 +62,9 @@ type Sniffer struct {
 	dedupCache *lru.Cache
 	stats      *Stats
 	debug      debugFlags
+
+	mu      sync.Mutex     // guards sources
+	sources []PacketSource // all active capture sources; closed by Stop()
 }
 
 type debugFlags struct {
@@ -142,6 +146,40 @@ func (s *Sniffer) GetStats() *Stats {
 	return s.stats
 }
 
+// registerSource adds a PacketSource to the tracked set so that Stop can close it.
+func (s *Sniffer) registerSource(src PacketSource) {
+	s.mu.Lock()
+	s.sources = append(s.sources, src)
+	s.mu.Unlock()
+}
+
+// deregisterSource removes a PacketSource from the tracked set after it is closed.
+func (s *Sniffer) deregisterSource(src PacketSource) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, ps := range s.sources {
+		if ps == src {
+			s.sources = append(s.sources[:i], s.sources[i+1:]...)
+			return
+		}
+	}
+}
+
+// Stop gracefully closes all active packet sources.
+// Closing a source unblocks any goroutine blocked in ReadPacketData, which
+// causes the capture goroutine to return and execute its deferred cleanup
+// (including restoring promiscuous mode on any affected interfaces).
+func (s *Sniffer) Stop() {
+	s.mu.Lock()
+	srcs := make([]PacketSource, len(s.sources))
+	copy(srcs, s.sources)
+	s.mu.Unlock()
+
+	for _, src := range srcs {
+		src.Close()
+	}
+}
+
 // Start begins packet capture for all active socket settings.
 func (s *Sniffer) Start() error {
 	for _, socket := range s.cfg.SocketSettings {
@@ -193,7 +231,11 @@ func (s *Sniffer) capture(socket config.SocketSettings) {
 		log.Error().Err(err).Msg("Failed to create packet source")
 		return
 	}
-	defer source.Close()
+	s.registerSource(source)
+	defer func() {
+		s.deregisterSource(source)
+		source.Close()
+	}()
 
 	var dumpCh chan<- dumpPacket
 	if s.cfg.PcapSettings.WriteFile != "" {
@@ -215,7 +257,11 @@ func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
 		log.Error().Err(err).Int("worker", workerID).Msg("Failed to create AF_PACKET source")
 		return
 	}
-	defer source.Close()
+	s.registerSource(source)
+	defer func() {
+		s.deregisterSource(source)
+		source.Close()
+	}()
 
 	var dumpCh chan<- dumpPacket
 	if s.cfg.PcapSettings.WriteFile != "" {
@@ -234,7 +280,11 @@ func (s *Sniffer) createPcapSource(socket config.SocketSettings, snapLen int) (P
 	if socket.PcapFile != "" {
 		handle, err = pcap.OpenOffline(socket.PcapFile)
 	} else {
-		handle, err = pcap.OpenLive(socket.Device, int32(snapLen), socket.Promisc, 1*time.Second)
+	readTimeout := time.Duration(socket.ReadTimeoutMs) * time.Millisecond
+	if readTimeout <= 0 {
+		readTimeout = 10 * time.Millisecond
+	}
+		handle, err = pcap.OpenLive(socket.Device, int32(snapLen), socket.Promisc, readTimeout)
 	}
 	if err != nil {
 		return nil, err
@@ -247,12 +297,14 @@ func (s *Sniffer) createPcapSource(socket config.SocketSettings, snapLen int) (P
 	if filter != "" {
 		if err := handle.SetBPFFilter(filter); err != nil {
 			log.Error().Err(err).Str("filter", filter).Msg("Failed to set BPF filter")
+		} else {
+			log.Info().Str("filter", filter).Str("interface", socket.Device).Msg("BPF filter applied")
 		}
 	}
 	return &pcapWrapper{handle: handle}, nil
 }
 
-func (s *Sniffer) createAFPacketSource(socket config.SocketSettings, snapLen int, _ int) (PacketSource, error) {
+func (s *Sniffer) createAFPacketSource(socket config.SocketSettings, snapLen int, workerID int) (PacketSource, error) {
 	if !afpacketSupported() {
 		return nil, fmt.Errorf("AF_PACKET is not supported on this platform")
 	}
@@ -268,8 +320,13 @@ func (s *Sniffer) createAFPacketSource(socket config.SocketSettings, snapLen int
 		return nil, err
 	}
 
+	readTimeout := time.Duration(socket.ReadTimeoutMs) * time.Millisecond
+	if readTimeout <= 0 {
+		readTimeout = 10 * time.Millisecond
+	}
+
 	handle, err := newAfpacketHandle(socket.Device, frameSize, blockSize, numBlocks,
-		1*time.Second, socket.Vlan)
+		readTimeout, socket.Vlan, socket.Promisc && workerID == 0, socket.PromiscInterfaces)
 	if err != nil {
 		return nil, err
 	}
@@ -287,6 +344,8 @@ func (s *Sniffer) createAFPacketSource(socket config.SocketSettings, snapLen int
 	if filter != "" {
 		if err := handle.SetBPFFilter(filter, snapLen); err != nil {
 			log.Error().Err(err).Str("filter", filter).Msg("Failed to set BPF filter")
+		} else if workerID == 0 {
+			log.Info().Str("filter", filter).Str("interface", socket.Device).Msg("BPF filter applied")
 		}
 	}
 	return handle, nil
@@ -332,7 +391,20 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 		filter = fmt.Sprintf("(%s) or (vlan and (%s))", filter, filter)
 	}
 
-	log.Info().Str("filter", filter).Str("interface", socket.Device).Msg("BPF filter applied")
+	// Exclude outgoing HEP traffic so heplify does not capture its own output.
+	// Without this exclusion, every HEP packet sent to a server is also captured
+	// and processed (wasted CPU + misleading debug counters).
+	var hepExcludes []string
+	for _, t := range s.cfg.TransportSettings {
+		if !t.Active || t.Port == 0 {
+			continue
+		}
+		hepExcludes = append(hepExcludes, fmt.Sprintf("not dst port %d", t.Port))
+	}
+	if len(hepExcludes) > 0 {
+		filter = fmt.Sprintf("(%s) and %s", filter, strings.Join(hepExcludes, " and "))
+	}
+
 	return filter
 }
 

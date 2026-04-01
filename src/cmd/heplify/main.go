@@ -40,6 +40,7 @@ var (
 	snaplen      int
 	bufferSizeMB int
 	promisc      bool
+	promiscIfaces string
 	bpfFilter    string
 	portRange    string
 
@@ -143,6 +144,7 @@ func init() {
 	flag.IntVar(&snaplen, "s", 8192, "Snap length")
 	flag.IntVar(&bufferSizeMB, "b", 32, "Interface buffer size (MB)")
 	flag.BoolVar(&promisc, "promisc", true, "Enable promiscuous mode")
+	flag.StringVar(&promiscIfaces, "pi", "", "Comma-separated interfaces to put into promisc when -i any (e.g. eth0,eth1)")
 	flag.StringVar(&bpfFilter, "bpf", "", "Custom BPF filter")
 	flag.StringVar(&portRange, "pr", "5060-5090", "Port range to capture SIP")
 
@@ -397,7 +399,9 @@ func main() {
 
 	log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
 
-	// Cleanup
+	// Cleanup: close packet sources first so that capture goroutines return and
+	// their deferred cleanup (e.g. restoring promiscuous mode) is executed.
+	sniff.Stop()
 	if coll != nil {
 		coll.Stop()
 	}
@@ -524,6 +528,7 @@ func buildConfigFromFlags() *config.Config {
 			SocketType:    socketType,
 			Device:        device,
 			Promisc:       promisc,
+			PromiscInterfaces: parseCSV(promiscIfaces),
 			SnapLen:       snaplen,
 			BufferSizeMB:  bufferSizeMB,
 			Vlan:          withVlan,

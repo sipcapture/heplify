@@ -171,8 +171,10 @@ func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if client.keepAlive > 0 {
-			if tcpConn, ok := conn.(*net.TCPConn); ok {
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			// Disable Nagle — HEP packets are small and must be sent immediately.
+			_ = tcpConn.SetNoDelay(true)
+			if client.keepAlive > 0 {
 				_ = tcpConn.SetKeepAlive(true)
 				_ = tcpConn.SetKeepAlivePeriod(time.Duration(client.keepAlive) * time.Second)
 			}
@@ -190,8 +192,10 @@ func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if client.keepAlive > 0 {
-			if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+		if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+			// Disable Nagle — HEP packets are small and must be sent immediately.
+			_ = tcpConn.SetNoDelay(true)
+			if client.keepAlive > 0 {
 				_ = tcpConn.SetKeepAlive(true)
 				_ = tcpConn.SetKeepAlivePeriod(time.Duration(client.keepAlive) * time.Second)
 			}

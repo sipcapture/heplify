@@ -49,8 +49,47 @@ func TestDetectLinkType(t *testing.T) {
 }
 
 func TestDetectLinkTypeAny(t *testing.T) {
-	if got := detectLinkType("any"); got != layers.LinkTypeEthernet {
-		t.Fatalf("detectLinkType(\"any\") = %v, want Ethernet", got)
+	if got := detectLinkType("any"); got != layers.LinkTypeLinuxSLL {
+		t.Fatalf("detectLinkType(\"any\") = %v, want LinuxSLL", got)
+	}
+}
+
+func TestSetInterfacePromiscNonExistent(t *testing.T) {
+	// setInterfacePromisc should return an error for a non-existent interface.
+	err := setInterfacePromisc("__no_such_iface__", true)
+	if err == nil {
+		t.Fatal("expected error for non-existent interface, got nil")
+	}
+}
+
+func TestApplyPromiscNoRoot(t *testing.T) {
+	// applyPromisc for a non-existent device must not panic; it logs a warning
+	// and leaves promiscIfaces empty.
+	h := &afpacketHandle{}
+	h.applyPromisc("__no_such_iface__", nil)
+	if len(h.promiscIfaces) != 0 {
+		t.Fatalf("expected empty promiscIfaces, got %v", h.promiscIfaces)
+	}
+}
+
+func TestApplyPromiscAnyEmptyList(t *testing.T) {
+	// With device="any" and an empty promiscIfaces list, applyPromisc must not
+	// touch any interface (it emits a warning instead).
+	h := &afpacketHandle{}
+	h.applyPromisc("any", nil)
+	if len(h.promiscIfaces) != 0 {
+		t.Fatalf("expected no interfaces set, got %v", h.promiscIfaces)
+	}
+}
+
+func TestApplyPromiscAnyWithList(t *testing.T) {
+	// With device="any" and a non-empty list, only the listed interfaces should
+	// be attempted. Non-existent ones produce a warning but no panic.
+	h := &afpacketHandle{}
+	h.applyPromisc("any", []string{"__no_such_iface_a__", "__no_such_iface_b__"})
+	// Both will fail (no such interface), so promiscIfaces stays empty.
+	if len(h.promiscIfaces) != 0 {
+		t.Fatalf("expected empty promiscIfaces for non-existent interfaces, got %v", h.promiscIfaces)
 	}
 }
 
