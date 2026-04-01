@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-commit hook: fail if any staged .go files need gofmt.
+# Install once per clone:  git config core.hooksPath .githooks
+
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+[ -z "$staged" ] && exit 0
+
+unformatted=$(gofmt -l $staged)
+if [ -n "$unformatted" ]; then
+    echo "gofmt: the following staged files need formatting:"
+    echo "$unformatted"
+    echo ""
+    echo "Run:  gofmt -w $unformatted"
+    echo " or:  make fmt && git add <files>"
+    exit 1
+fi

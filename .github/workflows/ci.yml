@@ -26,6 +26,9 @@ jobs:
       - name: Download Go modules
         run: go mod download
 
+      - name: gofmt check
+        run: make fmt-check
+
       - name: go vet
         run: make lint
 
@@ -55,6 +58,9 @@ jobs:
 
       - name: Download Go modules
         run: go mod download
+
+      - name: gofmt check
+        run: make fmt-check
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6

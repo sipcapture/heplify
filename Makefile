@@ -67,10 +67,18 @@ lint:
 lint-golangci:
 	golangci-lint run ./...
 
-lint-all: lint lint-golangci
+lint-all: lint lint-golangci fmt-check
 
 fmt:
 	go fmt $(PKGLIST)
+
+fmt-check:
+	@out=$$(gofmt -l $$(go list -f '{{.Dir}}' $(PKGLIST) | xargs -I{} find {} -maxdepth 1 -name '*.go')); \
+	if [ -n "$$out" ]; then \
+		echo "The following files need gofmt:"; \
+		echo "$$out"; \
+		exit 1; \
+	fi
 
 tidy:
 	go mod tidy
@@ -103,7 +111,7 @@ package: $(LIBPCAP_LOCAL_DIR)/lib/libpcap.a
 run: build
 	./$(NAME)
 
-.PHONY: all build debug linux linux-static libpcap-local test test-race test-coverage lint lint-golangci lint-all fmt tidy deps run package update-version release clean clean-libpcap
+.PHONY: all build debug linux linux-static libpcap-local test test-race test-coverage lint lint-golangci lint-all fmt fmt-check tidy deps run package update-version release clean clean-libpcap
 
 clean:
 	rm -f $(NAME) $(NAME)-linux-amd64 $(NAME)-linux-static
