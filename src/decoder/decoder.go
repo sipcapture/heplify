@@ -240,6 +240,22 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 				if innerPkt := d.decodeInnerIPPacket(d.gre.Payload, ci); innerPkt != nil {
 					return innerPkt, nil
 				}
+			} else if d.gre.Protocol == layers.EthernetTypeERSPAN {
+				// ERSPAN Type II/III over GRE (proto 0x88BE).
+				// gopacket maps 0x88BE → layers.LayerTypeERSPANII (id 145) which is not
+				// registered in our DecodingLayerParser, so the parser stops at GRE and
+				// never reaches ownlayers.LayerTypeERSPAN (id 2001). We therefore decode
+				// the ERSPAN header manually here using the shared d.erspan instance.
+				if err := d.erspan.DecodeFromBytes(d.gre.Payload, gopacket.NilDecodeFeedback); err == nil {
+					if len(d.erspan.Payload) > 0 {
+						if innerPkt := d.decodeInnerPacket(d.erspan.Payload, ci); innerPkt != nil {
+							if innerPkt.Vlan == 0 && d.erspan.VLan > 0 {
+								innerPkt.Vlan = d.erspan.VLan
+							}
+							return innerPkt, nil
+						}
+					}
+				}
 			}
 		}
 	}

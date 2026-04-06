@@ -406,6 +406,84 @@ func TestGREWithIPv4Payload(t *testing.T) {
 	}
 }
 
+// ─── GRE with ERSPAN Type II payload (regression: issue #336) ────────────────
+
+// buildGREERSPANTypeII builds an Ethernet+IPv4+GRE(0x88BE)+ERSPAN_II+Ethernet+IPv4+UDP packet.
+// ERSPAN Type II header is 8 bytes: Version+VLAN (2B) | CoS+T+SpanID (2B) | Reserved+Index (4B).
+func buildGREERSPANTypeII(t *testing.T, vlan uint16, innerSrcPort, innerDstPort uint16, payload []byte) []byte {
+	t.Helper()
+
+	// Inner Ethernet+IPv4+UDP frame.
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: layers.UDPPort(innerSrcPort), DstPort: layers.UDPPort(innerDstPort)},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII inner: %v", err)
+	}
+
+	// 8-byte ERSPAN Type II header.
+	// Byte 0-1: Version=1 (4 bits, upper) + VLAN (12 bits)
+	// Byte 2-3: CoS=0, Encap=0, T=0, SpanID=1
+	// Byte 4-7: Reserved=0, Index=0
+	erspan := make([]byte, 8)
+	binary.BigEndian.PutUint16(erspan[0:2], (1<<12)|vlan)
+	binary.BigEndian.PutUint16(erspan[2:4], 0x0001) // SpanID=1
+	binary.BigEndian.PutUint32(erspan[4:8], 0)
+
+	erspan = append(erspan, innerBuf.Bytes()...)
+
+	// Outer Ethernet+IPv4+GRE(0x88BE) wrapping the ERSPAN payload.
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolGRE,
+			TTL:      64,
+			SrcIP:    net.ParseIP("192.168.1.1").To4(),
+			DstIP:    net.ParseIP("192.168.1.2").To4(),
+		},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN},
+		gopacket.Payload(erspan),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII outer: %v", err)
+	}
+	return outerBuf.Bytes()
+}
+
+func TestGREWithERSPANTypeII(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	payload := []byte("INVITE sip:bob@example.com SIP/2.0\r\n")
+	const vlan = 100
+	data := buildGREERSPANTypeII(t, vlan, 5060, 5060, payload)
+
+	pkt, err := d.Decode(data, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN Type II: expected decoded inner packet from GRE(0x88BE), got nil (regression: issue #336)")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(payload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+	if pkt.Vlan != vlan {
+		t.Fatalf("expected VLAN %d from ERSPAN header, got %d", vlan, pkt.Vlan)
+	}
+}
+
 // TestTCPSIPMidStreamResync verifies that a SIP message delivered with
 // r.Skip != 0 (half-open stream — heplify started after the SYN) is still
 // decoded rather than silently dropped.
