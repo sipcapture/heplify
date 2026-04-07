@@ -2,11 +2,13 @@ package decoder
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"net"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/ip4defrag"
 	"github.com/google/gopacket/layers"
+	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/decoder/ip6defrag"
 	"github.com/sipcapture/heplify/src/decoder/ownlayers"
 )
@@ -255,6 +257,23 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 							return innerPkt, nil
 						}
 					}
+				} else {
+					// ERSPAN header decode failed. This may be ERSPAN Type I (no
+					// ERSPAN header — raw Ethernet directly after GRE) or a
+					// non-standard implementation. Fallback: treat the GRE payload
+					// as a raw Ethernet frame.
+					headerHex := ""
+					if len(d.gre.Payload) >= 4 {
+						headerHex = hex.EncodeToString(d.gre.Payload[:4])
+					}
+					log.Debug().
+						Err(err).
+						Str("header_hex", headerHex).
+						Int("payload_len", len(d.gre.Payload)).
+						Msg("[erspan] ERSPAN header decode failed, trying raw Ethernet fallback (Type I)")
+					if innerPkt := d.decodeInnerPacket(d.gre.Payload, ci); innerPkt != nil {
+						return innerPkt, nil
+					}
 				}
 			}
 		}
@@ -336,18 +355,18 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 
 // decodeInnerPacket decodes an inner Ethernet frame (e.g., from VXLAN or ERSPAN)
 func (d *Decoder) decodeInnerPacket(data []byte, ci gopacket.CaptureInfo) *Packet {
-	// Create a new parser for the inner frame starting with Ethernet
 	var eth layers.Ethernet
 	var d1q layers.Dot1Q
 	var ip4 layers.IPv4
 	var ip6 layers.IPv6
 	var tcp layers.TCP
 	var udp layers.UDP
+	var sctp layers.SCTP
 	var payload gopacket.Payload
 
 	parser := gopacket.NewDecodingLayerParser(
 		layers.LayerTypeEthernet,
-		&eth, &d1q, &ip4, &ip6, &tcp, &udp, &payload,
+		&eth, &d1q, &ip4, &ip6, &tcp, &udp, &sctp, &payload,
 	)
 	parser.IgnoreUnsupported = true
 
@@ -390,6 +409,12 @@ func (d *Decoder) decodeInnerPacket(data []byte, ci gopacket.CaptureInfo) *Packe
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
 			foundTransport = true
+		case layers.LayerTypeSCTP:
+			pkt.Protocol = 0x84
+			pkt.SrcPort = uint16(sctp.SrcPort)
+			pkt.DstPort = uint16(sctp.DstPort)
+			pkt.Payload = sctp.Payload
+			foundTransport = true
 		}
 	}
 
@@ -421,11 +446,12 @@ func (d *Decoder) decodeInnerIPPacket(data []byte, ci gopacket.CaptureInfo) *Pac
 	var ip6 layers.IPv6
 	var tcp layers.TCP
 	var udp layers.UDP
+	var sctp layers.SCTP
 	var payload gopacket.Payload
 
 	parser := gopacket.NewDecodingLayerParser(
 		startLayer,
-		&ip4, &ip6, &tcp, &udp, &payload,
+		&ip4, &ip6, &tcp, &udp, &sctp, &payload,
 	)
 	parser.IgnoreUnsupported = true
 
@@ -465,6 +491,12 @@ func (d *Decoder) decodeInnerIPPacket(data []byte, ci gopacket.CaptureInfo) *Pac
 			pkt.SrcPort = uint16(tcp.SrcPort)
 			pkt.DstPort = uint16(tcp.DstPort)
 			pkt.Payload = tcp.Payload
+			foundTransport = true
+		case layers.LayerTypeSCTP:
+			pkt.Protocol = 0x84
+			pkt.SrcPort = uint16(sctp.SrcPort)
+			pkt.DstPort = uint16(sctp.DstPort)
+			pkt.Payload = sctp.Payload
 			foundTransport = true
 		}
 	}

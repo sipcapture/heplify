@@ -484,6 +484,302 @@ func TestGREWithERSPANTypeII(t *testing.T) {
 	}
 }
 
+// ─── GRE with ERSPAN Type II + S-bit (real Cisco format) ─────────────────────
+
+// buildGREERSPANTypeII_SBit builds an Ethernet+IPv4+GRE(S=1,0x88BE)+ERSPAN_II+Ethernet+IPv4+UDP packet.
+// Real Cisco ERSPAN Type II always sets the GRE S-bit (sequence number present).
+func buildGREERSPANTypeII_SBit(t *testing.T, vlan uint16, innerSrcPort, innerDstPort uint16, payload []byte) []byte {
+	t.Helper()
+
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: layers.UDPPort(innerSrcPort), DstPort: layers.UDPPort(innerDstPort)},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII_SBit inner: %v", err)
+	}
+
+	erspan := make([]byte, 8)
+	binary.BigEndian.PutUint16(erspan[0:2], (1<<12)|vlan)
+	binary.BigEndian.PutUint16(erspan[2:4], 0x0001)
+	binary.BigEndian.PutUint32(erspan[4:8], 0)
+	erspan = append(erspan, innerBuf.Bytes()...)
+
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolGRE,
+			TTL:      64,
+			SrcIP:    net.ParseIP("192.168.1.1").To4(),
+			DstIP:    net.ParseIP("192.168.1.2").To4(),
+		},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN, SeqPresent: true, Seq: 42},
+		gopacket.Payload(erspan),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII_SBit outer: %v", err)
+	}
+	return outerBuf.Bytes()
+}
+
+func TestGREWithERSPANTypeII_SeqBit(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	payload := []byte("INVITE sip:bob@example.com SIP/2.0\r\n")
+	const vlan uint16 = 200
+	data := buildGREERSPANTypeII_SBit(t, vlan, 5060, 5060, payload)
+
+	pkt, err := d.Decode(data, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN Type II + GRE S-bit: expected decoded inner packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(payload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+	if pkt.Vlan != vlan {
+		t.Fatalf("expected VLAN %d, got %d", vlan, pkt.Vlan)
+	}
+}
+
+// buildGREERSPANTypeII_CSBit builds a packet with GRE C+S bits set (checksum + sequence).
+func buildGREERSPANTypeII_CSBit(t *testing.T, vlan uint16, innerSrcPort, innerDstPort uint16, payload []byte) []byte {
+	t.Helper()
+
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: layers.UDPPort(innerSrcPort), DstPort: layers.UDPPort(innerDstPort)},
+		gopacket.Payload(payload),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII_CSBit inner: %v", err)
+	}
+
+	erspan := make([]byte, 8)
+	binary.BigEndian.PutUint16(erspan[0:2], (1<<12)|vlan)
+	binary.BigEndian.PutUint16(erspan[2:4], 0x0001)
+	binary.BigEndian.PutUint32(erspan[4:8], 0)
+	erspan = append(erspan, innerBuf.Bytes()...)
+
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			Protocol: layers.IPProtocolGRE,
+			TTL:      64,
+			SrcIP:    net.ParseIP("192.168.1.1").To4(),
+			DstIP:    net.ParseIP("192.168.1.2").To4(),
+		},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN, ChecksumPresent: true, SeqPresent: true, Seq: 99},
+		gopacket.Payload(erspan),
+	); err != nil {
+		t.Fatalf("buildGREERSPANTypeII_CSBit outer: %v", err)
+	}
+	return outerBuf.Bytes()
+}
+
+func TestGREWithERSPANTypeII_ChecksumAndSeq(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	payload := []byte("SIP/2.0 200 OK\r\n")
+	const vlan uint16 = 300
+	data := buildGREERSPANTypeII_CSBit(t, vlan, 5060, 5060, payload)
+
+	pkt, err := d.Decode(data, ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN Type II + GRE C+S bits: expected decoded inner packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if string(pkt.Payload) != string(payload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+	if pkt.Vlan != vlan {
+		t.Fatalf("expected VLAN %d, got %d", vlan, pkt.Vlan)
+	}
+}
+
+// ─── GRE with ERSPAN Type III (Version 2, 12-byte header) ───────────────────
+
+func TestGREWithERSPANTypeIII(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	sipPayload := []byte("INVITE sip:bob@example.com SIP/2.0\r\n")
+
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: 5060, DstPort: 5060},
+		gopacket.Payload(sipPayload),
+	); err != nil {
+		t.Fatalf("inner: %v", err)
+	}
+
+	// 12-byte ERSPAN Type III header (Version=2).
+	const vlan uint16 = 150
+	erspan := make([]byte, 12)
+	binary.BigEndian.PutUint16(erspan[0:2], (2<<12)|vlan) // Version=2
+	binary.BigEndian.PutUint16(erspan[2:4], 0x0002)       // SpanID=2
+	binary.BigEndian.PutUint32(erspan[4:8], 0x12345678)   // Timestamp
+	binary.BigEndian.PutUint16(erspan[8:10], 0x00AA)      // SGT
+	binary.BigEndian.PutUint16(erspan[10:12], 0)          // P+FT+HW+D+Gra+O
+	erspan = append(erspan, innerBuf.Bytes()...)
+
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolGRE, TTL: 64,
+			SrcIP: net.ParseIP("192.168.1.1").To4(), DstIP: net.ParseIP("192.168.1.2").To4()},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN, SeqPresent: true, Seq: 10},
+		gopacket.Payload(erspan),
+	); err != nil {
+		t.Fatalf("outer: %v", err)
+	}
+
+	pkt, err := d.Decode(outerBuf.Bytes(), ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN Type III: expected decoded inner packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if string(pkt.Payload) != string(sipPayload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+	if pkt.Vlan != vlan {
+		t.Fatalf("expected VLAN %d, got %d", vlan, pkt.Vlan)
+	}
+}
+
+// ─── GRE ERSPAN Type I fallback (raw Ethernet, no ERSPAN header) ────────────
+
+func TestGREWithERSPAN_TypeIFallback(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	sipPayload := []byte("INVITE sip:alice@example.com SIP/2.0\r\n")
+
+	// Inner Ethernet frame WITHOUT ERSPAN header — some devices send GRE(0x88BE)
+	// with raw Ethernet payload (ERSPAN Type I).
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: 5060, DstPort: 5060},
+		gopacket.Payload(sipPayload),
+	); err != nil {
+		t.Fatalf("inner: %v", err)
+	}
+
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolGRE, TTL: 64,
+			SrcIP: net.ParseIP("192.168.1.1").To4(), DstIP: net.ParseIP("192.168.1.2").To4()},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN, SeqPresent: true, Seq: 5},
+		gopacket.Payload(innerBuf.Bytes()),
+	); err != nil {
+		t.Fatalf("outer: %v", err)
+	}
+
+	pkt, err := d.Decode(outerBuf.Bytes(), ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN Type I fallback: expected decoded inner packet, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if string(pkt.Payload) != string(sipPayload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+}
+
+// ─── GRE ERSPAN with inner VLAN-tagged frame ────────────────────────────────
+
+func TestGREWithERSPANTypeII_InnerVLAN(t *testing.T) {
+	d := NewDecoder(layers.LinkTypeEthernet)
+	ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+	sipPayload := []byte("REGISTER sip:example.com SIP/2.0\r\n")
+
+	// Inner Ethernet frame with 802.1Q VLAN tag.
+	innerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(innerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeDot1Q},
+		&layers.Dot1Q{VLANIdentifier: 55, Type: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolUDP, TTL: 64, SrcIP: testSrcIP4, DstIP: testDstIP4},
+		&layers.UDP{SrcPort: 5060, DstPort: 5060},
+		gopacket.Payload(sipPayload),
+	); err != nil {
+		t.Fatalf("inner: %v", err)
+	}
+
+	const erspanVLAN uint16 = 100
+	erspan := make([]byte, 8)
+	binary.BigEndian.PutUint16(erspan[0:2], (1<<12)|erspanVLAN)
+	binary.BigEndian.PutUint16(erspan[2:4], 0x0001)
+	binary.BigEndian.PutUint32(erspan[4:8], 0)
+	erspan = append(erspan, innerBuf.Bytes()...)
+
+	outerBuf := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(outerBuf, gopacket.SerializeOptions{FixLengths: true},
+		&layers.Ethernet{SrcMAC: testSrcMAC, DstMAC: testDstMAC, EthernetType: layers.EthernetTypeIPv4},
+		&layers.IPv4{Version: 4, IHL: 5, Protocol: layers.IPProtocolGRE, TTL: 64,
+			SrcIP: net.ParseIP("192.168.1.1").To4(), DstIP: net.ParseIP("192.168.1.2").To4()},
+		&layers.GRE{Protocol: layers.EthernetTypeERSPAN, SeqPresent: true, Seq: 1},
+		gopacket.Payload(erspan),
+	); err != nil {
+		t.Fatalf("outer: %v", err)
+	}
+
+	pkt, err := d.Decode(outerBuf.Bytes(), ci)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("ERSPAN + inner VLAN: expected decoded packet, got nil")
+	}
+	// Inner 802.1Q VLAN should take precedence over ERSPAN header VLAN.
+	if pkt.Vlan != 55 {
+		t.Fatalf("expected inner VLAN 55, got %d", pkt.Vlan)
+	}
+	if string(pkt.Payload) != string(sipPayload) {
+		t.Fatalf("payload mismatch: got %q", pkt.Payload)
+	}
+}
+
 // TestTCPSIPMidStreamResync verifies that a SIP message delivered with
 // r.Skip != 0 (half-open stream — heplify started after the SYN) is still
 // decoded rather than silently dropped.
