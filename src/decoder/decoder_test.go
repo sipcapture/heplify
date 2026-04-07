@@ -3,12 +3,14 @@ package decoder
 import (
 	"encoding/binary"
 	"net"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/tcpassembly"
 )
 
@@ -552,6 +554,65 @@ func TestGREWithERSPANTypeII_SeqBit(t *testing.T) {
 	}
 	if pkt.Vlan != vlan {
 		t.Fatalf("expected VLAN %d, got %d", vlan, pkt.Vlan)
+	}
+}
+
+func TestGREWithERSPANTypeII_ReproFromPCAP(t *testing.T) {
+	data := buildGREERSPANTypeII_SBit(t, 222, 5060, 5060, []byte("INVITE sip:debug@example.com SIP/2.0\r\n"))
+
+	pcapPath := t.TempDir() + "/erspan_type2_repro.pcap"
+	fw, err := os.Create(pcapPath)
+	if err != nil {
+		t.Fatalf("create pcap: %v", err)
+	}
+	w := pcapgo.NewWriter(fw)
+	if err := w.WriteFileHeader(65535, layers.LinkTypeEthernet); err != nil {
+		_ = fw.Close()
+		t.Fatalf("write pcap header: %v", err)
+	}
+	ci := gopacket.CaptureInfo{
+		Timestamp:     time.Now(),
+		CaptureLength: len(data),
+		Length:        len(data),
+	}
+	if err := w.WritePacket(ci, data); err != nil {
+		_ = fw.Close()
+		t.Fatalf("write pcap packet: %v", err)
+	}
+	if err := fw.Close(); err != nil {
+		t.Fatalf("close pcap: %v", err)
+	}
+	t.Logf("repro pcap generated: %s", pcapPath)
+
+	handle, err := pcap.OpenOffline(pcapPath)
+	if err != nil {
+		t.Fatalf("open pcap: %v", err)
+	}
+	defer handle.Close()
+
+	d := NewDecoder(handle.LinkType())
+	packetData, gotCI, err := handle.ReadPacketData()
+	if err != nil {
+		t.Fatalf("read pcap packet: %v", err)
+	}
+	pkt, err := d.Decode(packetData, gotCI)
+	if err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if pkt == nil {
+		t.Fatal("expected decoded packet from ERSPAN Type II repro pcap, got nil")
+	}
+	if pkt.Protocol != 0x11 {
+		t.Fatalf("expected UDP (0x11), got 0x%02x", pkt.Protocol)
+	}
+	if pkt.SrcPort != 5060 || pkt.DstPort != 5060 {
+		t.Fatalf("expected ports 5060/5060, got %d/%d", pkt.SrcPort, pkt.DstPort)
+	}
+	if pkt.Vlan != 222 {
+		t.Fatalf("expected ERSPAN VLAN 222, got %d", pkt.Vlan)
+	}
+	if string(pkt.Payload) != "INVITE sip:debug@example.com SIP/2.0\r\n" {
+		t.Fatalf("unexpected payload: %q", pkt.Payload)
 	}
 }
 

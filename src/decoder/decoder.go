@@ -229,10 +229,19 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case layers.LayerTypeGRE:
+			log.Debug().
+				Str("gre_proto", d.gre.Protocol.String()).
+				Int("gre_payload_len", len(d.gre.Payload)).
+				Msg("[gre] encountered GRE packet")
 			if d.gre.Protocol == layers.EthernetTypeTransparentEthernetBridging {
 				// NVGRE: inner Ethernet frame with an 8-byte key header.
 				if len(d.gre.Payload) >= 8 {
 					if innerPkt := d.decodeInnerPacket(d.gre.Payload[8:], ci); innerPkt != nil {
+						log.Debug().
+							Uint8("proto", innerPkt.Protocol).
+							Uint16("src_port", innerPkt.SrcPort).
+							Uint16("dst_port", innerPkt.DstPort).
+							Msg("[gre] decoded inner NVGRE Ethernet payload")
 						return innerPkt, nil
 					}
 				}
@@ -240,6 +249,11 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 				d.gre.Protocol == layers.EthernetTypeIPv6 {
 				// Standard GRE carrying an IP payload (e.g. ip tunnel / gre interfaces).
 				if innerPkt := d.decodeInnerIPPacket(d.gre.Payload, ci); innerPkt != nil {
+					log.Debug().
+						Uint8("proto", innerPkt.Protocol).
+						Uint16("src_port", innerPkt.SrcPort).
+						Uint16("dst_port", innerPkt.DstPort).
+						Msg("[gre] decoded inner raw IP payload")
 					return innerPkt, nil
 				}
 			} else if d.gre.Protocol == layers.EthernetTypeERSPAN {
@@ -248,14 +262,31 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 				// registered in our DecodingLayerParser, so the parser stops at GRE and
 				// never reaches ownlayers.LayerTypeERSPAN (id 2001). We therefore decode
 				// the ERSPAN header manually here using the shared d.erspan instance.
+				log.Debug().
+					Int("gre_payload_len", len(d.gre.Payload)).
+					Msg("[erspan] attempting ERSPAN header decode from GRE payload")
 				if err := d.erspan.DecodeFromBytes(d.gre.Payload, gopacket.NilDecodeFeedback); err == nil {
+					log.Debug().
+						Uint8("erspan_version", uint8(d.erspan.Version)).
+						Uint16("erspan_vlan", d.erspan.VLan).
+						Int("inner_payload_len", len(d.erspan.Payload)).
+						Msg("[erspan] ERSPAN header decoded")
 					if len(d.erspan.Payload) > 0 {
 						if innerPkt := d.decodeInnerPacket(d.erspan.Payload, ci); innerPkt != nil {
 							if innerPkt.Vlan == 0 && d.erspan.VLan > 0 {
 								innerPkt.Vlan = d.erspan.VLan
 							}
+							log.Debug().
+								Uint8("proto", innerPkt.Protocol).
+								Uint16("src_port", innerPkt.SrcPort).
+								Uint16("dst_port", innerPkt.DstPort).
+								Uint16("effective_vlan", innerPkt.Vlan).
+								Msg("[erspan] decoded inner packet")
 							return innerPkt, nil
 						}
+						log.Debug().
+							Int("inner_payload_len", len(d.erspan.Payload)).
+							Msg("[erspan] inner payload present but packet decode returned nil")
 					}
 				} else {
 					// ERSPAN header decode failed. This may be ERSPAN Type I (no
@@ -272,8 +303,15 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 						Int("payload_len", len(d.gre.Payload)).
 						Msg("[erspan] ERSPAN header decode failed, trying raw Ethernet fallback (Type I)")
 					if innerPkt := d.decodeInnerPacket(d.gre.Payload, ci); innerPkt != nil {
+						log.Debug().
+							Uint8("proto", innerPkt.Protocol).
+							Uint16("src_port", innerPkt.SrcPort).
+							Uint16("dst_port", innerPkt.DstPort).
+							Msg("[erspan] raw Ethernet fallback decoded packet")
 						return innerPkt, nil
 					}
+					log.Debug().
+						Msg("[erspan] raw Ethernet fallback failed to decode inner packet")
 				}
 			}
 		}
