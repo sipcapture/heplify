@@ -303,6 +303,11 @@ func main() {
 			log.Fatal().Err(err).Str("file", configFile).Msg("Failed to load config")
 		}
 		log.Info().Str("file", configFile).Msg("Loaded config from file")
+		// Explicitly-set CLI flags take precedence over the config file.
+		// This preserves backward-compatible behaviour: users can keep a default
+		// config in /etc/heplify/heplify.json (or via HEPLIFY_CONFIG) and still
+		// override individual settings on the command line (e.g. -i ens32 -erspan).
+		applyExplicitCLIOverrides(cfg)
 	} else {
 		cfg = buildConfigFromFlags()
 		log.Info().Msg("Using command line configuration")
@@ -831,6 +836,259 @@ func buildSenderForSocket(cfg *config.Config, sock config.SocketSettings) *trans
 	}
 	return transport.NewFromTransports(selected, cfg)
 }
+
+// applyExplicitCLIOverrides applies only the flags that the user explicitly set
+// on the command line on top of a config loaded from a file. This allows
+// "docker run ... -i ens32 -erspan" to override the interface/erspan setting in
+// a default config without requiring the user to disable the config file entirely.
+//
+// flag.Visit iterates only over flags whose value was changed from the default,
+// so default values never silently overwrite config file entries.
+func applyExplicitCLIOverrides(cfg *config.Config) {
+	var visited []string
+	flag.Visit(func(f *flag.Flag) { visited = append(visited, f.Name) })
+	applyExplicitCLIOverridesWithVisited(cfg, visited)
+}
+
+// applyExplicitCLIOverridesWithVisited is the testable core of
+// applyExplicitCLIOverrides. It applies only the named flags (those that were
+// explicitly set) to cfg, reading their current values from the package-level
+// flag variables. Tests pass a controlled visited slice instead of relying on
+// the global flag.CommandLine visited state.
+func applyExplicitCLIOverridesWithVisited(cfg *config.Config, visited []string) {
+	visitedSet := make(map[string]bool, len(visited))
+	for _, v := range visited {
+		visitedSet[v] = true
+	}
+
+	var overrideLog []string
+
+	applyOne := func(name string) {
+		switch name {
+		case "i":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].Device = device
+			}
+			overrideLog = append(overrideLog, "device="+device)
+
+		case "t":
+			st := "afpacket"
+			switch strings.ToLower(captureType) {
+			case "pcap":
+				st = "pcap"
+			case "afpacket", "af_packet":
+				st = "afpacket"
+			}
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].SocketType = st
+			}
+			overrideLog = append(overrideLog, "socket_type="+st)
+
+		case "s":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].SnapLen = snaplen
+			}
+
+		case "b":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].BufferSizeMB = bufferSizeMB
+			}
+
+		case "promisc":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].Promisc = promisc
+			}
+
+		case "pi":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].PromiscInterfaces = parseCSV(promiscIfaces)
+			}
+
+		case "bpf":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].BPFFilter = bpfFilter
+			}
+			overrideLog = append(overrideLog, "bpf_filter="+bpfFilter)
+
+		case "m":
+			modes := parseCaptureMode(captureMode)
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].CaptureMode = modes
+			}
+			overrideLog = append(overrideLog, "capture_mode="+captureMode)
+
+		case "vlan":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].Vlan = withVlan
+			}
+			if withVlan {
+				overrideLog = append(overrideLog, "vlan=true")
+			}
+
+		case "erspan":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].Erspan = withErspan
+			}
+			if withErspan {
+				overrideLog = append(overrideLog, "erspan=true")
+			}
+
+		case "pr":
+			minPort, maxPort, err := parsePortRange(portRange)
+			if err != nil {
+				log.Warn().Err(err).Str("range", portRange).Msg("Invalid -pr port range override, ignored")
+				return
+			}
+			modes := make([]string, 0)
+			for _, s := range cfg.SocketSettings {
+				modes = s.CaptureMode
+				break
+			}
+			cfg.ProtocolSettings = buildProtocolSettings(modes, minPort, maxPort)
+			overrideLog = append(overrideLog, "port_range="+portRange)
+
+		case "hs":
+			servers := strings.Split(hepServer, ",")
+			var newTransports []config.TransportSettings
+			for _, server := range servers {
+				server = strings.TrimSpace(server)
+				if server == "" {
+					continue
+				}
+				var host string
+				port := 9060
+				if h, p, err := net.SplitHostPort(server); err == nil {
+					host = h
+					if parsed, err := strconv.Atoi(p); err == nil {
+						port = parsed
+					}
+				} else {
+					host = server
+				}
+				newTransports = append(newTransports, config.TransportSettings{
+					Name:       fmt.Sprintf("hep-%s", server),
+					Active:     true,
+					Protocol:   "HEPv3",
+					Host:       host,
+					Port:       port,
+					Transport:  networkType,
+					Password:   hepNodePW,
+					SkipVerify: skipVerify,
+					KeepAlive:  int(keepAlive),
+					MaxRetries: tcpSendRetries,
+				})
+			}
+			if len(newTransports) > 0 {
+				cfg.TransportSettings = newTransports
+				overrideLog = append(overrideLog, "hep_server="+hepServer)
+			}
+
+		case "l":
+			cfg.LogSettings.Level = logLevel
+			overrideLog = append(overrideLog, "log_level="+logLevel)
+
+		case "hi":
+			cfg.SystemSettings.NodeID = uint32(hepNodeID)
+
+		case "hn":
+			cfg.SystemSettings.NodeName = hepNodeName
+
+		case "hp":
+			cfg.SystemSettings.NodePW = hepNodePW
+
+		case "fg":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].FanoutID = uint16(fanoutID)
+			}
+
+		case "fw":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].FanoutWorkers = fanoutWorkers
+			}
+
+		case "rf":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].PcapFile = readFile
+			}
+
+		case "tcpassembly":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].TcpReasm = tcpAssembly
+			}
+
+		case "sipassembly":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].SIPReasm = sipAssembly
+			}
+
+		case "ipfragment":
+			for i := range cfg.SocketSettings {
+				cfg.SocketSettings[i].IpFragment = ipFragment
+			}
+
+		case "dd":
+			cfg.SipSettings.Deduplicate = dedup
+			cfg.HepSettings.Deduplicate = dedup
+
+		case "dim":
+			cfg.SipSettings.DiscardMethods = parseCSV(discardMethods)
+
+		case "diip":
+			cfg.SipSettings.DiscardIPs = parseCSV(discardIPs)
+
+		case "disip":
+			cfg.SipSettings.DiscardSrcIP = parseCSV(discardSrcIPs)
+
+		case "didip":
+			cfg.SipSettings.DiscardDstIP = parseCSV(discardDstIPs)
+
+		case "fi":
+			cfg.FilterInclude = parseCSV(filterInclude)
+
+		case "di":
+			cfg.FilterExclude = parseCSV(filterExclude)
+
+		case "d":
+			cfg.DebugSelectors = parseCSV(debugSelectors)
+
+		case "log-payload":
+			cfg.LogSettings.LogPayload = logPayload
+
+		case "disable-defrag":
+			cfg.DebugSettings.DisableIPDefrag = disableDefrag
+
+		case "disable-tcp-reasm":
+			cfg.DebugSettings.DisableTcpReassembly = disableTcpReasm
+
+		case "wf":
+			cfg.PcapSettings.WriteFile = writeFile
+
+		case "rt":
+			cfg.PcapSettings.RotateMinutes = rotationTime
+
+		case "zf":
+			cfg.PcapSettings.Compress = compressPcap
+
+		case "rs":
+			cfg.PcapSettings.MaxSpeed = pcapMaxSpeed
+
+		case "lp":
+			cfg.PcapSettings.LoopCount = pcapLoopCount
+
+		case "eof-exit":
+			cfg.PcapSettings.EOFExit = pcapEOFExit
+		}
+	}
+
+	for name := range visitedSet {
+		applyOne(name)
+	}
+
+	if len(overrideLog) > 0 {
+		log.Info().Strs("overrides", overrideLog).Msg("CLI flags override config file settings")
+	}
+}
+
 func generateUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
