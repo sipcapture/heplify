@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -21,10 +20,6 @@ func LoadConfig(path string) (*Config, error) {
 		v.AddConfigPath("./")
 	}
 
-	v.SetEnvPrefix("HEPLIFYNG")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
-
 	v.SetDefault("rtcp_settings.active", true)
 	v.SetDefault("api_settings.tls", false)
 
@@ -36,6 +31,15 @@ func LoadConfig(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+
+	// Apply HEPLIFY_* environment variable overrides on top of the file
+	// config. This covers all fields including slice elements and nested
+	// structs that viper's AutomaticEnv cannot address.
+	eu := NewEnvUpdater()
+	if _, err := eu.UpdateFromEnv(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to apply env overrides: %w", err)
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
