@@ -140,11 +140,9 @@ func (eu *EnvUpdater) ensureArrayIndex(cfg *Config, parts []string) {
 	for i < len(parts) {
 		part := parts[i]
 
-		if idx, err := strconv.Atoi(part); err == nil {
-			if cur.Kind() == reflect.Slice && !cur.IsNil() && idx < cur.Len() {
-				cur = cur.Index(idx)
-				i++
-			}
+		if _, err := strconv.Atoi(part); err == nil {
+			// Numeric index reached — slice was already grown by the field
+			// navigation above; nothing more to do here.
 			return
 		}
 
