@@ -28,6 +28,7 @@ var (
 	showVersion bool
 	showHelp    bool
 	configFile  string
+	noConfig    bool
 	logLevel    string
 	logFormat   string
 	logStderr   bool
@@ -132,7 +133,8 @@ func init() {
 	flag.BoolVar(&showVersion, "version", false, "Show version and exit")
 	flag.BoolVar(&showHelp, "h", false, "Show help")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
-	flag.StringVar(&configFile, "config", "", "Path to JSON config file (overrides command line flags)")
+	flag.StringVar(&configFile, "config", "", "Path to JSON config file (explicitly set CLI flags override file values)")
+	flag.BoolVar(&noConfig, "no-config", false, "Ignore both -config and HEPLIFY_CONFIG; use CLI settings only")
 	flag.StringVar(&logLevel, "l", "info", "Log level [debug, info, warn, error]")
 	flag.BoolVar(&logStderr, "e", true, "Log to stderr")
 	flag.BoolVar(&logStdout, "S", false, "Log to stdout")
@@ -288,12 +290,12 @@ func main() {
 	var cfg *config.Config
 	var err error
 
-	// Honor HEPLIFY_CONFIG env var as fallback when -config is not set
-	if configFile == "" {
-		configFile = os.Getenv("HEPLIFY_CONFIG")
-		if configFile != "" {
-			log.Info().Str("file", configFile).Msg("Using config file from HEPLIFY_CONFIG env var")
-		}
+	var fromEnv bool
+	configFile, fromEnv = resolveConfigFilePath(configFile, noConfig)
+	if noConfig {
+		log.Info().Msg("Configuration file loading is disabled by -no-config")
+	} else if configFile != "" && fromEnv {
+		log.Info().Str("file", configFile).Msg("Using config file from HEPLIFY_CONFIG env var")
 	}
 
 	// Load config from file or build from flags
@@ -315,6 +317,7 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatal().Err(err).Msg("Configuration validation failed")
 	}
+	logEffectiveRuntimeConfig(cfg)
 
 	// Start API / Prometheus metrics server
 	apiserver.StartMetrics(cfg)
@@ -418,6 +421,20 @@ func main() {
 	}
 
 	log.Info().Msg("heplify stopped")
+}
+
+func resolveConfigFilePath(current string, skip bool) (string, bool) {
+	if skip {
+		return "", false
+	}
+	if current != "" {
+		return current, false
+	}
+	envPath := os.Getenv("HEPLIFY_CONFIG")
+	if envPath != "" {
+		return envPath, true
+	}
+	return "", false
 }
 
 func setupLogger() {
@@ -734,19 +751,22 @@ func parseCSV(s string) []string {
 
 func parseSize(s string) int64 {
 	s = strings.ToUpper(strings.TrimSpace(s))
-	multipliers := map[string]int64{
-		"TB": 1024 * 1024 * 1024 * 1024,
-		"GB": 1024 * 1024 * 1024,
-		"MB": 1024 * 1024,
-		"KB": 1024,
-		"B":  1,
+	multipliers := []struct {
+		suffix string
+		mult   int64
+	}{
+		{suffix: "TB", mult: 1024 * 1024 * 1024 * 1024},
+		{suffix: "GB", mult: 1024 * 1024 * 1024},
+		{suffix: "MB", mult: 1024 * 1024},
+		{suffix: "KB", mult: 1024},
+		{suffix: "B", mult: 1},
 	}
 
-	for suffix, mult := range multipliers {
-		if strings.HasSuffix(s, suffix) {
-			numStr := strings.TrimSuffix(s, suffix)
+	for _, m := range multipliers {
+		if strings.HasSuffix(s, m.suffix) {
+			numStr := strings.TrimSuffix(s, m.suffix)
 			if n, err := strconv.ParseInt(numStr, 10, 64); err == nil {
-				return n * mult
+				return n * m.mult
 			}
 			return 0
 		}
@@ -835,6 +855,107 @@ func buildSenderForSocket(cfg *config.Config, sock config.SocketSettings) *trans
 		}
 	}
 	return transport.NewFromTransports(selected, cfg)
+}
+
+func applyTransportRuntimeOverrides(cfg *config.Config) {
+	for i := range cfg.TransportSettings {
+		cfg.TransportSettings[i].Transport = networkType
+		cfg.TransportSettings[i].SkipVerify = skipVerify
+		cfg.TransportSettings[i].KeepAlive = int(keepAlive)
+		cfg.TransportSettings[i].MaxRetries = tcpSendRetries
+	}
+}
+
+func applyCollectorAddrOverride(cfg *config.Config) {
+	if collectorAddr == "" {
+		cfg.CollectorSettings.Active = false
+		cfg.CollectorSettings.Host = ""
+		cfg.CollectorSettings.Port = 0
+		cfg.CollectorSettings.Proto = ""
+		return
+	}
+	protoEnd := strings.Index(collectorAddr, ":")
+	if protoEnd <= 0 {
+		log.Warn().Str("addr", collectorAddr).Msg("Invalid -hin address override, expected proto:host:port")
+		return
+	}
+	proto := collectorAddr[:protoEnd]
+	rest := collectorAddr[protoEnd+1:]
+	host, portStr, splitErr := net.SplitHostPort(rest)
+	if splitErr != nil {
+		log.Warn().Err(splitErr).Str("addr", collectorAddr).Msg("Invalid -hin address override, expected proto:host:port")
+		return
+	}
+	port, convErr := strconv.Atoi(portStr)
+	if convErr != nil {
+		log.Warn().Err(convErr).Str("addr", collectorAddr).Msg("Invalid -hin port override")
+		return
+	}
+	cfg.CollectorSettings.Active = true
+	cfg.CollectorSettings.Proto = proto
+	cfg.CollectorSettings.Host = host
+	cfg.CollectorSettings.Port = port
+}
+
+func appendOverrideLogKV(overrideLog *[]string, key, value string) {
+	*overrideLog = append(*overrideLog, key+"="+value)
+}
+
+func logEffectiveRuntimeConfig(cfg *config.Config) {
+	activeSockets := 0
+	socketNames := make([]string, 0, len(cfg.SocketSettings))
+	socketDevices := make([]string, 0, len(cfg.SocketSettings))
+	socketModes := make([]string, 0, len(cfg.SocketSettings))
+	socketProfiles := make([]string, 0, len(cfg.SocketSettings))
+	for _, s := range cfg.SocketSettings {
+		if s.Active {
+			activeSockets++
+		}
+		socketNames = append(socketNames, s.Name)
+		socketDevices = append(socketDevices, s.Device)
+		socketModes = append(socketModes, strings.Join(s.CaptureMode, "+"))
+		if len(s.TransportProfile) == 0 {
+			socketProfiles = append(socketProfiles, "<all>")
+		} else {
+			socketProfiles = append(socketProfiles, strings.Join(s.TransportProfile, ","))
+		}
+	}
+
+	activeTransports := 0
+	transportNames := make([]string, 0, len(cfg.TransportSettings))
+	transportTargets := make([]string, 0, len(cfg.TransportSettings))
+	transportKinds := make([]string, 0, len(cfg.TransportSettings))
+	for _, t := range cfg.TransportSettings {
+		if t.Active {
+			activeTransports++
+		}
+		transportNames = append(transportNames, t.Name)
+		transportTargets = append(transportTargets, net.JoinHostPort(t.Host, strconv.Itoa(t.Port)))
+		transportKinds = append(transportKinds, t.Transport)
+	}
+
+	log.Info().
+		Int("sockets_total", len(cfg.SocketSettings)).
+		Int("sockets_active", activeSockets).
+		Strs("socket_names", socketNames).
+		Strs("socket_devices", socketDevices).
+		Strs("socket_capture_modes", socketModes).
+		Strs("socket_transport_profiles", socketProfiles).
+		Int("transports_total", len(cfg.TransportSettings)).
+		Int("transports_active", activeTransports).
+		Strs("transport_names", transportNames).
+		Strs("transport_targets", transportTargets).
+		Strs("transport_kinds", transportKinds).
+		Bool("collector_active", cfg.CollectorSettings.Active).
+		Bool("collect_only_sip", cfg.HepSettings.CollectOnlySIP).
+		Bool("replace_token", cfg.HepSettings.ReplaceToken).
+		Bool("deduplicate", cfg.HepSettings.Deduplicate).
+		Bool("rtcp_active", cfg.RtcpSettings.Active).
+		Bool("api_active", cfg.ApiSettings.Active).
+		Bool("prometheus_active", cfg.PrometheusSettings.Active).
+		Bool("script_active", cfg.ScriptSettings.Active).
+		Bool("buffer_active", cfg.BufferSettings.Enable).
+		Msg("Effective runtime configuration")
 }
 
 // applyExplicitCLIOverrides applies only the flags that the user explicitly set
@@ -983,9 +1104,41 @@ func applyExplicitCLIOverridesWithVisited(cfg *config.Config, visited []string) 
 				overrideLog = append(overrideLog, "hep_server="+hepServer)
 			}
 
+		case "nt":
+			applyTransportRuntimeOverrides(cfg)
+			appendOverrideLogKV(&overrideLog, "network_type", networkType)
+
+		case "skipverify":
+			applyTransportRuntimeOverrides(cfg)
+			appendOverrideLogKV(&overrideLog, "skipverify", strconv.FormatBool(skipVerify))
+
+		case "keepalive":
+			applyTransportRuntimeOverrides(cfg)
+			appendOverrideLogKV(&overrideLog, "keepalive", strconv.FormatUint(uint64(keepAlive), 10))
+
+		case "tcpsendretries":
+			applyTransportRuntimeOverrides(cfg)
+			appendOverrideLogKV(&overrideLog, "tcpsendretries", strconv.Itoa(tcpSendRetries))
+
+		case "hin":
+			applyCollectorAddrOverride(cfg)
+			appendOverrideLogKV(&overrideLog, "collector_addr", collectorAddr)
+
 		case "l":
 			cfg.LogSettings.Level = logLevel
 			overrideLog = append(overrideLog, "log_level="+logLevel)
+
+		case "e":
+			cfg.LogSettings.Stdout = logStdout
+			appendOverrideLogKV(&overrideLog, "log_stderr", strconv.FormatBool(logStderr))
+
+		case "S":
+			cfg.LogSettings.Stdout = logStdout
+			appendOverrideLogKV(&overrideLog, "log_stdout", strconv.FormatBool(logStdout))
+
+		case "log-format":
+			cfg.LogSettings.Json = logJSON
+			appendOverrideLogKV(&overrideLog, "log_format", logFormat)
 
 		case "hi":
 			cfg.SystemSettings.NodeID = uint32(hepNodeID)
@@ -1077,11 +1230,97 @@ func applyExplicitCLIOverridesWithVisited(cfg *config.Config, visited []string) 
 
 		case "eof-exit":
 			cfg.PcapSettings.EOFExit = pcapEOFExit
+
+		case "prometheus":
+			cfg.PrometheusSettings.Active = prometheusAddr != ""
+			if prometheusAddr != "" {
+				full := prometheusAddr
+				if strings.HasPrefix(prometheusAddr, ":") {
+					full = "0.0.0.0" + prometheusAddr
+				}
+				hostPort := strings.SplitN(full, ":", 2)
+				cfg.PrometheusSettings.Host = hostPort[0]
+				if len(hostPort) == 2 {
+					if p, err := strconv.Atoi(hostPort[1]); err == nil {
+						cfg.PrometheusSettings.Port = p
+					}
+				}
+			}
+			appendOverrideLogKV(&overrideLog, "prometheus_addr", prometheusAddr)
+
+		case "api":
+			cfg.ApiSettings.Active = apiAddr != ""
+			if apiAddr != "" {
+				full := apiAddr
+				if strings.HasPrefix(apiAddr, ":") {
+					full = "0.0.0.0" + apiAddr
+				}
+				hostPort := strings.SplitN(full, ":", 2)
+				cfg.ApiSettings.Host = hostPort[0]
+				if len(hostPort) == 2 {
+					if p, err := strconv.Atoi(hostPort[1]); err == nil {
+						cfg.ApiSettings.Port = p
+					}
+				}
+				if cfg.ApiSettings.Port == 0 {
+					cfg.ApiSettings.Port = 9060
+				}
+			}
+			appendOverrideLogKV(&overrideLog, "api_addr", apiAddr)
+
+		case "api-user":
+			cfg.ApiSettings.Username = apiUser
+
+		case "api-pass":
+			cfg.ApiSettings.Password = apiPass
+
+		case "api-tls":
+			cfg.ApiSettings.TLS = apiTLS
+			appendOverrideLogKV(&overrideLog, "api_tls", strconv.FormatBool(apiTLS))
+
+		case "api-cert":
+			cfg.ApiSettings.CertFile = apiCertFile
+
+		case "api-key":
+			cfg.ApiSettings.KeyFile = apiKeyFile
+
+		case "script-file":
+			cfg.ScriptSettings.File = scriptFile
+			cfg.ScriptSettings.Active = scriptFile != ""
+			appendOverrideLogKV(&overrideLog, "script_file", scriptFile)
+
+		case "script-hep-filter":
+			cfg.ScriptSettings.HEPFilter = scriptFilter
+
+		case "hep-buffer-activate":
+			cfg.BufferSettings.Enable = bufferEnable
+			appendOverrideLogKV(&overrideLog, "buffer_enable", strconv.FormatBool(bufferEnable))
+
+		case "hep-buffer-file":
+			cfg.BufferSettings.File = bufferFile
+
+		case "hep-buffer-max-size":
+			cfg.BufferSettings.MaxSizeBytes = parseSize(bufferMaxSize)
+
+		case "hep-buffer-debug":
+			cfg.BufferSettings.Debug = bufferDebug
+
+		case "collectonlysip":
+			cfg.HepSettings.CollectOnlySIP = collectOnlySIP
+			appendOverrideLogKV(&overrideLog, "collect_only_sip", strconv.FormatBool(collectOnlySIP))
+
+		case "replacetoken":
+			cfg.HepSettings.ReplaceToken = replaceToken
+			appendOverrideLogKV(&overrideLog, "replace_token", strconv.FormatBool(replaceToken))
 		}
 	}
 
-	for name := range visitedSet {
-		applyOne(name)
+	applied := make(map[string]bool, len(visitedSet))
+	for _, name := range visited {
+		if visitedSet[name] && !applied[name] {
+			applyOne(name)
+			applied[name] = true
+		}
 	}
 
 	if len(overrideLog) > 0 {

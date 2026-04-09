@@ -110,6 +110,34 @@ heplify:
   restart: unless-stopped
 ```
 
+Docker-safe launch notes:
+
+- If the image already defines `ENTRYPOINT` (heplify binary), pass only flag arguments in `command`.
+- Do not prefix `command` with `./heplify` in that case.
+- Use `-no-config` when you want deterministic CLI-only behavior and to ignore both `-config` and `HEPLIFY_CONFIG`.
+
+```yaml
+heplify:
+  image: sipcapture/heplify:latest
+  cap_add:
+    - CAP_NET_ADMIN
+    - CAP_NET_RAW
+  command:
+    - -no-config
+    - -e
+    - -hs
+    - 127.0.0.1:9060
+    - -m
+    - SIPRTCP
+    - -i
+    - ens32
+    - -l
+    - debug
+    - -erspan
+  network_mode: host
+  restart: unless-stopped
+```
+
 ---
 
 ## Configuration
@@ -139,7 +167,10 @@ Key sections in `heplify.json`:
 | `buffer_settings` | Disk-based HEP failover buffer |
 | `script_settings` | Lua script path and HEP type filter |
 
-All command-line flags still work and override the config file.
+All explicitly provided command-line flags override config-file values.
+Use `-no-config` to force CLI-only mode and ignore both `-config` and `HEPLIFY_CONFIG`.
+
+CLI/ENV/config mapping reference: [`docs/CLI_ENV_CONFIG_MAPPING.md`](docs/CLI_ENV_CONFIG_MAPPING.md).
 
 ---
 
@@ -150,7 +181,9 @@ Usage: heplify [options]
 
 Config:
   -config string
-        Path to JSON config file (overrides command line flags)
+        Path to JSON config file (explicitly set CLI flags override file values)
+  -no-config
+        Ignore both -config and HEPLIFY_CONFIG; use CLI settings only
   -version
         Show version and exit
 

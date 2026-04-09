@@ -3,6 +3,10 @@
 `heplify` is configured via a JSON file passed with `-config heplify.json`.  
 All sections are optional — omitted fields fall back to their defaults.
 
+If you need pure CLI mode, use `-no-config` to ignore both `-config` and `HEPLIFY_CONFIG`.
+
+For a full CLI/ENV/config key mapping, see [`CLI_ENV_CONFIG_MAPPING.md`](CLI_ENV_CONFIG_MAPPING.md).
+
 ---
 
 ## Table of Contents

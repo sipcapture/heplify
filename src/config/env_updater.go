@@ -289,6 +289,16 @@ func (eu *EnvUpdater) updateFieldByPath(cfg *Config, fieldPath string, value str
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
+			// Keep ENV semantics aligned with CLI for buffer max-size values:
+			// allow unit suffixes (KB/MB/GB/TB) for HEPLIFY_BUFFER_SETTINGS_MAX_SIZE.
+			if strings.EqualFold(fieldPath, envVarPrefix+"BUFFER_SETTINGS_MAX_SIZE") {
+				parsed := parseByteSize(value)
+				if parsed <= 0 {
+					return false
+				}
+				cur.SetInt(parsed)
+				return true
+			}
 			return false
 		}
 		cur.SetInt(v)
@@ -308,6 +318,37 @@ func (eu *EnvUpdater) updateFieldByPath(cfg *Config, fieldPath string, value str
 		return false
 	}
 	return true
+}
+
+func parseByteSize(s string) int64 {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	multipliers := []struct {
+		suffix string
+		mult   int64
+	}{
+		{suffix: "TB", mult: 1024 * 1024 * 1024 * 1024},
+		{suffix: "GB", mult: 1024 * 1024 * 1024},
+		{suffix: "MB", mult: 1024 * 1024},
+		{suffix: "KB", mult: 1024},
+		{suffix: "B", mult: 1},
+	}
+
+	for _, m := range multipliers {
+		if strings.HasSuffix(s, m.suffix) {
+			numStr := strings.TrimSuffix(s, m.suffix)
+			n, err := strconv.ParseInt(numStr, 10, 64)
+			if err != nil {
+				return 0
+			}
+			return n * m.mult
+		}
+	}
+
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // removeEmptyStringsFromSlices recursively strips empty strings from all

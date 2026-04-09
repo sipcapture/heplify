@@ -237,6 +237,22 @@ func TestEnvUpdaterApiSettings(t *testing.T) {
 	}
 }
 
+func TestEnvUpdaterBufferMaxSizeWithUnitSuffix(t *testing.T) {
+	os.Setenv("HEPLIFY_BUFFER_SETTINGS_MAX_SIZE", "12MB")
+	defer os.Unsetenv("HEPLIFY_BUFFER_SETTINGS_MAX_SIZE")
+
+	cfg := &Config{}
+	eu := NewEnvUpdater()
+	_, err := eu.UpdateFromEnv(cfg)
+	if err != nil {
+		t.Fatalf("UpdateFromEnv error: %v", err)
+	}
+
+	if cfg.BufferSettings.MaxSizeBytes != 12*1024*1024 {
+		t.Errorf("BufferSettings.MaxSizeBytes: got %d, want %d", cfg.BufferSettings.MaxSizeBytes, 12*1024*1024)
+	}
+}
+
 // TestEnvUpdaterFieldCoverage checks that all expected config sections are
 // represented in the generated ENV mappings.
 func TestEnvUpdaterFieldCoverage(t *testing.T) {
