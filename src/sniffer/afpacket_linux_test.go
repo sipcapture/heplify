@@ -54,6 +54,13 @@ func TestDetectLinkTypeAny(t *testing.T) {
 	}
 }
 
+func TestCompileBPFFilterRawIPLinkType(t *testing.T) {
+	filter := "udp and portrange 5060-5090"
+	if _, err := compileBPFFilter(layers.LinkTypeRaw, 65535, filter); err != nil {
+		t.Fatalf("compileBPFFilter(raw IP) returned error: %v", err)
+	}
+}
+
 func TestSetInterfacePromiscNonExistent(t *testing.T) {
 	// setInterfacePromisc should return an error for a non-existent interface.
 	err := setInterfacePromisc("__no_such_iface__", true)

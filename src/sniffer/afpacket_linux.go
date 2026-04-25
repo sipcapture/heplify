@@ -207,8 +207,7 @@ func (h *afpacketHandle) SetFanout(id uint16) error {
 
 // SetBPFFilter sets a BPF filter on the handle
 func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
-	// Use pcap BPF compiler to get raw BPF instruction
-	pcapBPF, err := pcap.CompileBPFFilter(h.LinkType(), snaplen, filter)
+	pcapBPF, err := compileBPFFilter(h.LinkType(), snaplen, filter)
 	if err != nil {
 		return err
 	}
@@ -217,6 +216,19 @@ func (h *afpacketHandle) SetBPFFilter(filter string, snaplen int) error {
 		rawBPF[i] = bpf.RawInstruction{Op: ri.Code, Jt: ri.Jt, Jf: ri.Jf, K: ri.K}
 	}
 	return h.TPacket.SetBPF(rawBPF)
+}
+
+func compileBPFFilter(linkType layers.LinkType, snaplen int, filter string) ([]pcap.BPFInstruction, error) {
+	return pcap.CompileBPFFilter(bpfCompileLinkType(linkType), snaplen, filter)
+}
+
+func bpfCompileLinkType(linkType layers.LinkType) layers.LinkType {
+	if linkType == layers.LinkTypeRaw {
+		// libpcap's no-pcap compiler expects DLT_RAW (12), while gopacket's
+		// LinkTypeRaw is LINKTYPE_RAW (101) for pcap file headers.
+		return layers.LinkType(12)
+	}
+	return linkType
 }
 
 // LinkType returns the actual link type of the captured interface.
