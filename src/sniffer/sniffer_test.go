@@ -125,6 +125,25 @@ func TestParseSIPMetricNormalizesUnknownMethods(t *testing.T) {
 	}
 }
 
+func TestParseSIPMetricAllowsConfiguredMethods(t *testing.T) {
+	methods := newSIPMethodSet([]string{"PING", "SERVICE"})
+	req, ok := parseSIPMetricWithMethods([]byte("PING sip:bob@example.com SIP/2.0\r\n\r\n"), methods)
+	if !ok {
+		t.Fatal("expected SIP-like request metric")
+	}
+	if req.Method != "PING" {
+		t.Fatalf("configured request method = %q, want PING", req.Method)
+	}
+
+	resp, ok := parseSIPMetricWithMethods([]byte("SIP/2.0 200 OK\r\nCSeq: 1 SERVICE\r\n\r\n"), methods)
+	if !ok {
+		t.Fatal("expected SIP response metric")
+	}
+	if resp.Method != "SERVICE" {
+		t.Fatalf("configured response method = %q, want SERVICE", resp.Method)
+	}
+}
+
 func TestCarrierResolverMatchesSourceThenDestination(t *testing.T) {
 	resolver := newCarrierResolver([]config.CarrierSettings{
 		{Name: "alpha", CIDRs: []string{"10.0.0.0/24"}},

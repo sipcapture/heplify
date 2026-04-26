@@ -63,6 +63,7 @@ type Sniffer struct {
 	dedupCache *lru.Cache
 	stats      *Stats
 	carriers   *carrierResolver
+	sipMethods sipMethodSet
 	debug      debugFlags
 
 	mu      sync.Mutex     // guards sources
@@ -120,6 +121,7 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 		dedupCache: cache,
 		stats:      NewStats(),
 		carriers:   newCarrierResolver(cfg.PrometheusSettings.Carriers),
+		sipMethods: newSIPMethodSet(cfg.PrometheusSettings.SIPMethods),
 		debug:      dbg,
 	}
 }
@@ -745,7 +747,7 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 }
 
 func (s *Sniffer) observeSIPMetrics(pkt *decoder.Packet) {
-	metric, ok := parseSIPMetric(pkt.Payload)
+	metric, ok := parseSIPMetricWithMethods(pkt.Payload, s.sipMethods)
 	if !ok {
 		return
 	}

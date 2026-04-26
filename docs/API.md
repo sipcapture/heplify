@@ -199,6 +199,7 @@ scrape_configs:
   "host":   "0.0.0.0",
   "port":   9096,
   "auth":   false,
+  "sip_methods": ["PING", "SERVICE"],
   "carriers": [
     { "name": "telecom-alpha", "cidrs": ["10.1.0.0/16"] },
     { "name": "trunk-beta", "cidrs": ["192.0.2.0/24"] }
@@ -213,6 +214,7 @@ scrape_configs:
 | `port` | `9096` | Listen port |
 | `auth` | `false` | Protect `/metrics` with HTTP Basic Auth (uses `api_settings` credentials) |
 | `carriers` | `[]` | Optional CIDR mapping used as the low-cardinality `carrier` label on SIP metrics |
+| `sip_methods` | built-in SIP methods | Optional extra SIP methods allowed in the low-cardinality `method` label |
 
 ---
 

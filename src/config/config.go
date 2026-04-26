@@ -40,11 +40,12 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active   bool              `json:"active" mapstructure:"active"`
-		Host     string            `json:"host" mapstructure:"host"`
-		Port     int               `json:"port" mapstructure:"port"`
-		Auth     bool              `json:"auth" mapstructure:"auth"`
-		Carriers []CarrierSettings `json:"carriers" mapstructure:"carriers"`
+		Active     bool              `json:"active" mapstructure:"active"`
+		Host       string            `json:"host" mapstructure:"host"`
+		Port       int               `json:"port" mapstructure:"port"`
+		Auth       bool              `json:"auth" mapstructure:"auth"`
+		Carriers   []CarrierSettings `json:"carriers" mapstructure:"carriers"`
+		SIPMethods []string          `json:"sip_methods" mapstructure:"sip_methods"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {

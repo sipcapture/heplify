@@ -10,7 +10,9 @@ import (
 
 const defaultCarrier = "other"
 
-var knownSIPMethods = map[string]struct{}{
+type sipMethodSet map[string]struct{}
+
+var knownSIPMethods = sipMethodSet{
 	"ACK":       {},
 	"BYE":       {},
 	"CANCEL":    {},
@@ -35,6 +37,10 @@ type sipMetric struct {
 }
 
 func parseSIPMetric(payload []byte) (sipMetric, bool) {
+	return parseSIPMetricWithMethods(payload, knownSIPMethods)
+}
+
+func parseSIPMetricWithMethods(payload []byte, methods sipMethodSet) (sipMetric, bool) {
 	line, _, _ := bytes.Cut(payload, []byte("\r\n"))
 	if len(line) == 0 {
 		return sipMetric{}, false
@@ -52,7 +58,7 @@ func parseSIPMetric(payload []byte) (sipMetric, bool) {
 			}
 		}
 		return sipMetric{
-			Method:      parseCSeqMethod(payload),
+			Method:      parseCSeqMethod(payload, methods),
 			IsResponse:  true,
 			StatusCode:  code,
 			StatusClass: code[:1] + "xx",
@@ -63,10 +69,10 @@ func parseSIPMetric(payload []byte) (sipMetric, bool) {
 	if len(fields) < 3 || !bytes.Equal(fields[len(fields)-1], []byte("SIP/2.0")) {
 		return sipMetric{}, false
 	}
-	return sipMetric{Method: normalizeSIPMethod(string(fields[0]))}, true
+	return sipMetric{Method: normalizeSIPMethod(string(fields[0]), methods)}, true
 }
 
-func parseCSeqMethod(payload []byte) string {
+func parseCSeqMethod(payload []byte, methods sipMethodSet) string {
 	headers, _, _ := bytes.Cut(payload, []byte("\r\n\r\n"))
 	for _, line := range bytes.Split(headers, []byte("\r\n")) {
 		name, value, ok := bytes.Cut(line, []byte(":"))
@@ -77,14 +83,32 @@ func parseCSeqMethod(payload []byte) string {
 		if len(fields) < 2 {
 			return "UNKNOWN"
 		}
-		return normalizeSIPMethod(string(fields[1]))
+		return normalizeSIPMethod(string(fields[1]), methods)
 	}
 	return "UNKNOWN"
 }
 
-func normalizeSIPMethod(method string) string {
+func newSIPMethodSet(extra []string) sipMethodSet {
+	methods := make(sipMethodSet, len(knownSIPMethods)+len(extra))
+	for method := range knownSIPMethods {
+		methods[method] = struct{}{}
+	}
+	for _, method := range extra {
+		method = strings.ToUpper(strings.TrimSpace(method))
+		if method == "" || strings.ContainsAny(method, " \t\r\n") {
+			continue
+		}
+		methods[method] = struct{}{}
+	}
+	return methods
+}
+
+func normalizeSIPMethod(method string, methods sipMethodSet) string {
 	method = strings.ToUpper(strings.TrimSpace(method))
-	if _, ok := knownSIPMethods[method]; ok {
+	if methods == nil {
+		methods = knownSIPMethods
+	}
+	if _, ok := methods[method]; ok {
 		return method
 	}
 	return "UNKNOWN"
