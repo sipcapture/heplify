@@ -187,6 +187,7 @@ Custom port-range to protocol mappings. Up to 5 entries (indices 0–4).
 | `HEPLIFY_PROMETHEUS_SETTINGS_HOST` | string | Listen host (default: `0.0.0.0`) |
 | `HEPLIFY_PROMETHEUS_SETTINGS_PORT` | int | Listen port (default: `9096`) |
 | `HEPLIFY_PROMETHEUS_SETTINGS_AUTH` | bool | Enable basic auth on metrics endpoint |
+| `HEPLIFY_PROMETHEUS_SETTINGS_CARRIERS` | array | Optional CIDR-to-carrier mapping for SIP metric labels; prefer JSON config for nested arrays |
 
 ---
 

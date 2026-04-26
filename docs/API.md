@@ -137,12 +137,16 @@ Optionally protected by HTTP Basic Auth when `prometheus_settings.auth: true` an
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `heplify_packets_total` | counter | Total HEP packets sent |
-| `heplify_packets_lost` | counter | Packets lost (send errors) |
-| `heplify_queue_size` | gauge | Current internal queue depth |
-| `heplify_buffer_size_bytes` | gauge | Current failover buffer size in bytes |
-| `heplify_reconnects_total` | counter | Total transport reconnect attempts |
-| `heplify_transport_connected` | gauge | `1` if transport is connected, `0` otherwise (labels: `addr`, `proto`) |
+| `heplify_packet_count{type}` | counter | Captured/processed packet counters (`sip`, `rtcp`, `rtp`, `dns`, `unknown`, etc.) |
+| `heplify_sip_requests_total{method,carrier}` | counter | SIP requests by method and configured carrier |
+| `heplify_sip_responses_total{status_code,status_class,method,carrier}` | counter | SIP responses by status and CSeq method |
+| `heplify_hep_sent_count` | counter | Total HEP packets sent |
+| `heplify_hep_error_count` | counter | Total HEP send errors |
+| `heplify_hep_dropped_count` | counter | Total dropped HEP packets |
+| `heplify_hep_queue_size` | gauge | Current HEP send queue depth |
+| `heplify_hep_buffer_size_bytes` | gauge | Current failover buffer size in bytes |
+| `heplify_hep_reconnect_count{addr,proto}` | counter | Total transport reconnect attempts |
+| `heplify_hep_transport_connected{addr,proto}` | gauge | `1` if transport is connected, `0` otherwise |
 
 ```
 curl http://localhost:9096/metrics
@@ -194,7 +198,11 @@ scrape_configs:
   "active": true,
   "host":   "0.0.0.0",
   "port":   9096,
-  "auth":   false
+  "auth":   false,
+  "carriers": [
+    { "name": "telecom-alpha", "cidrs": ["10.1.0.0/16"] },
+    { "name": "trunk-beta", "cidrs": ["192.0.2.0/24"] }
+  ]
 }
 ```
 
@@ -204,6 +212,7 @@ scrape_configs:
 | `host` | `0.0.0.0` | Listen address |
 | `port` | `9096` | Listen port |
 | `auth` | `false` | Protect `/metrics` with HTTP Basic Auth (uses `api_settings` credentials) |
+| `carriers` | `[]` | Optional CIDR mapping used as the low-cardinality `carrier` label on SIP metrics |
 
 ---
 

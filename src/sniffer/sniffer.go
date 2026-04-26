@@ -15,6 +15,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/decoder"
 	"github.com/sipcapture/heplify/src/hep"
@@ -61,6 +62,7 @@ type Sniffer struct {
 	senders    map[string]Sender // per-socket senders keyed by socket.Name
 	dedupCache *lru.Cache
 	stats      *Stats
+	carriers   *carrierResolver
 	debug      debugFlags
 
 	mu      sync.Mutex     // guards sources
@@ -117,6 +119,7 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 		senders:    make(map[string]Sender),
 		dedupCache: cache,
 		stats:      NewStats(),
+		carriers:   newCarrierResolver(cfg.PrometheusSettings.Carriers),
 		debug:      dbg,
 	}
 }
@@ -729,6 +732,7 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 
 	// Extract Call-ID for RTCP correlation
 	decoder.ExtractCID(pkt.SrcIP, pkt.SrcPort, pkt.DstIP, pkt.DstPort, pkt.Payload)
+	s.observeSIPMetrics(pkt)
 
 	if s.debug.sdp {
 		log.Debug().Str("src", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).Msg("[sdp] SIP packet")
@@ -738,6 +742,19 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 	s.callLua(pkt)
 	s.stats.Inc(StatSIP)
 	s.sendHEP(pkt, 1, sender)
+}
+
+func (s *Sniffer) observeSIPMetrics(pkt *decoder.Packet) {
+	metric, ok := parseSIPMetric(pkt.Payload)
+	if !ok {
+		return
+	}
+	carrier := s.carriers.Resolve(pkt.SrcIP, pkt.DstIP)
+	if metric.IsResponse {
+		apiserver.ObserveSIPResponse(metric.StatusCode, metric.StatusClass, metric.Method, carrier)
+		return
+	}
+	apiserver.ObserveSIPRequest(metric.Method, carrier)
 }
 
 func (s *Sniffer) handleRTCP(pkt *decoder.Packet, sender Sender) {

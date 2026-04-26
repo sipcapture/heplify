@@ -18,6 +18,20 @@ var (
 		},
 		[]string{"type"},
 	)
+	SIPRequestCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "heplify_sip_requests_total",
+			Help: "Total number of SIP requests by method and carrier",
+		},
+		[]string{"method", "carrier"},
+	)
+	SIPResponseCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "heplify_sip_responses_total",
+			Help: "Total number of SIP responses by status code, class, request method, and carrier",
+		},
+		[]string{"status_code", "status_class", "method", "carrier"},
+	)
 	HepSentCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "heplify_hep_sent_count",
@@ -73,6 +87,8 @@ var (
 
 func init() {
 	prometheus.MustRegister(PacketCount)
+	prometheus.MustRegister(SIPRequestCount)
+	prometheus.MustRegister(SIPResponseCount)
 	prometheus.MustRegister(HepSentCount)
 	prometheus.MustRegister(HepErrorCount)
 	prometheus.MustRegister(HepDroppedCount)
@@ -80,6 +96,33 @@ func init() {
 	prometheus.MustRegister(HepQueueSize)
 	prometheus.MustRegister(HepBufferSizeBytes)
 	prometheus.MustRegister(HepTransportConnected)
+}
+
+func IncPacketCount(packetType string) {
+	if packetType == "" {
+		packetType = "unknown"
+	}
+	PacketCount.WithLabelValues(packetType).Inc()
+}
+
+func ObserveSIPRequest(method, carrier string) {
+	SIPRequestCount.WithLabelValues(metricLabel(method, "UNKNOWN"), metricLabel(carrier, "other")).Inc()
+}
+
+func ObserveSIPResponse(statusCode, statusClass, method, carrier string) {
+	SIPResponseCount.WithLabelValues(
+		metricLabel(statusCode, "unknown"),
+		metricLabel(statusClass, "unknown"),
+		metricLabel(method, "UNKNOWN"),
+		metricLabel(carrier, "other"),
+	).Inc()
+}
+
+func metricLabel(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func SetQueueSize(v int) {
