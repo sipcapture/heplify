@@ -10,6 +10,23 @@ import (
 
 const defaultCarrier = "other"
 
+var knownSIPMethods = map[string]struct{}{
+	"ACK":       {},
+	"BYE":       {},
+	"CANCEL":    {},
+	"INFO":      {},
+	"INVITE":    {},
+	"MESSAGE":   {},
+	"NOTIFY":    {},
+	"OPTIONS":   {},
+	"PRACK":     {},
+	"PUBLISH":   {},
+	"REFER":     {},
+	"REGISTER":  {},
+	"SUBSCRIBE": {},
+	"UPDATE":    {},
+}
+
 type sipMetric struct {
 	Method      string
 	IsResponse  bool
@@ -46,8 +63,7 @@ func parseSIPMetric(payload []byte) (sipMetric, bool) {
 	if len(fields) < 3 || !bytes.Equal(fields[len(fields)-1], []byte("SIP/2.0")) {
 		return sipMetric{}, false
 	}
-	method := strings.ToUpper(string(fields[0]))
-	return sipMetric{Method: method}, true
+	return sipMetric{Method: normalizeSIPMethod(string(fields[0]))}, true
 }
 
 func parseCSeqMethod(payload []byte) string {
@@ -61,7 +77,15 @@ func parseCSeqMethod(payload []byte) string {
 		if len(fields) < 2 {
 			return "UNKNOWN"
 		}
-		return strings.ToUpper(string(fields[1]))
+		return normalizeSIPMethod(string(fields[1]))
+	}
+	return "UNKNOWN"
+}
+
+func normalizeSIPMethod(method string) string {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if _, ok := knownSIPMethods[method]; ok {
+		return method
 	}
 	return "UNKNOWN"
 }

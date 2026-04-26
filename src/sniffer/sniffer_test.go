@@ -107,6 +107,24 @@ func TestParseSIPMetricResponseWithCSeqMethod(t *testing.T) {
 	}
 }
 
+func TestParseSIPMetricNormalizesUnknownMethods(t *testing.T) {
+	req, ok := parseSIPMetric([]byte("X-RANDOM sip:bob@example.com SIP/2.0\r\n\r\n"))
+	if !ok {
+		t.Fatal("expected SIP-like request metric")
+	}
+	if req.Method != "UNKNOWN" {
+		t.Fatalf("request method = %q, want UNKNOWN", req.Method)
+	}
+
+	resp, ok := parseSIPMetric([]byte("SIP/2.0 500 Server Error\r\nCSeq: 42 X-RANDOM\r\n\r\n"))
+	if !ok {
+		t.Fatal("expected SIP response metric")
+	}
+	if resp.Method != "UNKNOWN" {
+		t.Fatalf("response CSeq method = %q, want UNKNOWN", resp.Method)
+	}
+}
+
 func TestCarrierResolverMatchesSourceThenDestination(t *testing.T) {
 	resolver := newCarrierResolver([]config.CarrierSettings{
 		{Name: "alpha", CIDRs: []string{"10.0.0.0/24"}},
