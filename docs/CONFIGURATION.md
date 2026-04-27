@@ -264,6 +264,8 @@ Resolution checks the source IP first, then the destination IP. If neither match
 the label is `carrier="other"`.
 The `method` label is bounded to built-in SIP methods plus `sip_methods`; anything
 else is exported as `method="UNKNOWN"`.
+See [`examples/carriers.json`](../examples/carriers.json) for a standalone JSON
+carrier mapping example.
 
 ```json
 "prometheus_settings": {

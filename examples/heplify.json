@@ -131,7 +131,26 @@
         "active": false,
         "host": "0.0.0.0",
         "port": 9096,
-        "auth": false
+        "auth": false,
+        "sip_methods": [
+            "PING",
+            "SERVICE"
+        ],
+        "carriers": [
+            {
+                "name": "telecom-alpha",
+                "cidrs": [
+                    "10.1.0.0/16",
+                    "10.2.0.0/16"
+                ]
+            },
+            {
+                "name": "trunk-beta",
+                "cidrs": [
+                    "192.0.2.0/24"
+                ]
+            }
+        ]
     },
     "api_settings": {
         "active": false,

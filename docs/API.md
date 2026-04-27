@@ -216,6 +216,8 @@ scrape_configs:
 | `carriers` | `[]` | Optional CIDR mapping used as the low-cardinality `carrier` label on SIP metrics |
 | `sip_methods` | built-in SIP methods | Optional extra SIP methods allowed in the low-cardinality `method` label |
 
+Standalone JSON carrier example: [`examples/carriers.json`](../examples/carriers.json).
+
 ---
 
 ## CLI flags
