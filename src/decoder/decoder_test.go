@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -878,4 +879,44 @@ func TestTCPSIPMidStreamResync(t *testing.T) {
 	if len(received) != 1 {
 		t.Fatalf("expected 1 SIP packet, got %d (mid-stream resync failed)", len(received))
 	}
+}
+
+func TestSIPAssemblerConcurrentFeedAndFlush(t *testing.T) {
+	assembler := NewSIPAssembler(func(*Packet) {})
+	netFlow := gopacket.NewFlow(layers.EndpointIPv4, []byte{10, 0, 0, 1}, []byte{10, 0, 0, 2})
+	payload := []byte("INVITE sip:bob@example.com SIP/2.0\r\nContent-Length: 0\r\n\r\n")
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+
+	for worker := 0; worker < 4; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 2000; i++ {
+				tcp := &layers.TCP{
+					BaseLayer: layers.BaseLayer{Payload: payload},
+					SrcPort:   layers.TCPPort(5060 + worker),
+					DstPort:   layers.TCPPort(5060),
+					Seq:       uint32(i*len(payload) + 1),
+				}
+				assembler.Feed(netFlow, tcp, time.Now())
+			}
+		}(worker)
+	}
+
+	for worker := 0; worker < 2; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 2000; i++ {
+				assembler.FlushOlderThan(time.Now().Add(time.Second))
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
 }

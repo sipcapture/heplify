@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -20,6 +21,7 @@ type SIPCallback func(pkt *Packet)
 // complete SIP (or SIP-over-WebSocket) message is reassembled.
 type SIPAssembler struct {
 	asm *tcpassembly.Assembler
+	mu  sync.Mutex
 }
 
 // NewSIPAssembler creates a SIPAssembler that calls cb for every reassembled
@@ -32,11 +34,15 @@ func NewSIPAssembler(cb SIPCallback) *SIPAssembler {
 
 // Feed passes a single TCP segment to the assembler.
 func (a *SIPAssembler) Feed(netFlow gopacket.Flow, tcp *layers.TCP, ts time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.asm.AssembleWithTimestamp(netFlow, tcp, ts)
 }
 
 // FlushOlderThan releases streams that have not received data since t.
 func (a *SIPAssembler) FlushOlderThan(t time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.asm.FlushOlderThan(t)
 }
 
