@@ -21,6 +21,11 @@ permissions:
   contents: write
   packages: write
 
+# Serialize runs for the same ref (tag vs follow-up release event) to reduce races.
+concurrency:
+  group: heplify-release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GO_VERSION_FILE: go.mod
   IMAGE_NAME: ghcr.io/sipcapture/heplify
@@ -193,6 +198,7 @@ jobs:
             --target "./heplify_${VERSION}_${ARCH}.rpm"
           ls -lh heplify_*.deb heplify_*.rpm heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
+      # Single Linux artifact per arch: binary + deb + rpm (Packagecloud downloads heplify-linux-*).
       - name: Upload artifacts (Linux)
         if: matrix.goos == 'linux'
         uses: actions/upload-artifact@v4
@@ -203,16 +209,6 @@ jobs:
             heplify_${{ matrix.goos }}_${{ matrix.goarch }}
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
-
-      - name: Upload package artifacts (Packagecloud job)
-        if: matrix.goos == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: heplify-pkg-${{ matrix.goarch }}
-          path: |
-            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
-            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
-          if-no-files-found: error
 
       - name: Upload artifacts (macOS)
         if: matrix.goos == 'darwin'
@@ -439,18 +435,21 @@ jobs:
 
   # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
   # Same repos as homer-core: qxip/sipcapture/any/any and rpm_any/rpm_any
+  #
+  # Skip Packagecloud on github.event_name == 'release': publishing the GitHub Release
+  # (release job) triggers a second workflow run; packages were already pushed on tag push.
   packagecloud:
     name: Push to Packagecloud
     needs: build
     runs-on: ubuntu-latest
-    if: success() && ((github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
+    if: success() && ((github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
     env:
       PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: pkgs
-          pattern: heplify-pkg-*
+          pattern: heplify-linux-*
           merge-multiple: true
 
       - name: Push to Packagecloud (sequential, retries)
