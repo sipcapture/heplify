@@ -22,7 +22,7 @@ heplify/
 │   └── ownlayers/      # Custom gopacket layers (VXLAN, ERSPAN, HPERM)
 ├── dump/               # PCAP writer with rotation and optional compression
 ├── hep/                # HEP v3 encoder (binary TLV)
-├── promstats/          # Prometheus metrics
+├── apiserver/          # HTTP API, health, optional /metrics (Prometheus client_golang)
 ├── script/             # Lua scripting engine (gopher-lua)
 ├── sniffer/            # Packet capture, decode loop, protocol dispatch
 ├── transport/          # HEP sender (TCP/UDP/TLS) and Arrow Flight client
@@ -88,7 +88,7 @@ Startup sequence:
 2. Configure `zerolog` (console or JSON, debug selectors)
 3. Start `transport.Sender` — establishes connections to all active transports
 4. Start `collector.Server` — begins listening for inbound HEP (optional)
-5. Start `promstats` HTTP server (optional)
+5. Start HTTP **apiserver** when API or Prometheus is enabled — serves `/health`, optional `/metrics` for scraping (Prometheus pulls from this endpoint)
 6. Start `sniffer.Sniffer` — begins packet capture loop
 7. Block on OS signals (`SIGINT`, `SIGTERM`, `SIGHUP`)
    - `SIGHUP` triggers Lua script hot-reload
@@ -324,22 +324,24 @@ Embeds a `gopher-lua` VM for per-packet custom logic.
 
 ---
 
-### 9. Observability (`promstats`)
+### 9. Observability (`apiserver` + Prometheus)
 
-Prometheus metrics exposed on a configurable HTTP endpoint (default `:9111/metrics`).
+When `prometheus_settings.active` / `-prometheus` is set, the same HTTP server as the API exposes **`/metrics`** using `github.com/prometheus/client_golang` (`src/apiserver/prometheus.go`). Prometheus **scrapes** this URL (pull model); the agent does not push samples.
 
-**Key metrics:**
+**Registered metrics (representative):**
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `heplify_captured_packets_total` | counter | Packets captured per protocol |
-| `heplify_filtered_packets_total` | counter | Packets dropped by filters |
-| `heplify_duplicated_packets_total` | counter | Packets dropped by deduplication |
-| `heplify_sent_bytes_total` | counter | Bytes sent to HEP server |
-| `heplify_send_errors_total` | counter | Failed send attempts |
-| `heplify_transport_connected` | gauge | `1` if transport is currently connected |
-| `heplify_buffered_packets_total` | counter | Packets written to disk buffer |
-| `heplify_lua_errors_total` | counter | Lua execution errors |
+| `heplify_packet_count` | counter vec | Packets captured (`type` label) |
+| `heplify_sip_requests_total` | counter vec | SIP requests by method / carrier |
+| `heplify_sip_responses_total` | counter vec | SIP responses by status / class / method / carrier |
+| `heplify_hep_sent_count` | counter | HEP packets sent |
+| `heplify_hep_error_count` | counter | HEP send errors |
+| `heplify_hep_dropped_count` | counter | Dropped HEP queue packets |
+| `heplify_hep_reconnect_count` | counter vec | Reconnect attempts per transport |
+| `heplify_hep_queue_size` | gauge | HEP send queue depth |
+| `heplify_hep_buffer_size_bytes` | gauge | On-disk HEP buffer file size |
+| `heplify_hep_transport_connected` | gauge vec | Per-transport connected (`1`/`0`) |
 
 ---
 

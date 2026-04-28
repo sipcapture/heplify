@@ -1,43 +1,45 @@
-# Gap Analysis: heplify vs heplify
+# Gap analysis: this tree vs legacy heplify expectations
 
-The user requested to check `heplify` features and identify missing capabilities in `heplify`.
+**Last reviewed:** 2026-04-28 (against current `src/`).
 
-## Heplify Features NOT in Heplify-NG
+Older notes compared a “simplified” line to full **heplify** and listed missing features. **Most of those gaps are now closed in this repository.** This document tracks what is implemented, what is still absent, and migration notes (e.g. scrape URL / flags vs older deployment guides).
 
-1.  **Prometheus Metrics** (`promstats` package):
-    - `heplify` exposes metrics at `:8090` (default).
-    - *Action*: Should be added if monitoring is required.
+---
 
-2.  **HEP Buffering** (`hep-buffer-*` flags):
-    - To handle network connectivity issues to the HEP server.
-    - *Action*: Useful for reliability, but complex to implement quickly.
+## Implemented in this codebase
 
-3.  **TLS Scraping**:
-    - `heplify` seems to support inspecting TLS (requires key?).
-    - *Action*: Skip for "simplified" version unless explicitly asked.
+| Area | Where / how |
+|------|-------------|
+| **Prometheus** | `-prometheus` (e.g. `:9096`); metrics in `src/apiserver/prometheus.go`, wired from `src/cmd/heplify/main.go`. Not the legacy fixed `:8090` default — address is explicit when enabled. |
+| **HEP buffering** | Flags `hep-buffer-activate`, `hep-buffer-file`, `hep-buffer-max-size`, `hep-buffer-debug`; logic in `src/transport/sender.go`. |
+| **Deduplication** | `-dd` / config `deduplicate`; LRU in `src/sniffer/sniffer.go`. |
+| **Discard filters** | SIP: `-dim`, `-diip`, `-disip`, `-didip`; `SipSettings.Discard*` in `src/config/config.go`. |
+| **VLAN / ERSPAN / VXLAN** | `-vlan`, `-erspan`; decode paths in `src/decoder/decoder.go`, layers under `src/decoder/ownlayers/`. |
+| **gzip** | Rotated pcap: `-zf` (`PcapSettings`); HEP path may gzip payloads in `src/transport/sender.go`. |
+| **HEP wire format** | HEP **v3 binary** chunks via `src/hep/encoder.go` (`Encode`). |
 
-4.  **VLAN/ERSPAN/VXLAN Support**:
-    - `heplify` has specific flags for these.
-    - *Action*: `afpacket` in `heplify` might support some naturally, but explicit extraction logic is missing.
+---
 
-5.  **De-duplication** (`dedup` flag):
-    - *Action*: Add simple cache-based deduplication if required.
+## Still missing or intentionally narrow
 
-6.  **Advanced Filtering** (`config.Cfg.Discard*`):
-    - `heplify` allows discarding based on method, IP, etc.
-    - *Action*: We implemented basic port filtering. Advanced filtering could be added.
+1. **TLS decryption / “TLS scraping”**  
+   No keylog / session secrets / decrypt of mirrored TLS to recover SIP inside TLS. TLS in-tree is for the **HTTP API** (`api_settings` / `-api-tls`), not for passive TLS decode of capture traffic.
 
-7.  **Protobuf Support**:
-    - `heplify` can send protobuf.
-    - *Action*: Probably overkill for "ng".
+2. **Protobuf as HEP or alternate capture encoding**  
+   This tree sends **HEP3 binary** only. If a collector or legacy peer required a protobuf framing mode, that is **not** present in `src/hep/`.
 
-8.  **Compression** (gzip):
-    - *Action*: Good to have for low bandwidth.
+3. **Scrape URL vs older docs**  
+   `/metrics` is optional and shares the HTTP server with the API when enabled; listen address comes from `-prometheus` / config — there is no fixed default port baked into the binary, so Prometheus `scrape_configs` may need updating when moving from very old examples.
 
-## Recommendation
+---
 
-Focus on adding **Prometheus Metrics** as it's a standard requirement for observability.
-HEP Buffering and Deduplication are "nice to have".
-User goal was "simplified", so avoid bloated features like Protobuf or complex TLS handling for now.
+## Recommendations
 
-We will proceed by offering to implement Prometheus metrics.
+- **Docs / operators:** document `-prometheus`, HEP buffer flags, and scrape auth next to deployment examples so behaviour matches expectations from older heplify guides.
+- **Only if product requires it:** invest in TLS decrypt (high complexity, keying material, legal/compliance) or protobuf HEP — both were historically “skip for simplified” for good reason.
+
+---
+
+## Archive: original “NOT in NG” list (obsolete)
+
+The following items were once listed as missing from a simplified fork; **they are no longer accurate for this tree** and are kept only for history: Prometheus, HEP buffering, dedup, `Discard*`, VLAN/ERSPAN/VXLAN, gzip compression as a general capability.
