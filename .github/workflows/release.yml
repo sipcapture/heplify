@@ -12,6 +12,10 @@ on:
       tag:
         description: 'Release tag (e.g. v2.0.1)'
         required: true
+      release:
+        description: 'Create GitHub Release and push deb/rpm to Packagecloud (same idea as homer-core)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -199,6 +203,16 @@ jobs:
             heplify_${{ matrix.goos }}_${{ matrix.goarch }}
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
             heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+
+      - name: Upload package artifacts (Packagecloud job)
+        if: matrix.goos == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: heplify-pkg-${{ matrix.goarch }}
+          path: |
+            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
+            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+          if-no-files-found: error
 
       - name: Upload artifacts (macOS)
         if: matrix.goos == 'darwin'
@@ -422,3 +436,60 @@ jobs:
           files: dist/flat/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
+  # Same repos as homer-core: qxip/sipcapture/any/any and rpm_any/rpm_any
+  packagecloud:
+    name: Push to Packagecloud
+    needs: build
+    runs-on: ubuntu-latest
+    if: success() && ((github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
+    env:
+      PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: pkgs
+          pattern: heplify-pkg-*
+          merge-multiple: true
+
+      - name: Push to Packagecloud (sequential, retries)
+        run: |
+          set -e
+          ls -laR pkgs
+          deb_n=$(find pkgs -name '*.deb' | wc -l)
+          rpm_n=$(find pkgs -name '*.rpm' | wc -l)
+          echo "Artifacts: $deb_n deb, $rpm_n rpm"
+          [ "$deb_n" -ge 1 ] && [ "$rpm_n" -ge 1 ] || { echo "::error::missing packages under pkgs/"; exit 1; }
+          sudo apt install -y ruby ca-certificates
+          sudo update-ca-certificates
+          sudo gem install package_cloud
+          push_pkg() {
+            f="$1"
+            repo="$2"
+            n=0
+            ok=0
+            while [ "$n" -lt 2 ]; do
+              n=$((n+1))
+              if package_cloud push "$repo" "$f"; then
+                ok=1
+                break
+              fi
+              echo "package_cloud failed $f (attempt $n/2), sleeping $((n*25))s..."
+              sleep $((n*25))
+            done
+            [ "$ok" = "1" ]
+          }
+          for deb in $(find pkgs -name '*.deb' | sort); do
+            echo "---- $deb ----"
+            dpkg-deb -I "$deb" | head -30
+            if dpkg-deb -f "$deb" 2>/dev/null | grep -qi '^License:'; then
+              echo "::error::deb control still has License: — fix nfpm yaml"
+              exit 1
+            fi
+            push_pkg "$deb" "qxip/sipcapture/any/any"
+          done
+          for rpm in $(find pkgs -name '*.rpm' | sort); do
+            echo "---- $rpm ----"
+            push_pkg "$rpm" "qxip/sipcapture/rpm_any/rpm_any"
+          done
