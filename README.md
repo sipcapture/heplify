@@ -67,12 +67,21 @@ chmod +x heplify_linux_amd64
 
 ### macOS (Apple Silicon)
 
-Download [heplify](https://github.com/sipcapture/heplify/releases) and run:
+**Homebrew** (tap lives in this repo):
+
+```bash
+brew tap sipcapture/heplify https://github.com/sipcapture/heplify
+brew install heplify
+```
+
+Or download [heplify](https://github.com/sipcapture/heplify/releases) and run:
 
 ```bash
 chmod +x heplify_darwin_arm64
 sudo ./heplify_darwin_arm64 -config heplify.json
 ```
+
+After each release, bump `version` and `sha256` in [`Formula/heplify.rb`](Formula/heplify.rb) (Apple Silicon binary only).
 
 ### Windows
 

@@ -16,9 +16,10 @@ maintainer: "SIPCAPTURE <support@sipcapture.org>"
 description: |
   Next-generation HEP Agent and Collector for the SIPCAPTURE ecosystem.
   Captures SIP, RTCP and other VoIP traffic and forwards it via HEP protocol.
+  (AGPL-3.0)
 vendor: "SIPCAPTURE"
 homepage: "https://github.com/sipcapture/heplify"
-license: "AGPL-3.0"
+# license omitted: nfpm writes "License:" into deb control; Packagecloud may 500.
 contents:
   - src: ./heplify
     dst: /usr/local/bin/heplify
