@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.17] - 2026-04-28
+
+### Changed
+
+- Bump embedded version to 2.0.17. Refresh `sha256` in `Formula/heplify.rb` after the `heplify_darwin_arm64` artifact for this tag is on GitHub Releases.
+
 ## [2.0.16] - 2026-04-28
 
 ### Changed
