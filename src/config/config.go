@@ -40,10 +40,12 @@ type Config struct {
 	} `json:"system_settings" mapstructure:"system_settings"`
 
 	PrometheusSettings struct {
-		Active bool   `json:"active" mapstructure:"active"`
-		Host   string `json:"host" mapstructure:"host"`
-		Port   int    `json:"port" mapstructure:"port"`
-		Auth   bool   `json:"auth" mapstructure:"auth"`
+		Active     bool              `json:"active" mapstructure:"active"`
+		Host       string            `json:"host" mapstructure:"host"`
+		Port       int               `json:"port" mapstructure:"port"`
+		Auth       bool              `json:"auth" mapstructure:"auth"`
+		Carriers   []CarrierSettings `json:"carriers" mapstructure:"carriers"`
+		SIPMethods []string          `json:"sip_methods" mapstructure:"sip_methods"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {
@@ -171,6 +173,11 @@ type ProtocolSettings struct {
 	MaxPort     uint16   `json:"max_port" mapstructure:"max_port"`
 	Protocol    []string `json:"protocol" mapstructure:"protocol"`
 	Description string   `json:"description" mapstructure:"description"`
+}
+
+type CarrierSettings struct {
+	Name  string   `json:"name" mapstructure:"name"`
+	CIDRs []string `json:"cidrs" mapstructure:"cidrs"`
 }
 
 type LogSettings struct {

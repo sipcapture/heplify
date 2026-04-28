@@ -387,6 +387,9 @@ Web stats API:
 # Export Prometheus metrics on port 9096
 ./heplify -hs 192.168.1.1:9060 -prometheus :9096
 
+# SIP Prometheus metrics include request/response counters.
+# Configure prometheus_settings.carriers in JSON config to add low-cardinality carrier labels.
+
 # Web stats dashboard and JSON API on port 8008
 ./heplify -hs 192.168.1.1:9060 -api :8008
 

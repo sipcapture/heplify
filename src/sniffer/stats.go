@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 )
 
 const (
@@ -53,6 +54,32 @@ func (s *Stats) Inc(idx int) {
 	if idx >= 0 && idx < statCount {
 		s.counters[idx].Add(1)
 		s.totals[idx].Add(1)
+		apiserver.IncPacketCount(statPrometheusLabel(idx))
+	}
+}
+
+func statPrometheusLabel(idx int) string {
+	switch idx {
+	case StatSIP:
+		return "sip"
+	case StatRTCP:
+		return "rtcp"
+	case StatRTCPFail:
+		return "rtcp_fail"
+	case StatRTP:
+		return "rtp"
+	case StatDNS:
+		return "dns"
+	case StatLog:
+		return "log"
+	case StatHEPSent:
+		return "hep_sent"
+	case StatDuplicates:
+		return "duplicates"
+	case StatUnknown:
+		return "unknown"
+	default:
+		return "unknown"
 	}
 }
 

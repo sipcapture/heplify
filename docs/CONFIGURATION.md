@@ -256,6 +256,27 @@ The HTTP server itself is controlled by [`api_settings`](#api_settings).
 |-------|------|---------|-------------|
 | `active` | bool | `false` | Mount the `/metrics` endpoint (requires `api_settings.active: true`) |
 | `auth` | bool | `false` | Protect `/metrics` with HTTP Basic Auth (uses `api_settings` credentials) |
+| `carriers` | array | `[]` | Optional static CIDR-to-carrier mapping for SIP Prometheus labels |
+| `sip_methods` | array | built-in SIP methods | Optional extra SIP methods to allow in the `method` label |
+
+When `carriers` is set, SIP request and response metrics include `carrier="<name>"`.
+Resolution checks the source IP first, then the destination IP. If neither matches,
+the label is `carrier="other"`.
+The `method` label is bounded to built-in SIP methods plus `sip_methods`; anything
+else is exported as `method="UNKNOWN"`.
+See [`examples/carriers.json`](../examples/carriers.json) for a standalone JSON
+carrier mapping example.
+
+```json
+"prometheus_settings": {
+  "active": true,
+  "sip_methods": ["PING", "SERVICE"],
+  "carriers": [
+    { "name": "telecom-alpha", "cidrs": ["10.1.0.0/16"] },
+    { "name": "trunk-beta", "cidrs": ["192.0.2.0/24"] }
+  ]
+}
+```
 
 ---
 
