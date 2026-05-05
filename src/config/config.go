@@ -46,6 +46,10 @@ type Config struct {
 		Auth       bool              `json:"auth" mapstructure:"auth"`
 		Carriers   []CarrierSettings `json:"carriers" mapstructure:"carriers"`
 		SIPMethods []string          `json:"sip_methods" mapstructure:"sip_methods"`
+		// PromTargetIP / PromTargetName: comma-separated lists (same semantics as heplify-server)
+		// for labeling RTCP Prometheus metrics as target_name + direction (src/dst).
+		PromTargetIP   string `json:"prom_target_ip" mapstructure:"prom_target_ip"`
+		PromTargetName string `json:"prom_target_name" mapstructure:"prom_target_name"`
 	} `json:"prometheus_settings" mapstructure:"prometheus_settings"`
 
 	ApiSettings struct {

@@ -66,6 +66,9 @@ type Sniffer struct {
 	sipMethods sipMethodSet
 	debug      debugFlags
 
+	// promTargetMap: IP string → target label for RTCP Prometheus metrics; nil = label as unknown only.
+	promTargetMap map[string]string
+
 	mu      sync.Mutex     // guards sources
 	sources []PacketSource // all active capture sources; closed by Stop()
 }
@@ -122,7 +125,11 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 		stats:      NewStats(),
 		carriers:   newCarrierResolver(cfg.PrometheusSettings.Carriers),
 		sipMethods: newSIPMethodSet(cfg.PrometheusSettings.SIPMethods),
-		debug:      dbg,
+		promTargetMap: apiserver.BuildPromTargetMap(
+			cfg.PrometheusSettings.PromTargetIP,
+			cfg.PrometheusSettings.PromTargetName,
+		),
+		debug: dbg,
 	}
 }
 
@@ -780,6 +787,9 @@ func (s *Sniffer) handleRTCP(pkt *decoder.Packet, sender Sender) {
 	pkt.Payload = jsonData
 	pkt.CID = cid
 	s.stats.Inc(StatRTCP)
+	if s.cfg.PrometheusSettings.Active {
+		apiserver.ObserveRTCPMetrics(pkt.Payload, s.cfg.SystemSettings.NodeName, pkt.SrcIP, pkt.DstIP, s.promTargetMap)
+	}
 	s.sendHEPWithMOS(pkt, 5, mos, sender)
 }
 
