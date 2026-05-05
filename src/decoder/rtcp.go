@@ -27,53 +27,27 @@ type RTCPHeader struct {
 	Length      uint16
 }
 
-// SenderReport represents RTCP Sender Report
-type SenderReport struct {
-	SSRC        uint32 `json:"ssrc"`
-	NTPTimeSec  uint32 `json:"ntp_time_sec"`
-	NTPTimeFrac uint32 `json:"ntp_time_frac"`
-	RTPTime     uint32 `json:"rtp_time"`
-	PacketCount uint32 `json:"packet_count"`
-	OctetCount  uint32 `json:"octet_count"`
+// rtcpPacketJSON mirrors heplify v1.67.1 protos/rtcp.go RTCP_Packet JSON shape.
+type rtcpPacketJSON struct {
+	SenderInformation struct {
+		Ntp_timestamp_MSW uint32 `json:"ntp_timestamp_sec"`
+		Ntp_timestamp_LSW uint32 `json:"ntp_timestamp_usec"`
+		Rtp_timestamp     uint32 `json:"rtp_timestamp"`
+		Pkt_count         uint32 `json:"packets"`
+		Octet_count       uint32 `json:"octets"`
+	} `json:"sender_information"`
+	Ssrc           uint32                `json:"ssrc"`
+	Type           uint8                 `json:"type"`
+	ReportCount    uint8                 `json:"report_count"`
+	ReportBlocks   []rtcpReportBlockJSON `json:"report_blocks"`
+	ReportBlocksXr rtcpReportBlockXrJSON `json:"report_blocks_xr"`
+	// VoIPMetrics is full RFC 3611 VoIP Metrics (BT=7) — extension beyond v1 flat report_blocks_xr.
+	VoIPMetrics *rtcpVoIPMetricsJSON `json:"voip_metrics,omitempty"`
+	Sdes_ssrc   uint32               `json:"sdes_ssrc"`
 }
 
-// ReceiverReport represents RTCP Receiver Report block
-type ReceiverReport struct {
-	SSRC             uint32  `json:"ssrc"`
-	FractionLost     uint8   `json:"fraction_lost"`
-	PacketsLost      int32   `json:"packets_lost"`
-	HighestSeq       uint32  `json:"highest_seq"`
-	Jitter           uint32  `json:"jitter"`
-	LastSR           uint32  `json:"last_sr"`
-	DelaySinceLastSR uint32  `json:"delay_since_last_sr"`
-	MOS              float64 `json:"mos,omitempty"`
-}
-
-// RTCPReport represents parsed RTCP data
-type RTCPReport struct {
-	Type           string           `json:"type"`
-	SSRC           uint32           `json:"ssrc"`
-	SenderReport   *SenderReport    `json:"sender_report,omitempty"`
-	ReceiverReport []ReceiverReport `json:"receiver_report,omitempty"`
-	SDES           []SDESChunk      `json:"sdes,omitempty"`
-	VoIPMetrics    *XRVoIPMetrics   `json:"voip_metrics,omitempty"`
-}
-
-// SDESItem represents one RTCP SDES item (RFC 3550 Section 6.5).
-type SDESItem struct {
-	Type uint8  `json:"type"`
-	Name string `json:"name"` // human-readable name for the item type
-	Text string `json:"text"`
-}
-
-// SDESChunk represents one source description chunk (one SSRC + its items).
-type SDESChunk struct {
-	SSRC  uint32     `json:"ssrc"`
-	Items []SDESItem `json:"items"`
-}
-
-// XRVoIPMetrics holds fields from RTCP XR VoIP Metrics block (RFC 3611, block type 7)
-type XRVoIPMetrics struct {
+// rtcpVoIPMetricsJSON holds all fields from RTCP XR VoIP Metrics block (RFC 3611, block type 7).
+type rtcpVoIPMetricsJSON struct {
 	SSRC           uint32  `json:"ssrc"`
 	LossRate       uint8   `json:"loss_rate"`
 	DiscardRate    uint8   `json:"discard_rate"`
@@ -91,13 +65,49 @@ type XRVoIPMetrics struct {
 	ExtRFactor     uint8   `json:"ext_r_factor"`
 	MOSCQ          float64 `json:"mos_cq"`
 	MOSLQ          float64 `json:"mos_lq"`
-	RXConfig       uint8   `json:"rx_config"`
-	JBNominal      uint16  `json:"jb_nominal"`
-	JBMaximum      uint16  `json:"jb_maximum"`
-	JBAbsMax       uint16  `json:"jb_abs_max"`
+	RXConfig       uint8   `json:"rx_config,omitempty"`
+	JBNominal      uint16  `json:"jb_nominal,omitempty"`
+	JBMaximum      uint16  `json:"jb_maximum,omitempty"`
+	JBAbsMax       uint16  `json:"jb_abs_max,omitempty"`
+}
+
+type rtcpReportBlockJSON struct {
+	SourceSsrc      uint32 `json:"source_ssrc"`
+	Fraction_lost   uint8  `json:"fraction_lost"`
+	Cumulative_lost uint32 `json:"packets_lost"`
+	Highest_seq_no  uint32 `json:"highest_seq_no"`
+	Jitter          uint32 `json:"ia_jitter"`
+	LastSR          uint32 `json:"lsr"`
+	Delay_last_SR   uint32 `json:"dlsr"`
+}
+
+type rtcpReportBlockXrJSON struct {
+	Type             uint8  `json:"type"`
+	ID               uint32 `json:"id"`
+	Fraction_lost    uint8  `json:"fraction_lost"`
+	Fraction_discard uint8  `json:"fraction_discard"`
+	Burst_density    uint8  `json:"burst_density"`
+	Gap_density      uint8  `json:"gap_density"`
+	Burst_duration   uint16 `json:"burst_duration"`
+	Gap_duration     uint16 `json:"gap_duration"`
+	Round_trip_delay uint16 `json:"round_trip_delay"`
+	End_system_delay uint16 `json:"end_system_delay"`
+}
+
+// rxReport is an internal RR/SR report block with optional MOS estimate for HEP MOS chunk.
+type rxReport struct {
+	SourceSsrc     uint32
+	FractionLost   uint8
+	CumulativeLost uint32
+	HighestSeqNo   uint32
+	Jitter         uint32
+	LastSR         uint32
+	DelayLastSR    uint32
+	MOS            float64
 }
 
 // ParseRTCP parses RTCP packet and returns SSRC bytes, JSON representation and MOS×100.
+// JSON matches heplify v1.67.1 RTCP_Packet wire format.
 func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 	if len(data) < 8 {
 		return nil, nil, 0
@@ -108,29 +118,30 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 		return nil, nil, 0
 	}
 
-	report := &RTCPReport{}
+	var pkt rtcpPacketJSON
 	var ssrc uint32
+	var rxBlocks []rxReport
 
 	switch header.PacketType {
 	case RTCPTypeSR:
 		if len(data) < 28 {
 			return nil, nil, 0
 		}
-		report.Type = "SR"
+		pkt.Type = RTCPTypeSR
+		pkt.ReportCount = header.ReportCount
 		ssrc = binary.BigEndian.Uint32(data[4:8])
-		report.SSRC = ssrc
-		report.SenderReport = &SenderReport{
-			SSRC:        ssrc,
-			NTPTimeSec:  binary.BigEndian.Uint32(data[8:12]),
-			NTPTimeFrac: binary.BigEndian.Uint32(data[12:16]),
-			RTPTime:     binary.BigEndian.Uint32(data[16:20]),
-			PacketCount: binary.BigEndian.Uint32(data[20:24]),
-			OctetCount:  binary.BigEndian.Uint32(data[24:28]),
-		}
+		pkt.Ssrc = ssrc
+		pkt.SenderInformation.Ntp_timestamp_MSW = binary.BigEndian.Uint32(data[8:12])
+		pkt.SenderInformation.Ntp_timestamp_LSW = binary.BigEndian.Uint32(data[12:16])
+		pkt.SenderInformation.Rtp_timestamp = binary.BigEndian.Uint32(data[16:20])
+		pkt.SenderInformation.Pkt_count = binary.BigEndian.Uint32(data[20:24])
+		pkt.SenderInformation.Octet_count = binary.BigEndian.Uint32(data[24:28])
+
 		offset := 28
 		for i := 0; i < int(header.ReportCount) && offset+24 <= len(data); i++ {
 			rr := parseReceiverReportBlock(data[offset:])
-			report.ReceiverReport = append(report.ReceiverReport, rr)
+			rxBlocks = append(rxBlocks, rr)
+			pkt.ReportBlocks = append(pkt.ReportBlocks, rxReportToJSON(rr))
 			offset += 24
 		}
 
@@ -138,41 +149,36 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 		if len(data) < 8 {
 			return nil, nil, 0
 		}
-		report.Type = "RR"
+		pkt.Type = RTCPTypeRR
+		pkt.ReportCount = header.ReportCount
 		ssrc = binary.BigEndian.Uint32(data[4:8])
-		report.SSRC = ssrc
+		pkt.Ssrc = ssrc
 
 		offset := 8
 		for i := 0; i < int(header.ReportCount) && offset+24 <= len(data); i++ {
 			rr := parseReceiverReportBlock(data[offset:])
-			report.ReceiverReport = append(report.ReceiverReport, rr)
+			rxBlocks = append(rxBlocks, rr)
+			pkt.ReportBlocks = append(pkt.ReportBlocks, rxReportToJSON(rr))
 			offset += 24
 		}
 
 	case RTCPTypeSDES:
-		report.Type = "SDES"
-		// ReportCount = SC (number of SSRC chunks)
-		offset := 4
-		for i := 0; i < int(header.ReportCount) && offset+4 <= len(data); i++ {
-			chunk := SDESChunk{
-				SSRC: binary.BigEndian.Uint32(data[offset : offset+4]),
-			}
-			if ssrc == 0 {
-				ssrc = chunk.SSRC
-			}
-			offset += 4
-			chunk.Items = parseSDESItems(data, &offset)
-			report.SDES = append(report.SDES, chunk)
+		pkt.Type = RTCPTypeSDES
+		pkt.ReportCount = header.ReportCount
+		if len(data) >= 8 {
+			pkt.Sdes_ssrc = binary.BigEndian.Uint32(data[4:8])
+			ssrc = pkt.Sdes_ssrc
 		}
 
 	case RTCPTypeXR:
 		if len(data) < 8 {
 			return nil, nil, 0
 		}
-		report.Type = "XR"
+		pkt.Type = RTCPTypeXR
+		pkt.ReportCount = header.ReportCount
 		ssrc = binary.BigEndian.Uint32(data[4:8])
-		report.SSRC = ssrc
-		// Parse XR blocks
+		pkt.Ssrc = ssrc
+
 		offset := 8
 		for offset+4 <= len(data) {
 			blockType := data[offset]
@@ -180,10 +186,13 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 			if offset+blockLen > len(data) {
 				break
 			}
-			if blockType == 7 && blockLen >= 28 { // VoIP Metrics block (RFC 3611)
-				vm := parseXRVoIPMetrics(data[offset : offset+blockLen])
-				if vm != nil {
-					report.VoIPMetrics = vm
+			if blockType == 7 && blockLen >= 20 {
+				blk := data[offset : offset+blockLen]
+				if xr := parseXRBlockV1(blk); xr != nil {
+					pkt.ReportBlocksXr = *xr
+				}
+				if vm := parseVoIPMetricsBlockFull(blk); vm != nil {
+					pkt.VoIPMetrics = vm
 				}
 			}
 			offset += blockLen
@@ -196,10 +205,9 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 		return []byte(fmt.Sprintf("%08x", ssrc)), nil, 0
 	}
 
-	// Extract best MOS value for HEP chunk (as uint16 × 100)
-	mos = extractMOS(report)
+	mos = extractMOS(pkt.VoIPMetrics, rxBlocks)
 
-	out, err := json.Marshal(report)
+	out, err := json.Marshal(pkt)
 	if err != nil {
 		return []byte(fmt.Sprintf("%08x", ssrc)), nil, mos
 	}
@@ -207,132 +215,45 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 	return []byte(fmt.Sprintf("%08x", ssrc)), out, mos
 }
 
-// extractMOS returns the best available MOS value scaled ×100 for the HEP MOS chunk.
-// Priority: XR VoIP Metrics MOSCQ > first RR block MOS.
-func extractMOS(r *RTCPReport) uint16 {
-	if r.VoIPMetrics != nil && r.VoIPMetrics.MOSCQ > 0 {
-		return uint16(r.VoIPMetrics.MOSCQ * 100)
-	}
-	if len(r.ReceiverReport) > 0 && r.ReceiverReport[0].MOS > 0 {
-		return uint16(r.ReceiverReport[0].MOS * 100)
-	}
-	return 0
-}
-
-func parseRTCPHeader(data []byte) RTCPHeader {
-	return RTCPHeader{
-		Version:     (data[0] >> 6) & 0x03,
-		Padding:     (data[0] & 0x20) != 0,
-		ReportCount: data[0] & 0x1F,
-		PacketType:  data[1],
-		Length:      binary.BigEndian.Uint16(data[2:4]),
+func rxReportToJSON(rr rxReport) rtcpReportBlockJSON {
+	return rtcpReportBlockJSON{
+		SourceSsrc:      rr.SourceSsrc,
+		Fraction_lost:   rr.FractionLost,
+		Cumulative_lost: rr.CumulativeLost,
+		Highest_seq_no:  rr.HighestSeqNo,
+		Jitter:          rr.Jitter,
+		LastSR:          rr.LastSR,
+		Delay_last_SR:   rr.DelayLastSR,
 	}
 }
 
-func parseReceiverReportBlock(data []byte) ReceiverReport {
-	packetsLost := int32(data[5])<<16 | int32(data[6])<<8 | int32(data[7])
-	// Sign extend 24-bit to 32-bit
-	if packetsLost&0x800000 != 0 {
-		packetsLost |= -0x1000000 // equivalent to 0xFF000000 but works with int32
-	}
-
-	rr := ReceiverReport{
-		SSRC:             binary.BigEndian.Uint32(data[0:4]),
-		FractionLost:     data[4],
-		PacketsLost:      packetsLost,
-		HighestSeq:       binary.BigEndian.Uint32(data[8:12]),
-		Jitter:           binary.BigEndian.Uint32(data[12:16]),
-		LastSR:           binary.BigEndian.Uint32(data[16:20]),
-		DelaySinceLastSR: binary.BigEndian.Uint32(data[20:24]),
-	}
-
-	// Calculate simple MOS estimate based on fraction lost
-	if rr.FractionLost < 10 {
-		rr.MOS = 4.5
-	} else if rr.FractionLost < 25 {
-		rr.MOS = 4.0
-	} else if rr.FractionLost < 50 {
-		rr.MOS = 3.5
-	} else if rr.FractionLost < 100 {
-		rr.MOS = 3.0
-	} else {
-		rr.MOS = 2.5
-	}
-
-	return rr
-}
-
-// parseSDESItems reads SDES items from data starting at *offset,
-// advancing *offset past the items and their 4-byte-aligned padding.
-// Returns when a null (END) item is found or data is exhausted.
-func parseSDESItems(data []byte, offset *int) []SDESItem {
-	var items []SDESItem
-	start := *offset
-
-	for *offset < len(data) {
-		itemType := data[*offset]
-		*offset++
-
-		if itemType == 0 { // END item
-			// advance to next 4-byte boundary relative to start of chunk
-			used := *offset - start
-			if pad := used % 4; pad != 0 {
-				*offset += 4 - pad
-			}
-			return items
-		}
-
-		if *offset >= len(data) {
-			break
-		}
-		length := int(data[*offset])
-		*offset++
-
-		if *offset+length > len(data) {
-			break
-		}
-		text := string(data[*offset : *offset+length])
-		*offset += length
-
-		items = append(items, SDESItem{
-			Type: itemType,
-			Name: sdesItemName(itemType),
-			Text: text,
-		})
-	}
-	return items
-}
-
-// sdesItemName maps SDES item type codes to human-readable names (RFC 3550).
-func sdesItemName(t uint8) string {
-	switch t {
-	case 1:
-		return "CNAME"
-	case 2:
-		return "NAME"
-	case 3:
-		return "EMAIL"
-	case 4:
-		return "PHONE"
-	case 5:
-		return "LOC"
-	case 6:
-		return "TOOL"
-	case 7:
-		return "NOTE"
-	case 8:
-		return "PRIV"
-	default:
-		return fmt.Sprintf("ITEM%d", t)
-	}
-}
-
-// block must be at least 28 bytes: 4 bytes header + 4 bytes SSRC + 20 bytes metrics.
-func parseXRVoIPMetrics(block []byte) *XRVoIPMetrics {
-	if len(block) < 28 {
+// parseXRBlockV1 fills report_blocks_xr like v1.67.1 for VoIP Metrics block (RFC 3611, BT=7).
+// block begins at the extended report block header (BT, reserved, length).
+func parseXRBlockV1(block []byte) *rtcpReportBlockXrJSON {
+	if len(block) < 20 || block[0] != 7 {
 		return nil
 	}
-	vm := &XRVoIPMetrics{
+	return &rtcpReportBlockXrJSON{
+		Type:             block[0],
+		ID:               binary.BigEndian.Uint32(block[4:8]),
+		Fraction_lost:    block[8],
+		Fraction_discard: block[9],
+		Burst_density:    block[10],
+		Gap_density:      block[11],
+		Burst_duration:   binary.BigEndian.Uint16(block[12:14]),
+		Gap_duration:     binary.BigEndian.Uint16(block[14:16]),
+		Round_trip_delay: binary.BigEndian.Uint16(block[16:18]),
+		End_system_delay: binary.BigEndian.Uint16(block[18:20]),
+	}
+}
+
+// parseVoIPMetricsBlockFull parses RFC 3611 VoIP Metrics extended report block (BT=7).
+// block starts with block header: BT(1), reserved(1), length(16-bit).
+func parseVoIPMetricsBlockFull(block []byte) *rtcpVoIPMetricsJSON {
+	if len(block) < 28 || block[0] != 7 {
+		return nil
+	}
+	vm := &rtcpVoIPMetricsJSON{
 		SSRC:           binary.BigEndian.Uint32(block[4:8]),
 		LossRate:       block[8],
 		DiscardRate:    block[9],
@@ -358,4 +279,54 @@ func parseXRVoIPMetrics(block []byte) *XRVoIPMetrics {
 		vm.JBAbsMax = binary.BigEndian.Uint16(block[34:36])
 	}
 	return vm
+}
+
+func extractMOS(vm *rtcpVoIPMetricsJSON, rxBlocks []rxReport) uint16 {
+	if vm != nil && vm.MOSCQ > 0 {
+		return uint16(vm.MOSCQ * 100)
+	}
+	if len(rxBlocks) > 0 && rxBlocks[0].MOS > 0 {
+		return uint16(rxBlocks[0].MOS * 100)
+	}
+	return 0
+}
+
+func parseRTCPHeader(data []byte) RTCPHeader {
+	return RTCPHeader{
+		Version:     (data[0] >> 6) & 0x03,
+		Padding:     (data[0] & 0x20) != 0,
+		ReportCount: data[0] & 0x1F,
+		PacketType:  data[1],
+		Length:      binary.BigEndian.Uint16(data[2:4]),
+	}
+}
+
+func parseReceiverReportBlock(data []byte) rxReport {
+	var cumBuf [4]byte
+	copy(cumBuf[1:], data[5:8])
+	cumLost := binary.BigEndian.Uint32(cumBuf[:])
+
+	rr := rxReport{
+		SourceSsrc:     binary.BigEndian.Uint32(data[0:4]),
+		FractionLost:   data[4],
+		CumulativeLost: cumLost,
+		HighestSeqNo:   binary.BigEndian.Uint32(data[8:12]),
+		Jitter:         binary.BigEndian.Uint32(data[12:16]),
+		LastSR:         binary.BigEndian.Uint32(data[16:20]),
+		DelayLastSR:    binary.BigEndian.Uint32(data[20:24]),
+	}
+
+	if rr.FractionLost < 10 {
+		rr.MOS = 4.5
+	} else if rr.FractionLost < 25 {
+		rr.MOS = 4.0
+	} else if rr.FractionLost < 50 {
+		rr.MOS = 3.5
+	} else if rr.FractionLost < 100 {
+		rr.MOS = 3.0
+	} else {
+		rr.MOS = 2.5
+	}
+
+	return rr
 }
