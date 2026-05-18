@@ -80,12 +80,13 @@ Array of capture interfaces. At least one active entry is required for packet sn
 
 ## `transport`
 
-Array of HEP destinations. Multiple active entries send to all destinations simultaneously.
+Array of HEP destinations. Multiple active **primary** entries (`failover_only: false`) receive every packet — HEP mirror / fan-out. See [TRANSPORT.md](TRANSPORT.md) for routing, failover, and `socket[].transport_profile`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `name` | string | `""` | Logical name (used in logs) |
+| `name` | string | `""` | Logical name (referenced by `socket[].transport_profile`) |
 | `active` | bool | `false` | Enable this transport |
+| `failover_only` | bool | `false` | Backup destination: used only when all primary transports fail to send |
 | `protocol` | string | `"HEPv3"` | HEP version: `HEPv3` or `HEPv2` |
 | `host` | string | `""` | Destination hostname or IP address |
 | `port` | int | `9060` | Destination port |
@@ -105,6 +106,8 @@ Array of HEP destinations. Multiple active entries send to all destinations simu
 | `batch_size` | int | `500` | Number of records per Arrow batch |
 | `flush_interval_ms` | int | `1000` | Force flush interval in milliseconds |
 
+**Mirror example** (same capture to two Homer instances): see [`examples/heplify-mirror.json`](../examples/heplify-mirror.json).
+
 **Example:**
 
 ```json
@@ -112,6 +115,7 @@ Array of HEP destinations. Multiple active entries send to all destinations simu
   {
     "name": "homer",
     "active": true,
+    "failover_only": false,
     "protocol": "HEPv3",
     "host": "192.168.1.10",
     "port": 9060,

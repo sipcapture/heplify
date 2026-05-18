@@ -393,3 +393,25 @@ func TestResolveConfigFilePath_NoConfigWins(t *testing.T) {
 		t.Fatalf("expected empty config path with -no-config, got: %s", path)
 	}
 }
+
+func TestBuildConfigFromFlagsMultipleHEPServers(t *testing.T) {
+	hepServer = "10.0.0.1:9060, 10.0.0.2:9061"
+	networkType = "tcp"
+
+	cfg := buildConfigFromFlags()
+	if len(cfg.TransportSettings) != 2 {
+		t.Fatalf("expected 2 transports, got %d", len(cfg.TransportSettings))
+	}
+	if cfg.TransportSettings[0].Host != "10.0.0.1" || cfg.TransportSettings[0].Port != 9060 {
+		t.Fatalf("unexpected first transport: %+v", cfg.TransportSettings[0])
+	}
+	if cfg.TransportSettings[1].Host != "10.0.0.2" || cfg.TransportSettings[1].Port != 9061 {
+		t.Fatalf("unexpected second transport: %+v", cfg.TransportSettings[1])
+	}
+	if !cfg.TransportSettings[0].Active || !cfg.TransportSettings[1].Active {
+		t.Fatal("both mirror transports should be active")
+	}
+	if cfg.TransportSettings[0].FailoverOnly || cfg.TransportSettings[1].FailoverOnly {
+		t.Fatal("comma-separated -hs transports must be primary (not failover_only)")
+	}
+}

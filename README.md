@@ -27,6 +27,7 @@ It handles fragmented and duplicate packets out of the box.
 - **Arrow Flight transport** — high-performance columnar data delivery over gRPC
 - **Improved IP defragmentation** — rewritten IPv4/IPv6 defragmenter with test coverage
 - **TCP SIP reassembly** — improved handling of fragmented SIP over TCP (Skype for Business, Lync)
+- **HEP mirror / fan-out** — send the same capture to multiple HEP servers (`transport[]` or comma-separated `-hs`); see [docs/TRANSPORT.md](docs/TRANSPORT.md) and [examples/heplify-mirror.json](examples/heplify-mirror.json)
 - **HEP Collector** — receive HEP from other agents and forward/fan-out to multiple destinations
 - **Prometheus metrics** — built-in exporter for agent performance and traffic statistics
 - **Web stats dashboard** — live `/` UI showing uptime, interfaces, packet counters and transport status; JSON API at `/api/stats`; optional HTTP Basic Auth

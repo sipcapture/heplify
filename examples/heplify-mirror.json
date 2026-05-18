@@ -1,0 +1,44 @@
+{
+    "socket": [
+        {
+            "name": "default",
+            "active": true,
+            "socket_type": "afpacket",
+            "transport_profile": [],
+            "device": "any",
+            "capture_mode": ["SIP", "RTCP"]
+        }
+    ],
+    "transport": [
+        {
+            "name": "homer-prod",
+            "active": true,
+            "failover_only": false,
+            "protocol": "HEPv3",
+            "host": "10.0.0.1",
+            "transport": "tcp",
+            "port": 9060,
+            "password": ""
+        },
+        {
+            "name": "homer-dev",
+            "active": true,
+            "failover_only": false,
+            "protocol": "HEPv3",
+            "host": "10.0.0.2",
+            "transport": "udp",
+            "port": 9060,
+            "password": ""
+        }
+    ],
+    "log_settings": {
+        "active": true,
+        "level": "info",
+        "stdout": true
+    },
+    "system_settings": {
+        "node_name": "heplify-mirror",
+        "node_id": 1,
+        "node_pw": ""
+    }
+}
