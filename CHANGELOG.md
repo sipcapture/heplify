@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **TCP SIP HEP ordering ([#342](https://github.com/sipcapture/heplify/issues/342))**: multiple SIP messages from one TCP capture timestamp receive incrementing HEP `Tmsec` values so Homer preserves wire order.
+
 ## [2.0.22] - 2026-05-19
 
 ### Added

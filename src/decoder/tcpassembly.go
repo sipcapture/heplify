@@ -66,6 +66,9 @@ type sipStream struct {
 	cb             SIPCallback
 	buf            []byte
 	ts             time.Time
+	// tsSeq assigns distinct HEP Tmsec values when multiple SIP messages share
+	// one TCP capture timestamp (same segment). Homer sorts by (Tsec, Tmsec).
+	tsSeq uint32
 }
 
 func (s *sipStream) Reassembled(reassemblies []tcpassembly.Reassembly) {
@@ -79,7 +82,7 @@ func (s *sipStream) Reassembled(reassemblies []tcpassembly.Reassembly) {
 			// immediately instead of waiting for the connection to be torn
 			// down and a new SYN to be captured.
 			s.buf = s.buf[:0]
-			s.ts = time.Time{}
+			s.clearTimestamp()
 			// fall through ↓
 		}
 		if len(r.Bytes) == 0 {
@@ -87,6 +90,7 @@ func (s *sipStream) Reassembled(reassemblies []tcpassembly.Reassembly) {
 		}
 		if s.ts.IsZero() {
 			s.ts = r.Seen
+			s.tsSeq = 0
 		}
 		s.buf = append(s.buf, r.Bytes...)
 	}
@@ -106,7 +110,7 @@ func (s *sipStream) process() {
 				return // wait for more data
 			}
 			s.buf = s.buf[end+4:]
-			s.ts = time.Time{}
+			s.clearTimestamp()
 			continue
 		}
 
@@ -125,7 +129,7 @@ func (s *sipStream) process() {
 			// Use the full buffer length as a safe approximation; the next
 			// iteration will restart cleanly if there is trailing data.
 			s.buf = s.buf[:0]
-			s.ts = time.Time{}
+			s.clearTimestamp()
 			return
 		}
 
@@ -137,7 +141,7 @@ func (s *sipStream) process() {
 			// Not SIP or corrupted — safety valve: drop if buffer is huge.
 			if len(s.buf) > 1<<20 {
 				s.buf = s.buf[:0]
-				s.ts = time.Time{}
+				s.clearTimestamp()
 			}
 			return
 		}
@@ -148,13 +152,30 @@ func (s *sipStream) process() {
 		}
 		s.buf = s.buf[len(payload):]
 		// When the buffer is empty, clear the timestamp so the next
-		// Reassembled() call picks up a fresh r.Seen for the next message.
-		// Do NOT clear it while data still remains — consecutive SIP messages
-		// inside the same TCP segment share the segment's capture timestamp.
+		// Reassembled() call picks up a fresh r.Seen for the next segment.
+		// While data remains, consecutive SIP messages keep the same capture
+		// second but receive incrementing Tmsec via tsSeq (issue #342).
 		if len(s.buf) == 0 {
-			s.ts = time.Time{}
+			s.clearTimestamp()
 		}
 	}
+}
+
+func (s *sipStream) clearTimestamp() {
+	s.ts = time.Time{}
+	s.tsSeq = 0
+}
+
+// hepTimestampFromCapture maps a capture time and sub-message sequence to HEP fields.
+func hepTimestampFromCapture(ts time.Time, seq uint32) (tsec, tmsec uint32) {
+	tsec = uint32(ts.Unix())
+	us := uint64(ts.Nanosecond()/1000) + uint64(seq)
+	if us >= 1_000_000 {
+		tsec += uint32(us / 1_000_000)
+		tmsec = uint32(us % 1_000_000)
+		return tsec, tmsec
+	}
+	return tsec, uint32(us)
 }
 
 func (s *sipStream) buildPacket(payload []byte) *Packet {
@@ -193,8 +214,8 @@ func (s *sipStream) buildPacket(payload []byte) *Packet {
 	}
 
 	if !s.ts.IsZero() {
-		pkt.Tsec = uint32(s.ts.Unix())
-		pkt.Tmsec = uint32(s.ts.Nanosecond() / 1000)
+		pkt.Tsec, pkt.Tmsec = hepTimestampFromCapture(s.ts, s.tsSeq)
+		s.tsSeq++
 	}
 	return pkt
 }
