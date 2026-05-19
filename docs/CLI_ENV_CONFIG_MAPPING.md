@@ -69,6 +69,7 @@ This document describes how `heplify` resolves configuration from:
 | `-d` | `debug_selectors` | `HEPLIFY_DEBUG_SELECTORS__N` |
 | `-disable-defrag` | `debug_settings.disable_ip_defrag` | `HEPLIFY_DEBUG_SETTINGS_DISABLE_IP_DEFRAG` |
 | `-disable-tcp-reasm` | `debug_settings.disable_tcp_reassembly` | `HEPLIFY_DEBUG_SETTINGS_DISABLE_TCP_REASSEMBLY` |
+| `-print-out-bad-message` | `debug_settings.print_out_bad_message` | `HEPLIFY_DEBUG_SETTINGS_PRINT_OUT_BAD_MESSAGE` |
 | `-wf` | `pcap_settings.write_file` | `HEPLIFY_PCAP_SETTINGS_WRITE_FILE` |
 | `-rt` | `pcap_settings.rotate_minutes` | `HEPLIFY_PCAP_SETTINGS_ROTATE_MINUTES` |
 | `-zf` | `pcap_settings.compress` | `HEPLIFY_PCAP_SETTINGS_COMPRESS` |

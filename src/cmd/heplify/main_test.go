@@ -316,7 +316,7 @@ func TestConfigAndCLIParityForCriticalFields(t *testing.T) {
 		"hs", "nt", "skipverify", "keepalive", "tcpsendretries", "hin",
 		"l", "S", "e", "log-format", "hi", "hn", "hp", "fg", "fw", "rf",
 		"tcpassembly", "sipassembly", "ipfragment", "dd", "dim", "diip", "disip", "didip",
-		"fi", "di", "d", "log-payload", "disable-defrag", "disable-tcp-reasm",
+		"fi", "di", "d", "log-payload", "disable-defrag", "disable-tcp-reasm", "print-out-bad-message",
 		"wf", "rt", "zf", "rs", "lp", "eof-exit",
 		"prometheus", "api", "api-user", "api-pass", "api-tls", "api-cert", "api-key",
 		"script-file", "script-hep-filter",

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.22] - 2026-05-19
+
+### Added
+
+- Log `hep_bytes`, `wire_bytes`, and `hep_payload_bytes` when HEP UDP send fails with `message too long` (`EMSGSIZE`).
+- CLI flag `-print-out-bad-message` / config `debug_settings.print_out_bad_message` to dump HEP/SIP payload hex (and printable SIP text) on that error.
+- Periodic discard of stale incomplete IP fragment flows every minute (restores legacy heplify v1 behaviour; reduces memory growth from never-completed fragments).
+
+### Changed
+
+- Incomplete IP fragment flows are never emitted as HEP; the flush only drops stale state.
+
 ## [2.0.17] - 2026-04-28
 
 ### Changed

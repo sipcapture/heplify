@@ -119,8 +119,9 @@ var (
 	logPayload bool
 
 	// Debug settings
-	disableDefrag   bool
-	disableTcpReasm bool
+	disableDefrag      bool
+	disableTcpReasm    bool
+	printOutBadMessage bool
 
 	// API TLS
 	apiTLS      bool
@@ -230,6 +231,7 @@ func init() {
 	// Debug settings
 	flag.BoolVar(&disableDefrag, "disable-defrag", false, "Disable IP defragmentation")
 	flag.BoolVar(&disableTcpReasm, "disable-tcp-reasm", false, "Disable TCP reassembly processing")
+	flag.BoolVar(&printOutBadMessage, "print-out-bad-message", false, "On HEP UDP 'message too long', dump HEP/SIP payload to the log (sizes are always logged)")
 
 	// API TLS flags
 	flag.BoolVar(&apiTLS, "api-tls", false, "Enable HTTPS for API (requires -api-cert and -api-key)")
@@ -682,6 +684,7 @@ func buildConfigFromFlags() *config.Config {
 	// Debug settings
 	cfg.DebugSettings.DisableIPDefrag = disableDefrag
 	cfg.DebugSettings.DisableTcpReassembly = disableTcpReasm
+	cfg.DebugSettings.PrintOutBadMessage = printOutBadMessage
 
 	// API TLS settings
 	if apiTLS {
@@ -1212,6 +1215,9 @@ func applyExplicitCLIOverridesWithVisited(cfg *config.Config, visited []string) 
 
 		case "disable-tcp-reasm":
 			cfg.DebugSettings.DisableTcpReassembly = disableTcpReasm
+
+		case "print-out-bad-message":
+			cfg.DebugSettings.PrintOutBadMessage = printOutBadMessage
 
 		case "wf":
 			cfg.PcapSettings.WriteFile = writeFile

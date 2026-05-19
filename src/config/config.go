@@ -67,6 +67,8 @@ type Config struct {
 	DebugSettings struct {
 		DisableTcpReassembly bool `json:"disable_tcp_reassembly" mapstructure:"disable_tcp_reassembly"`
 		DisableIPDefrag      bool `json:"disable_ip_defrag" mapstructure:"disable_ip_defrag"`
+		// PrintOutBadMessage: on HEP UDP "message too long", log HEP/payload dump (sizes always logged).
+		PrintOutBadMessage bool `json:"print_out_bad_message" mapstructure:"print_out_bad_message"`
 	} `json:"debug_settings" mapstructure:"debug_settings"`
 
 	ScriptSettings ScriptSettings `json:"script_settings" mapstructure:"script_settings"`
