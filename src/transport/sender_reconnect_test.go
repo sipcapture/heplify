@@ -245,7 +245,7 @@ func TestHandleWriteErrorDoesNotCloseNewConn(t *testing.T) {
 		reconnecting: true,
 	}
 
-	sender.handleWriteError(client, oldConn, errors.New("stale write error"))
+	sender.handleWriteError(client, oldConn, errors.New("stale write error"), nil, 0)
 
 	client.mu.Lock()
 	defer client.mu.Unlock()

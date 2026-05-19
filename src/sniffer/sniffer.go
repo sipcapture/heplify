@@ -441,6 +441,24 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 	// IP defragmentation: enabled by default, disabled via disable_ip_defrag.
 	if s.cfg.DebugSettings.DisableIPDefrag {
 		dec.DisableDefrag()
+	} else {
+		// Drop stale incomplete fragment flows (legacy heplify v1: every 1 minute).
+		go func() {
+			interval := decoder.IPFragmentFlushInterval
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for range ticker.C {
+				cutoff := time.Now().Add(-interval)
+				v4, v6 := dec.DiscardStaleFragments(cutoff)
+				if (v4 > 0 || v6 > 0) && s.debug.defrag {
+					log.Debug().
+						Int("ipv4_flows", v4).
+						Int("ipv6_flows", v6).
+						Dur("max_age", interval).
+						Msg("[defrag] discarded stale incomplete IP fragment flows")
+				}
+			}
+		}()
 	}
 
 	// TCP reassembly: enabled by default, disabled via disable_tcp_reassembly.

@@ -314,14 +314,17 @@ func (s *Sender) reconnectLoop(client *HEPClient, reason string) {
 	}
 }
 
-func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err error) {
-	log.Error().
+func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err error, hepPacket []byte, wireBytes int) {
+	ev := log.Error().
 		Str("component", "sender").
 		Str("transport", client.proto).
 		Str("addr", client.addr).
 		Str("reason", "write error").
-		Err(err).
-		Msg("Failed to send HEP")
+		Err(err)
+	if isMessageTooLong(err) {
+		ev = enrichMessageTooLongLog(ev, hepPacket, wireBytes, s.cfg.DebugSettings.PrintOutBadMessage)
+	}
+	ev.Msg("Failed to send HEP")
 	client.mu.Lock()
 	if client.conn == failedConn && client.conn != nil {
 		_ = client.conn.Close()
@@ -419,7 +422,7 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 
 		n, err := conn.Write(data)
 		if err != nil {
-			s.handleWriteError(client, conn, err)
+			s.handleWriteError(client, conn, err, msg, len(data))
 			if !sent {
 				s.bufferToFile(msg)
 			}
@@ -595,8 +598,12 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 		_, err := conn.Write(msg)
 		client.mu.Unlock()
 		if err != nil {
-			log.Error().Str("component", "sender").Err(err).Str("reason", "buffer drain write").Msg("Failed to send buffered HEP")
-			s.handleWriteError(client, conn, err)
+			ev := log.Error().Str("component", "sender").Err(err).Str("reason", "buffer drain write")
+			if isMessageTooLong(err) {
+				ev = enrichMessageTooLongLog(ev, msg, len(msg), s.cfg.DebugSettings.PrintOutBadMessage)
+			}
+			ev.Msg("Failed to send buffered HEP")
+			s.handleWriteError(client, conn, err, msg, len(msg))
 			break
 		}
 		sentCount++

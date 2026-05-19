@@ -344,6 +344,7 @@ Flags to selectively disable processing subsystems (useful for troubleshooting).
 |-------|------|---------|-------------|
 | `disable_tcp_reassembly` | bool | `false` | Disable TCP stream reassembly |
 | `disable_ip_defrag` | bool | `false` | Disable IP defragmentation |
+| `print_out_bad_message` | bool | `false` | On HEP send `message too long`, dump HEP/SIP payload in the log (`hep_bytes` / `hep_payload_bytes` always logged) |
 
 ---
 

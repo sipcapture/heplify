@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"net"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/ip4defrag"
@@ -12,6 +13,10 @@ import (
 	"github.com/sipcapture/heplify/src/decoder/ip6defrag"
 	"github.com/sipcapture/heplify/src/decoder/ownlayers"
 )
+
+// IPFragmentFlushInterval is how long incomplete IP fragment flows are retained
+// before DiscardStaleFragments removes them (legacy heplify v1 used 1 minute).
+const IPFragmentFlushInterval = time.Minute
 
 // Packet represents a decoded network packet ready for HEP encoding
 type Packet struct {
@@ -588,6 +593,19 @@ func (p *Packet) GetPayload() string {
 func (d *Decoder) DisableDefrag() {
 	d.defrag4 = nil
 	d.defrag6 = nil
+}
+
+// DiscardStaleFragments removes incomplete IPv4/IPv6 fragment flows with no
+// activity since cutoff. Returns the number of flows discarded per protocol.
+// Incomplete flows are never emitted as HEP; this only limits memory growth.
+func (d *Decoder) DiscardStaleFragments(cutoff time.Time) (ipv4Flows, ipv6Flows int) {
+	if d.defrag4 != nil {
+		ipv4Flows = d.defrag4.DiscardOlderThan(cutoff)
+	}
+	if d.defrag6 != nil {
+		ipv6Flows = d.defrag6.DiscardOlderThan(cutoff)
+	}
+	return ipv4Flows, ipv6Flows
 }
 
 // boolToUint8 converts bool to uint8 (0 or 1)
