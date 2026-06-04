@@ -284,7 +284,7 @@ func (e *Engine) setHEPField(L *lua.LState) int {
 
 	switch field {
 	case "ProtoType":
-		if i, err := strconv.Atoi(value); err == nil {
+		if i, err := strconv.ParseUint(value, 10, 8); err == nil {
 			e.pkt.ProtoType = byte(i)
 		}
 	case "SrcIP":
