@@ -16,8 +16,8 @@ func TestHepTimestampFromCapture_sequence(t *testing.T) {
 		t.Fatalf("seq 0: got tsec=%d tmsec=%d", tsec, tmsec)
 	}
 	tsec, tmsec = hepTimestampFromCapture(ts, 1)
-	if tmsec != 818143 {
-		t.Fatalf("seq 1: got tmsec=%d want 818143", tmsec)
+	if tsec != uint32(ts.Unix()) || tmsec != 818143 {
+		t.Fatalf("seq 1: got tsec=%d tmsec=%d want tsec=%d tmsec=818143", tsec, tmsec, uint32(ts.Unix()))
 	}
 }
 
