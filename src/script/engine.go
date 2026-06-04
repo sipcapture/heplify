@@ -290,13 +290,13 @@ func (e *Engine) setHEPField(L *lua.LState) int {
 	case "SrcIP":
 		e.pkt.SrcIP = net.ParseIP(value)
 	case "SrcPort":
-		if i, err := strconv.Atoi(value); err == nil {
+		if i, err := strconv.ParseUint(value, 10, 16); err == nil {
 			e.pkt.SrcPort = uint16(i)
 		}
 	case "DstIP":
 		e.pkt.DstIP = net.ParseIP(value)
 	case "DstPort":
-		if i, err := strconv.Atoi(value); err == nil {
+		if i, err := strconv.ParseUint(value, 10, 16); err == nil {
 			e.pkt.DstPort = uint16(i)
 		}
 	case "CID":
