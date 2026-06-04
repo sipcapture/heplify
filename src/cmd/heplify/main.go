@@ -716,25 +716,25 @@ func parseCaptureMode(mode string) []string {
 
 func parsePortRange(pr string) (uint16, uint16, error) {
 	parts := strings.Split(pr, "-")
-	minInt, maxInt := 5060, 5090
+	minPort, maxPort := uint16(5060), uint16(5090)
 	if len(parts) >= 1 {
-		parsed, err := strconv.Atoi(parts[0])
+		parsed, err := strconv.ParseUint(parts[0], 10, 16)
 		if err != nil {
 			return 0, 0, fmt.Errorf("invalid min port: %w", err)
 		}
-		minInt = parsed
+		minPort = uint16(parsed)
 	}
 	if len(parts) >= 2 {
-		parsed, err := strconv.Atoi(parts[1])
+		parsed, err := strconv.ParseUint(parts[1], 10, 16)
 		if err != nil {
 			return 0, 0, fmt.Errorf("invalid max port: %w", err)
 		}
-		maxInt = parsed
+		maxPort = uint16(parsed)
 	}
-	if minInt < 1 || maxInt > 65535 || minInt > maxInt {
-		return 0, 0, fmt.Errorf("port range out of bounds: %d-%d", minInt, maxInt)
+	if minPort < 1 || minPort > maxPort {
+		return 0, 0, fmt.Errorf("port range out of bounds: %d-%d", minPort, maxPort)
 	}
-	return uint16(minInt), uint16(maxInt), nil
+	return minPort, maxPort, nil
 }
 
 func parseCSV(s string) []string {
