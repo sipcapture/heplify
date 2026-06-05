@@ -1,10 +1,13 @@
-FROM golang:1.24-bookworm AS builder
+ARG GOLANG_VERSION=1.24
+ARG DEBIAN_RELEASE=bookworm
+
+FROM golang:${GOLANG_VERSION}-${DEBIAN_RELEASE} AS builder
 
 WORKDIR /build
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends libpcap-dev && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -22,11 +25,11 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
     ./src/cmd/heplify
 
 # ──────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+FROM debian:${DEBIAN_RELEASE}-slim
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends libpcap0.8 ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/heplify /usr/local/bin/heplify
 
