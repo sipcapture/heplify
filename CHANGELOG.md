@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **TCP SIP HEP ordering ([#342](https://github.com/sipcapture/heplify/issues/342))**: multiple SIP messages from one TCP capture timestamp receive incrementing HEP `Tmsec` values so Homer preserves wire order.
 
+## [2.0.27] - 2026-08-10
+
+### Fixed
+
+- Docker image build: use `golang:1.25` so `go.mod` (`go 1.25.0`) succeeds (`go mod download` failed on 1.24).
+
 ## [2.0.26] - 2026-08-10
 
 ### Added
