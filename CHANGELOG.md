@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **TCP SIP HEP ordering ([#342](https://github.com/sipcapture/heplify/issues/342))**: multiple SIP messages from one TCP capture timestamp receive incrementing HEP `Tmsec` values so Homer preserves wire order.
 
+## [2.0.26] - 2026-08-10
+
+### Added
+
+- **Diameter capture**: TCP/SCTP Diameter → HEP `proto_type=56` with Session-Id correlation (`-m DIAMETER` / `SIPDIAMETER` / `SIPRTCPDIAMETER`). See [docs/DIAMETER.md](docs/DIAMETER.md).
+
 ## [2.0.22] - 2026-05-19
 
 ### Added

@@ -6,7 +6,7 @@
 
 **heplify** is captagent's little brother, optimized for speed and simplicity. It's a single binary which you can run
 on Linux, macOS and Windows to capture IPv4 or IPv6 packets and send them to Homer. Heplify can send
-SIP, correlated RTCP, DNS and Logs into homer.
+SIP, correlated RTCP, DNS, Diameter and Logs into homer.
 It handles fragmented and duplicate packets out of the box.
 
 ## Platform Support
@@ -28,6 +28,7 @@ It handles fragmented and duplicate packets out of the box.
 - **Improved IP defragmentation** — rewritten IPv4/IPv6 defragmenter with test coverage
 - **TCP SIP reassembly** — improved handling of fragmented SIP over TCP (Skype for Business, Lync)
 - **HEP mirror / fan-out** — send the same capture to multiple HEP servers (`transport[]` or comma-separated `-hs`); see [docs/TRANSPORT.md](docs/TRANSPORT.md) and [examples/heplify-mirror.json](examples/heplify-mirror.json)
+- **Diameter capture** — TCP/SCTP Diameter → HEP `proto_type=56` with Session-Id correlation; see [docs/DIAMETER.md](docs/DIAMETER.md)
 - **HEP Collector** — receive HEP from other agents and forward/fan-out to multiple destinations
 - **Prometheus metrics** — built-in exporter for agent performance and traffic statistics
 - **Web stats dashboard** — live `/` UI showing uptime, interfaces, packet counters and transport status; JSON API at `/api/stats`; optional HTTP Basic Auth
@@ -225,7 +226,7 @@ Capture:
   -pr string
         Port range to capture SIP (default "5060-5090")
   -m string
-        Capture mode [SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP] (default "SIPRTCP")
+        Capture mode [SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP, DIAMETER, SIPDIAMETER, SIPRTCPDIAMETER] (default "SIPRTCP")
   -vlan
         Enable VLAN support
   -erspan

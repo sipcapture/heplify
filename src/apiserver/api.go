@@ -33,6 +33,7 @@ type WebStats struct {
 		RTCPFail   int64 `json:"rtcp_fail"`
 		RTP        int64 `json:"rtp"`
 		DNS        int64 `json:"dns"`
+		Diameter   int64 `json:"diameter"`
 		Log        int64 `json:"log"`
 		HEPSent    int64 `json:"hep_sent"`
 		Duplicates int64 `json:"duplicates"`

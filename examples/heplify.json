@@ -104,6 +104,17 @@
                 "tcp"
             ],
             "description": "HEP message template"
+        },
+        {
+            "name": "DIAMETER",
+            "filter": "(tcp or sctp) and port 3868",
+            "min_port": 3868,
+            "max_port": 3868,
+            "protocol": [
+                "tcp",
+                "sctp"
+            ],
+            "description": "Diameter over TCP/SCTP (HEP proto_type 56)"
         }
     ],
     "sip_settings": {

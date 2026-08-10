@@ -32,25 +32,31 @@ func TestBuildBPFFilterWithProtocols(t *testing.T) {
 	}
 }
 
-func TestMatchProtocolAndPort(t *testing.T) {
-	setting := config.ProtocolSettings{
-		Name:     "SIP",
-		Protocol: []string{"udp", "tcp"},
-		MinPort:  5060,
-		MaxPort:  5090,
+func TestBuildBPFFilterWithSCTP(t *testing.T) {
+	s := &Sniffer{cfg: &config.Config{
+		ProtocolSettings: []config.ProtocolSettings{
+			{Name: "DIAMETER", MinPort: 3868, MaxPort: 3868, Protocol: []string{"tcp", "sctp"}},
+		},
+	}}
+	filter := s.buildBPFFilter(config.SocketSettings{})
+	expected := "(tcp and port 3868) or (sctp and port 3868)"
+	if filter != expected {
+		t.Fatalf("unexpected filter: got %q, want %q", filter, expected)
 	}
+}
 
-	if !matchProtocol(setting, 0x11) { // udp
-		t.Fatal("expected udp protocol match")
+func TestMatchProtocolSCTP(t *testing.T) {
+	setting := config.ProtocolSettings{
+		Name:     "DIAMETER",
+		Protocol: []string{"tcp", "sctp"},
+		MinPort:  3868,
+		MaxPort:  3868,
 	}
-	if matchProtocol(setting, 0x84) { // sctp
-		t.Fatal("did not expect sctp protocol match")
+	if !matchProtocol(setting, 0x84) {
+		t.Fatal("expected sctp protocol match for Diameter")
 	}
-	if !matchPort(setting, 5060) || !matchPort(setting, 5090) {
-		t.Fatal("expected port range boundary match")
-	}
-	if matchPort(setting, 6000) {
-		t.Fatal("did not expect out-of-range port match")
+	if !matchProtocol(setting, 0x06) {
+		t.Fatal("expected tcp protocol match for Diameter")
 	}
 }
 

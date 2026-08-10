@@ -117,6 +117,8 @@ func (h *HEP) parseHEP(packet []byte) error {
 				h.ProtoString = "horaclifix"
 			case 53:
 				h.ProtoString = "dns"
+			case 56:
+				h.ProtoString = "diameter"
 			case 100:
 				h.ProtoString = "log"
 			default:

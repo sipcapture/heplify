@@ -396,6 +396,8 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 				parts = append(parts, fmt.Sprintf("(udp and %s)", portExpr))
 			case "tcp":
 				parts = append(parts, fmt.Sprintf("(tcp and %s)", portExpr))
+			case "sctp":
+				parts = append(parts, fmt.Sprintf("(sctp and %s)", portExpr))
 			}
 		}
 	}
@@ -462,8 +464,13 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 	}
 
 	// TCP reassembly: enabled by default, disabled via disable_tcp_reassembly.
+	// The assembler also Length-frames Diameter (version 0x01) before SIP text.
 	if !s.cfg.DebugSettings.DisableTcpReassembly {
 		dec.TCPAssembler = decoder.NewSIPAssembler(func(pkt *decoder.Packet) {
+			if decoder.IsDiameterPayload(pkt.Payload) {
+				s.handleDiameter(pkt, sender)
+				return
+			}
 			s.handleSIP(pkt, sender)
 		})
 		// Capture the assembler in a local variable so that the goroutine is not
@@ -687,6 +694,8 @@ func (s *Sniffer) handleProtocol(pkt *decoder.Packet, proto config.ProtocolSetti
 		s.handleRTP(pkt, sender)
 	case "DNS":
 		s.handleDNS(pkt, sender)
+	case "DIAMETER":
+		s.handleDiameter(pkt, sender)
 	case "HEP":
 		// Incoming HEP in sniffer mode — forward as-is
 		if sender != nil {
@@ -835,6 +844,21 @@ func (s *Sniffer) handleDNS(pkt *decoder.Packet, sender Sender) {
 	pkt.Payload = jsonData
 	s.stats.Inc(StatDNS)
 	s.sendHEP(pkt, 53, sender)
+}
+
+func (s *Sniffer) handleDiameter(pkt *decoder.Packet, sender Sender) {
+	msgs := decoder.ParseDiameterFromPacket(pkt.Protocol, pkt.Payload)
+	if len(msgs) == 0 {
+		return
+	}
+	for _, msg := range msgs {
+		out := *pkt
+		out.ProtoType = decoder.HEPProtoDiameter
+		out.Payload = msg.JSON
+		out.CID = msg.CID
+		s.stats.Inc(StatDiameter)
+		s.sendHEP(&out, decoder.HEPProtoDiameter, sender)
+	}
 }
 
 func (s *Sniffer) callLua(pkt *decoder.Packet) {
