@@ -103,6 +103,29 @@ func (s *sipStream) ReassemblyComplete() {
 
 func (s *sipStream) process() {
 	for len(s.buf) > 0 {
+		// Diameter over TCP: Length-framed binary messages (version byte 0x01).
+		// Checked before SIP so Diameter/TCP shares the same assembler safely.
+		if len(s.buf) >= DiameterHeaderLen && s.buf[0] == 0x01 {
+			msgLen := DiameterMessageLength(s.buf)
+			if msgLen == 0 {
+				// Not a valid Diameter header — fall through to SIP/other.
+			} else if msgLen > len(s.buf) {
+				return // wait for more data
+			} else {
+				payload := make([]byte, msgLen)
+				copy(payload, s.buf[:msgLen])
+				pkt := s.buildPacket(payload)
+				if pkt != nil {
+					s.cb(pkt)
+				}
+				s.buf = s.buf[msgLen:]
+				if len(s.buf) == 0 {
+					s.clearTimestamp()
+				}
+				continue
+			}
+		}
+
 		// Skip HTTP upgrade / WebSocket handshake framing.
 		if bytes.HasPrefix(s.buf, []byte("GET ")) || bytes.HasPrefix(s.buf, []byte("HTTP/")) {
 			end := bytes.Index(s.buf, []byte("\r\n\r\n"))

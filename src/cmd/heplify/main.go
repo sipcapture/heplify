@@ -152,7 +152,7 @@ func init() {
 	flag.StringVar(&portRange, "pr", "5060-5090", "Port range to capture SIP")
 
 	// Mode flags
-	flag.StringVar(&captureMode, "m", "SIPRTCP", "Capture mode [SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP]")
+	flag.StringVar(&captureMode, "m", "SIPRTCP", "Capture mode [SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP, SIPDIAMETER, DIAMETER]")
 	flag.BoolVar(&withVlan, "vlan", false, "Enable VLAN support")
 	flag.BoolVar(&withErspan, "erspan", false, "Enable ERSPAN support")
 
@@ -387,6 +387,7 @@ func main() {
 			ws.Packets.RTCPFail = snap.RTCPFail
 			ws.Packets.RTP = snap.RTP
 			ws.Packets.DNS = snap.DNS
+			ws.Packets.Diameter = snap.Diameter
 			ws.Packets.Log = snap.Log
 			ws.Packets.HEPSent = snap.HEPSent
 			ws.Packets.Duplicates = snap.Duplicates
@@ -708,8 +709,14 @@ func parseCaptureMode(mode string) []string {
 		return []string{"SIP", "RTCP"}
 	case "SIPRTP":
 		return []string{"SIP", "RTP"}
+	case "DIAMETER":
+		return []string{"DIAMETER"}
+	case "SIPDIAMETER":
+		return []string{"SIP", "DIAMETER"}
+	case "SIPRTCPDIAMETER":
+		return []string{"SIP", "RTCP", "DIAMETER"}
 	default:
-		log.Warn().Str("mode", mode).Msg("Unknown capture mode, falling back to SIPRTCP. Valid modes: SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP")
+		log.Warn().Str("mode", mode).Msg("Unknown capture mode, falling back to SIPRTCP. Valid modes: SIP, SIPDNS, SIPLOG, SIPRTCP, SIPRTP, DIAMETER, SIPDIAMETER, SIPRTCPDIAMETER")
 		return []string{"SIP", "RTCP"}
 	}
 }
@@ -817,6 +824,14 @@ func buildProtocolSettings(modes []string, sipMin, sipMax uint16) []config.Proto
 				MaxPort:     53,
 				Protocol:    []string{"udp", "tcp"},
 				Description: "DNS",
+			})
+		case "DIAMETER":
+			ps = append(ps, config.ProtocolSettings{
+				Name:        "DIAMETER",
+				MinPort:     3868,
+				MaxPort:     3868,
+				Protocol:    []string{"tcp", "sctp"},
+				Description: "Diameter",
 			})
 		}
 	}
