@@ -13,9 +13,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/hep"
-	heplifyDecoder "github.com/sipcapture/heplify/src/hep"
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
 )
 
 type Server struct {
@@ -251,7 +250,8 @@ func (s *Server) startHTTP2(addr string) {
 
 	h2s := &http2.Server{}
 	s.httpSrv = &http.Server{
-		Addr:    addr,
+		Addr: addr,
+		//nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
 		Handler: h2c.NewHandler(mux, h2s),
 	}
 
@@ -263,7 +263,7 @@ func (s *Server) startHTTP2(addr string) {
 }
 
 func (s *Server) processHEP(data []byte, remoteAddr string) {
-	hepMsg, err := heplifyDecoder.DecodeHEP(data)
+	hepMsg, err := hep.DecodeHEP(data)
 	if err != nil {
 		log.Debug().Err(err).Str("addr", remoteAddr).Msg("Failed to decode HEP")
 		return
@@ -295,7 +295,7 @@ func (s *Server) processHEP(data []byte, remoteAddr string) {
 }
 
 // reEncodeWithNewToken re-builds the HEP packet replacing NodePW (and optionally NodeID/NodeName).
-func reEncodeWithNewToken(h *heplifyDecoder.HEP, newPW string, nodeID uint32, nodeName string) []byte {
+func reEncodeWithNewToken(h *hep.HEP, newPW string, nodeID uint32, nodeName string) []byte {
 	if nodeID == 0 {
 		nodeID = h.NodeID
 	}
