@@ -15,7 +15,7 @@ CLI:
 JSON (`examples/heplify.json`):
 
 ```json
-"capture_mode": ["SIP", "DIAMETER"],
+"capture_mode": ["SIP", "RTCP", "DIAMETER"],
 "protocol": [
   {
     "name": "DIAMETER",
@@ -26,7 +26,7 @@ JSON (`examples/heplify.json`):
 ]
 ```
 
-Default Diameter port is **3868**. Adjust `min_port`/`max_port` if your peers use another port.
+**Important:** with a JSON config, Diameter is enabled by the `protocol[]` entry named `DIAMETER` (port range + `tcp`/`sctp`). That drives BPF and packet dispatch. Put `DIAMETER` in `socket[].capture_mode` as well for clarity / stats; `capture_mode` alone without a matching `protocol[]` row is not enough when using a config file.
 
 ## What is sent
 

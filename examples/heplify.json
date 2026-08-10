@@ -18,7 +18,8 @@
             "snap_len": 8192,
             "capture_mode": [
                 "SIP",
-                "RTCP"
+                "RTCP",
+                "DIAMETER"
             ],
             "fanout_id": 1000,
             "fanout_workers": 0,
