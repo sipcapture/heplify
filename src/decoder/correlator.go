@@ -275,7 +275,9 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 				// Port only
 				rtcpPort = line[7:]
 			} else {
-				// Port and IP
+				// Port and IP. "IN IP" is 5 bytes; +2 skips the family digit and separator.
+				// Truncated lines such as "a=rtcp:12345 IN IP4" match the prefix but have
+				// no address, so the slice start is past len(line) (#360).
 				if !bytes.HasPrefix(line[7+sep+1:], []byte("IN IP")) {
 					continue
 				}
@@ -283,7 +285,11 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 				if sep2 := bytes.Index(rtcpPort, []byte("/")); sep2 > 0 {
 					rtcpPort = rtcpPort[:sep2]
 				}
-				rtcpIP = line[7+sep+1+5+2:]
+				ipStart := 7 + sep + 1 + 5 + 2
+				if ipStart >= len(line) {
+					continue
+				}
+				rtcpIP = line[ipStart:]
 				if sep3 := bytes.Index(rtcpIP, []byte("/")); sep3 > 0 {
 					rtcpIP = rtcpIP[:sep3]
 				}
