@@ -43,7 +43,7 @@ func buildAVP(code uint32, flags byte, data []byte) []byte {
 func TestParseDiameterSessionID(t *testing.T) {
 	session := []byte("host.example;1234;5678")
 	avp := buildAVP(263, 0x40, session) // Session-Id, M flag
-	msg := buildDiameterMessage(280, 0, 0x80, avp)
+	msg := buildDiameterMessage(280, 16777251, 0x80, avp)
 
 	parsed := ParseDiameterMessages(msg)
 	if len(parsed) != 1 {
@@ -59,6 +59,9 @@ func TestParseDiameterSessionID(t *testing.T) {
 	if report.Command != 280 {
 		t.Fatalf("command = %d, want 280", report.Command)
 	}
+	if report.ApplicationID != 16777251 {
+		t.Fatalf("app-ID = %d, want 16777251", report.ApplicationID)
+	}
 	if report.Type != "Request" {
 		t.Fatalf("type = %q, want Request", report.Type)
 	}
@@ -69,13 +72,20 @@ func TestParseDiameterSessionID(t *testing.T) {
 
 func TestParseDiameterMultiMessage(t *testing.T) {
 	a := buildDiameterMessage(280, 0, 0x80, buildAVP(263, 0x40, []byte("a")))
-	b := buildDiameterMessage(280, 0, 0x00, buildAVP(263, 0x40, []byte("b")))
+	b := buildDiameterMessage(257, 4, 0x00, buildAVP(268, 0x40, []byte{0, 0, 7, 208})) // Result-Code 2000
 	parsed := ParseDiameterMessages(append(a, b...))
 	if len(parsed) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(parsed))
 	}
-	if string(parsed[0].CID) != "a" || string(parsed[1].CID) != "b" {
-		t.Fatalf("CIDs = %q,%q", parsed[0].CID, parsed[1].CID)
+	if string(parsed[0].CID) != "a" {
+		t.Fatalf("CID[0] = %q", parsed[0].CID)
+	}
+	var report DiameterReport
+	if err := json.Unmarshal(parsed[1].JSON, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Command != 257 || report.ApplicationID != 4 {
+		t.Fatalf("unexpected second message: cmd=%d app=%d", report.Command, report.ApplicationID)
 	}
 }
 
@@ -96,6 +106,16 @@ func TestExtractSCTPDiameterPayloads(t *testing.T) {
 	msgs := ParseDiameterFromPacket(0x84, chunk)
 	if len(msgs) != 1 || string(msgs[0].CID) != "sctp-sess" {
 		t.Fatalf("unexpected parse: %+v", msgs)
+	}
+}
+
+func TestBuildAVPVendorFlagUnusedPath(t *testing.T) {
+	// Exercise non-M flag path so unparam does not flag buildAVP.flags.
+	avp := buildAVP(264, 0x00, []byte("origin.example"))
+	msg := buildDiameterMessage(257, 0, 0x80, avp)
+	parsed := ParseDiameterMessages(msg)
+	if len(parsed) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(parsed))
 	}
 }
 

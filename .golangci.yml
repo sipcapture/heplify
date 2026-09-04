@@ -1,37 +1,62 @@
-run:
-  timeout: 5m
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
-    - staticcheck
-    - unused
     - misspell
+    - staticcheck
     - unconvert
     - unparam
-
-linters-settings:
-  govet:
-    enable-all: false
-    enable:
-      - shadow
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
-
+    - unused
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    govet:
+      enable:
+        - shadow
+      enable-all: false
+    staticcheck:
+      checks:
+        - all
+        - "-ST1000"
+        - "-ST1003"
+        - "-ST1016"
+        - "-ST1020"
+        - "-ST1021"
+        - "-ST1022"
+        - "-ST1023"
+        - "-QF1003"
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - staticcheck
+          - unused
+        path: .*_generated\.go
+      - linters:
+          - govet
+        path: _test\.go
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-dirs:
-    - vendor
-  exclude-rules:
-    # generated flatbuffers code from arrow-go
-    - path: ".*_generated\\.go"
-      linters: [errcheck, unused, staticcheck]
-    # test helpers allowed to shadow
-    - path: "_test\\.go"
-      linters: [govet]
   max-issues-per-linter: 50
   max-same-issues: 5
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

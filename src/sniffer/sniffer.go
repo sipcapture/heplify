@@ -638,7 +638,7 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 		if !matchProtocol(protoSetting, pkt.Protocol) {
 			continue
 		}
-		if !(matchPort(protoSetting, pkt.SrcPort) || matchPort(protoSetting, pkt.DstPort)) {
+		if !matchPort(protoSetting, pkt.SrcPort) && !matchPort(protoSetting, pkt.DstPort) {
 			continue
 		}
 		dispatchNum := atomic.AddUint64(&matchedForDebug, 1)
