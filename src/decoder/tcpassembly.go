@@ -93,8 +93,12 @@ func (s *sipStream) Reassembled(reassemblies []tcpassembly.Reassembly) {
 			s.tsSeq = 0
 		}
 		s.buf = append(s.buf, r.Bytes...)
+		// A single Reassembled callback can contain data from multiple TCP
+		// segments, each with its own capture timestamp. Process after each
+		// entry so a complete SIP message does not inherit the timestamp of
+		// the first segment in the whole callback batch.
+		s.process()
 	}
-	s.process()
 }
 
 func (s *sipStream) ReassemblyComplete() {
