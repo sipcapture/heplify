@@ -435,6 +435,66 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Keep Formula/heplify.rb (the Homebrew tap lives in this repository) in sync
+  # with the published release. Stable versions only, and only on the upstream
+  # repository: the formula points at its release assets.
+  homebrew:
+    name: Update Homebrew formula
+    needs: release
+    # workflow_dispatch can opt out of creating the release (input 'release')
+    if: >-
+      github.repository == 'sipcapture/heplify' &&
+      (github.event_name != 'workflow_dispatch' || inputs.release)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      INPUT_TAG: ${{ github.event.inputs.tag }}
+      REF_NAME: ${{ github.ref_name }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Update formula
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${INPUT_TAG}"
+          else
+            TAG="${REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          # The tag is user-controlled: only a plain stable version goes any further.
+          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "'${TAG}' is not a stable release version, formula not updated."
+            exit 0
+          fi
+          current="$(sed -n 's|.*/releases/download/\([^/]*\)/heplify_darwin_arm64.*|\1|p' Formula/heplify.rb)"
+          newest="$(printf '%s\n%s\n' "${current}" "${VERSION}" | sort -V | tail -n 1)"
+          if [ "${current}" = "${VERSION}" ] || [ "${newest}" != "${VERSION}" ]; then
+            echo "Formula is at ${current}, nothing to do for ${VERSION}."
+            exit 0
+          fi
+          # Downloads the published asset: fails if it is missing
+          ./scripts/update_formula.sh "${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/heplify.rb
+          git commit -m "chore(homebrew): bump formula to ${VERSION}"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin "${DEFAULT_BRANCH}" && git push origin "HEAD:${DEFAULT_BRANCH}"; then
+              exit 0
+            fi
+            echo "push failed (attempt ${attempt}/3), retrying..."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push the formula update to ${DEFAULT_BRANCH}"
+          exit 1
+
   # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
   # Same repos as homer-core: qxip/sipcapture/any/any and rpm_any/rpm_any
   #
