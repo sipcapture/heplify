@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-06
+
 ### Added
 
 - **Package tests ([#380](https://github.com/sipcapture/heplify/issues/380))**: the `Package check` workflow now also installs, upgrades (from the latest release), reinstalls, removes and purges the deb/rpm in clean Debian, Ubuntu and Rocky containers, and runs the packaged service on the runner VM to check the `homer` user, its capabilities and that a SIP packet on `lo` arrives as HEP3 (`scripts/test_package.sh`).
@@ -28,8 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Packaging ([#364](https://github.com/sipcapture/heplify/issues/364))**: install the binary to `/usr/bin/heplify` in the deb/rpm packages (was `/usr/local/bin`) and update the shipped systemd unit and init script; fix the file paths in `.goreleaser.yml` and ship the service files there too; make `/etc/init.d/heplify` executable.
 - **Homebrew formula ([#370](https://github.com/sipcapture/heplify/issues/370), [#378](https://github.com/sipcapture/heplify/issues/378))**: bump `Formula/heplify.rb` from 2.0.17 to 2.0.28, fail clearly on unsupported platforms (`depends_on arch: :arm64` / `:macos`), add a `livecheck` block, and add `scripts/update_formula.sh` to bump the URL and sha256 from a release. The release workflow now runs it after each stable release and pushes the result to the default branch (`github-actions[bot]`; never on forks, pre-releases or older versions).
-
-## [2.1.0] - 2026-11-06
+- **Pcap replay (`-rf`)** no longer starts a live capture on `any` when fanout workers are configured.
+- **Shutdown crash**: stopping AF_PACKET capture no longer segfaults (the ring was unmapped while a worker was reading it); capture goroutines are stopped and awaited first.
+- **Pcap replay** flushes TCP streams and IP fragments on packet time and at EOF, so the last messages of a capture are sent; `-eof-exit` shuts down through the normal path instead of `os.Exit`.
+- **SIP headers** are parsed per line, case-insensitively and only in the header section: `CONTENT-LENGTH` is found, and `c:` no longer matches inside `Contact`.
+- **Compound RTCP**: the first packet is parsed within its own length, so report blocks are not read from the next packet.
+- **`payload_zip`**: the buffer drain now compresses too, and drain and send worker no longer interleave writes on one connection. A warning is logged when it is used on a stream transport.
 
 ### Security
 
@@ -52,15 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tunnel spoofing**: `socket[].tunnel_allowed_sources` drops VXLAN/GRE/ERSPAN/IP-in-IP traffic from unknown outer sources.
 - **Logs**: `Authorization` and `Proxy-Authorization` values are masked in payload debug logs; `Logp` strips control characters.
 - **Deployment**: the systemd unit runs as a dynamic user with only `CAP_NET_RAW`, `CAP_NET_ADMIN` and `CAP_NET_BIND_SERVICE` and a sandbox; the Docker image runs as user `heplify` with file capabilities. **Note:** promiscuous mode in Docker now needs `--user root --cap-add NET_ADMIN`, and mounted output directories must be writable by the `heplify` user.
-
-### Fixed
-
-- **Pcap replay (`-rf`)** no longer starts a live capture on `any` when fanout workers are configured.
-- **Shutdown crash**: stopping AF_PACKET capture no longer segfaults (the ring was unmapped while a worker was reading it); capture goroutines are stopped and awaited first.
-- **Pcap replay** flushes TCP streams and IP fragments on packet time and at EOF, so the last messages of a capture are sent; `-eof-exit` shuts down through the normal path instead of `os.Exit`.
-- **SIP headers** are parsed per line, case-insensitively and only in the header section: `CONTENT-LENGTH` is found, and `c:` no longer matches inside `Contact`.
-- **Compound RTCP**: the first packet is parsed within its own length, so report blocks are not read from the next packet.
-- **`payload_zip`**: the buffer drain now compresses too, and drain and send worker no longer interleave writes on one connection. A warning is logged when it is used on a stream transport.
 
 ### CI
 
