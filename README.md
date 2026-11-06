@@ -67,6 +67,63 @@ chmod +x heplify_linux_amd64
 ./heplify_linux_amd64 -config heplify.json
 ```
 
+### Linux packages (Debian, Ubuntu, RHEL and derivatives)
+
+Each [release](https://github.com/sipcapture/heplify/releases) provides `.deb` and `.rpm` packages for `amd64` and `arm64`. The `.deb` uses the system libraries (it depends on `libc6` and `libpcap0.8`, installed automatically by `apt`) and requires Debian 12+ or Ubuntu 22.04+; on older systems use the static binary from the same page. The `.rpm` contains a statically linked binary, so it has no library dependencies.
+
+```bash
+VERSION=2.0.28   # the release to install, see the releases page
+ARCH=amd64       # or arm64
+
+# Debian / Ubuntu
+curl -fsSLO "https://github.com/sipcapture/heplify/releases/download/${VERSION}/heplify_${VERSION}_${ARCH}.deb"
+sudo apt install "./heplify_${VERSION}_${ARCH}.deb"
+
+# RHEL / Rocky / Alma / Fedora
+curl -fsSLO "https://github.com/sipcapture/heplify/releases/download/${VERSION}/heplify_${VERSION}_${ARCH}.rpm"
+sudo dnf install "./heplify_${VERSION}_${ARCH}.rpm"
+```
+
+The package installs:
+
+| Path | Content |
+|------|---------|
+| `/usr/bin/heplify` | the binary |
+| `/etc/heplify/heplify.json` | configuration (kept on upgrade; mode `0640`, owner `root:homer`, as it may contain passwords) |
+| `/etc/heplify/example.lua` | example Lua script |
+| `/usr/lib/systemd/system/heplify.service` | systemd unit (customize with `systemctl edit heplify`) |
+| `/var/lib/heplify` | state directory and working directory (e.g. the HEP buffer file) |
+
+The service runs as the unprivileged `homer:homer` system user, shared with the other HOMER components (created by the package unless it already exists), with only the `CAP_NET_RAW`, `CAP_NET_ADMIN` and `CAP_NET_BIND_SERVICE` capabilities and a sandboxed filesystem.
+
+A fresh install does **not** start the service, so that the default configuration is not run blindly. Edit `/etc/heplify/heplify.json` (at least the `transport` section with your HEP server and the capture `device`), then:
+
+```bash
+sudo systemctl enable --now heplify
+journalctl -u heplify -f
+```
+
+- **Upgrade**: the configuration is preserved and the service is restarted if it was running.
+- **Removal**: the service is stopped and disabled. `apt purge heplify` also deletes `/var/lib/heplify`; the `homer` user is kept. `rpm` has no purge, so `/var/lib/heplify` is kept when removing an rpm.
+- **Local adjustments** are made with a systemd drop-in (`sudo systemctl edit heplify`), because the service is sandboxed:
+
+  - *Writing outside `/var/lib/heplify`* (for example a pcap output file) is blocked. Allow it with:
+
+    ```ini
+    [Service]
+    ReadWritePaths=/path/to/dir
+    ```
+
+  - *Ports below 1024* (for example a collector or API listening on UDP 514 or TCP 443) fail with `bind: permission denied`, because the service only has `CAP_NET_RAW` and `CAP_NET_ADMIN`. Either use a port of 1024 or above, or grant the capability:
+
+    ```ini
+    [Service]
+    AmbientCapabilities=CAP_NET_BIND_SERVICE
+    CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+    ```
+
+  - *Files named in the configuration* (TLS certificates and keys, Lua scripts, pcap files to read) must be readable by the `homer` user and must not be under `/home` or `/root`. For a key owned by another group, add `SupplementaryGroups=<group>` in the drop-in.
+
 ### macOS (Apple Silicon)
 
 **Homebrew** (tap lives in this repo):
