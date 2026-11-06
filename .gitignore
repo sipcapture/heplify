@@ -2,6 +2,7 @@
 /heplify-linux-amd64
 /heplify-linux-static
 /heplify-static
+/heplify-deb
 coverage.out
 *.prof
 *.test

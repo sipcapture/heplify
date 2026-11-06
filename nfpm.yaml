@@ -1,9 +1,12 @@
 # nfpm package configuration for heplify
 # Used by release workflow and scripts/build_package.sh
-# VERSION is passed via environment variable: VERSION=1.2.3 nfpm pkg ...
+# VERSION, ARCH and BINARY are passed via environment variables:
+#   VERSION=1.2.3 ARCH=amd64 BINARY=heplify nfpm pkg ...
+# The deb ships a dynamically linked binary (scripts/build_deb_binary.sh) and
+# depends on the system libpcap and libc; the rpm ships the static binary.
 
 name: "heplify"
-arch: "amd64"
+arch: "${ARCH}"
 platform: "linux"
 version: "${VERSION}"
 section: "net"
@@ -20,9 +23,17 @@ description: |
 vendor: "SIPCAPTURE"
 homepage: "https://github.com/sipcapture/heplify"
 # license omitted: nfpm writes "License:" into deb control; Packagecloud may 500.
+overrides:
+  deb:
+    depends:
+      # Keep in sync with the binary: scripts/build_deb_binary.sh checks that the
+      # libc floor covers the symbols it uses and that nothing else is needed.
+      - libc6 (>= 2.34)
+      - libpcap0.8 (>= 1.5.1)
 contents:
-  - src: ./heplify
+  - src: ./${BINARY}
     dst: /usr/bin/heplify
+    expand: true
 
   - src: ./examples/heplify.json
     dst: /etc/heplify/heplify.json

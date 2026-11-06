@@ -5,8 +5,6 @@ on:
     tags:
       - 'v*.*.*'
       - '[0-9]*.[0-9]*.[0-9]*'
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -17,11 +15,11 @@ on:
         type: boolean
         default: true
 
+# Least privilege by default; jobs that need more declare it.
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
-# Serialize runs for the same ref (tag vs follow-up release event) to reduce races.
+# Serialize runs for the same ref to reduce races.
 concurrency:
   group: heplify-release-${{ github.ref }}
   cancel-in-progress: false
@@ -32,8 +30,50 @@ env:
   IMAGE_NAME: ghcr.io/sipcapture/heplify
 
 jobs:
+  # Resolve and validate the version once; every other job reads these outputs.
+  # The tag is user-controlled (tag name or workflow_dispatch input): it only
+  # reaches shell scripts through env, after the regex check below.
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      git_commit: ${{ steps.v.outputs.git_commit }}
+      build_date: ${{ steps.v.outputs.build_date }}
+      latest: ${{ steps.v.outputs.latest }}
+    steps:
+      - name: Resolve version
+        id: v
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${INPUT_TAG}"
+          else
+            TAG="${REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'${TAG}' is not a valid release tag (expected e.g. v2.0.1 or 2.0.1-rc1)."
+            exit 1
+          fi
+          # 'latest' image tag only for stable versions (no pre-release suffix)
+          LATEST=true
+          case "${VERSION}" in *-*) LATEST=false ;; esac
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "git_commit=${GITHUB_SHA:0:7}"
+            echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo "latest=${LATEST}"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build & Package (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +92,11 @@ jobs:
             runner: windows-latest
 
     runs-on: ${{ matrix.runner }}
+
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GIT_COMMIT: ${{ needs.version.outputs.git_commit }}
+      BUILD_DATE: ${{ needs.version.outputs.build_date }}
 
     defaults:
       run:
@@ -105,55 +150,14 @@ jobs:
           chmod +x scripts/build_libpcap.sh
           ./scripts/build_libpcap.sh
 
-      - name: Resolve version
-        id: version
+      - name: Update version.go
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          VERSION="${TAG#v}"
-          if [ -z "${VERSION}" ]; then
-            echo "::error::VERSION is empty. Provide a valid tag (e.g. v2.0.1)."
-            exit 1
-          fi
-          GIT_COMMIT="$(git rev-parse --short HEAD)"
-          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          echo "VERSION=${VERSION}"       >> "$GITHUB_OUTPUT"
-          echo "GIT_COMMIT=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
-          echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
-          echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
-          echo "VERSION=${VERSION}"       >> "$GITHUB_ENV"
-
-      - name: Update version.go (Linux)
-        if: matrix.goos == 'linux'
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          sed -i "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
+          sed -i.bak "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
+          rm -f src/cmd/heplify/version.go.bak
           grep "var Version" src/cmd/heplify/version.go
-
-      - name: Update version.go (macOS)
-        if: matrix.goos == 'darwin'
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          sed -i '' "s|var Version = \"[^\"]*\"|var Version = \"${VERSION}\"|" src/cmd/heplify/version.go
-          grep "var Version" src/cmd/heplify/version.go
-
-      - name: Update version.go (Windows)
-        if: matrix.goos == 'windows'
-        shell: pwsh
-        run: |
-          $VERSION = "${{ steps.version.outputs.VERSION }}"
-          $file = "src/cmd/heplify/version.go"
-          (Get-Content $file) -replace 'var Version = "[^"]*"', "var Version = `"$VERSION`"" | Set-Content $file
-          Select-String "var Version" $file
 
       - name: Build heplify (${{ matrix.goos }}/${{ matrix.goarch }})
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          GIT_COMMIT="${{ steps.version.outputs.GIT_COMMIT }}"
-          BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
           LDFLAGS="-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -X main.GitCommit=${GIT_COMMIT}"
           EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
 
@@ -175,7 +179,12 @@ jobs:
 
           echo "=== Version dump ==="
           ./heplify_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} -version
-        shell: bash
+
+      # The deb ships a dynamically linked binary built on Debian 12 (libc and
+      # libpcap from the system); the rpm and the release asset stay static.
+      - name: Build dynamic binary for the deb
+        if: matrix.goos == 'linux'
+        run: ./scripts/build_deb_binary.sh heplify_deb_${{ matrix.goarch }}
 
       - name: Get nfpm
         if: matrix.goos == 'linux'
@@ -187,17 +196,13 @@ jobs:
 
       - name: Create packages (${{ matrix.goarch }})
         if: matrix.goos == 'linux'
+        env:
+          ARCH: ${{ matrix.goarch }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          cp heplify_${{ matrix.goos }}_${{ matrix.goarch }} heplify
-          echo "=== Binary type ==="
-          file heplify
-          ARCH="${{ matrix.goarch }}"
-          sed -i "s|arch: \"amd64\"|arch: \"${ARCH}\"|g" nfpm.yaml
-          VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
-            --target "./heplify_${VERSION}_${ARCH}.deb"
-          VERSION="${VERSION}" ./nfpm pkg --config nfpm.yaml \
-            --target "./heplify_${VERSION}_${ARCH}.rpm"
+          echo "=== Binary types ==="
+          file "heplify_deb_${ARCH}" "heplify_linux_${ARCH}"
+          BINARY="heplify_deb_${ARCH}" ./nfpm pkg --config nfpm.yaml --target "./heplify_${VERSION}_${ARCH}.deb"
+          BINARY="heplify_linux_${ARCH}" ./nfpm pkg --config nfpm.yaml --target "./heplify_${VERSION}_${ARCH}.rpm"
           ls -lh heplify_*.deb heplify_*.rpm heplify_${{ matrix.goos }}_${{ matrix.goarch }}
 
       # Single Linux artifact per arch: binary + deb + rpm (Packagecloud downloads heplify-linux-*).
@@ -209,8 +214,8 @@ jobs:
           retention-days: 1
           path: |
             heplify_${{ matrix.goos }}_${{ matrix.goarch }}
-            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.deb
-            heplify_${{ steps.version.outputs.VERSION }}_${{ matrix.goarch }}.rpm
+            heplify_${{ needs.version.outputs.version }}_${{ matrix.goarch }}.deb
+            heplify_${{ needs.version.outputs.version }}_${{ matrix.goarch }}.rpm
 
       - name: Upload artifacts (macOS)
         if: matrix.goos == 'darwin'
@@ -244,29 +249,14 @@ jobs:
             platform: linux/arm64
 
     runs-on: ${{ matrix.runner }}
-    needs: build
+    needs: [version, build]
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          VERSION="${TAG#v}"
-          GIT_COMMIT="$(git rev-parse --short HEAD)"
-          BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          echo "VERSION=${VERSION}"       >> "$GITHUB_OUTPUT"
-          echo "GIT_COMMIT=${GIT_COMMIT}" >> "$GITHUB_OUTPUT"
-          echo "BUILD_DATE=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
-          echo "TAG=${TAG}"               >> "$GITHUB_OUTPUT"
 
       - name: Check DockerHub credentials
         id: dockerhub
@@ -305,30 +295,24 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           provenance: false
-          tags: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}-${{ matrix.goarch }}
+          tags: ${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-${{ matrix.goarch }}
           build-args: |
-            VERSION=${{ steps.version.outputs.VERSION }}
-            BUILD_DATE=${{ steps.version.outputs.BUILD_DATE }}
-            GIT_COMMIT=${{ steps.version.outputs.GIT_COMMIT }}
+            VERSION=${{ needs.version.outputs.version }}
+            BUILD_DATE=${{ needs.version.outputs.build_date }}
+            GIT_COMMIT=${{ needs.version.outputs.git_commit }}
 
   docker-manifest:
     name: Docker multi-arch manifest
-    needs: docker
+    needs: [version, docker]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      LATEST: ${{ needs.version.outputs.latest }}
 
     steps:
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          VERSION="${TAG#v}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
-
       - name: Check DockerHub credentials
         id: dockerhub
         env:
@@ -357,10 +341,9 @@ jobs:
 
       - name: Create and push multi-arch manifest (GHCR)
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          docker buildx imagetools create \
-            --tag "${IMAGE_NAME}:${VERSION}" \
-            --tag "${IMAGE_NAME}:latest" \
+          TAGS=(--tag "${IMAGE_NAME}:${VERSION}")
+          [ "${LATEST}" = "true" ] && TAGS+=(--tag "${IMAGE_NAME}:latest")
+          docker buildx imagetools create "${TAGS[@]}" \
             "${IMAGE_NAME}:${VERSION}-amd64" \
             "${IMAGE_NAME}:${VERSION}-arm64"
           docker buildx imagetools inspect "${IMAGE_NAME}:${VERSION}"
@@ -368,36 +351,27 @@ jobs:
       - name: Create and push multi-arch manifest (Docker Hub)
         if: steps.dockerhub.outputs.available == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
           HUB_IMAGE="sipcapture/heplify"
-          docker buildx imagetools create \
-            --tag "${HUB_IMAGE}:${VERSION}" \
-            --tag "${HUB_IMAGE}:latest" \
+          TAGS=(--tag "${HUB_IMAGE}:${VERSION}")
+          [ "${LATEST}" = "true" ] && TAGS+=(--tag "${HUB_IMAGE}:latest")
+          docker buildx imagetools create "${TAGS[@]}" \
             "${IMAGE_NAME}:${VERSION}-amd64" \
             "${IMAGE_NAME}:${VERSION}-arm64"
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [version, build]
+    # workflow_dispatch can opt out of creating the release (input 'release')
+    if: github.event_name != 'workflow_dispatch' || inputs.release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          VERSION="${TAG#v}"
-          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -408,8 +382,9 @@ jobs:
         run: find dist/ -type f | sort
 
       - name: Ensure tag exists
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
-          TAG="${{ steps.version.outputs.TAG }}"
           if ! git rev-parse "${TAG}" >/dev/null 2>&1; then
             git tag "${TAG}"
             git push origin "${TAG}"
@@ -419,16 +394,17 @@ jobs:
         run: |
           mkdir -p dist/flat
           find dist/ -type f -exec mv {} dist/flat/ \;
+          (cd dist/flat && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
           echo "=== Release assets ==="
           ls -lh dist/flat/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.TAG }}
-          name: "heplify v${{ steps.version.outputs.VERSION }}"
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: "heplify v${{ needs.version.outputs.version }}"
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: dist/flat/*
@@ -498,8 +474,6 @@ jobs:
   # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
   # Same repos as homer-core: qxip/sipcapture/any/any and rpm_any/rpm_any
   #
-  # Skip Packagecloud on github.event_name == 'release': publishing the GitHub Release
-  # (release job) triggers a second workflow run; packages were already pushed on tag push.
   # Skip when PACKAGECLOUD_TOKEN is unset or empty (forks, dev repos without Packagecloud).
   # TEMP: push disabled until PACKAGECLOUD_TOKEN is fixed — restore:
   #   success() && secrets.PACKAGECLOUD_TOKEN != '' && (...)
@@ -508,6 +482,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: false
+    permissions:
+      contents: read
     env:
       PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
     steps:
