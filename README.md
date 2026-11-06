@@ -67,6 +67,12 @@ chmod +x heplify_linux_amd64
 ./heplify_linux_amd64 -config heplify.json
 ```
 
+The Linux release binaries are statically linked. Host names of HEP
+destinations (`-hs`, `transport[]`) must resolve through `/etc/hosts` or DNS: glibc cannot
+load NSS modules (LDAP/sssd, mDNS, `nss-resolve`) into a static binary. See
+[how each artifact is built](docs/ARCHITECTURE.md#how-each-artifact-is-built-and-linked).
+`heplify -version` shows the libpcap version and whether the binary is static.
+
 ### macOS (Apple Silicon)
 
 **Homebrew** (tap lives in this repo):

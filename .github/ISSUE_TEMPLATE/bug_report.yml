@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: heplify -version
+      description: Paste the full output. It shows the build, the libpcap version and the linkage.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: artifact
+    attributes:
+      label: How is heplify installed
+      options:
+        - Release binary
+        - .deb package
+        - .rpm package
+        - Docker image
+        - Homebrew
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Command line and configuration
+      description: Remove passwords and tokens before pasting.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      render: text
