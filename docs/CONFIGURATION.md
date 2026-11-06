@@ -55,6 +55,7 @@ Array of capture interfaces. At least one active entry is required for packet sn
 | `buffer_size_mb` | int | `0` | AF_PACKET ring buffer size in MB. `0` = OS default |
 | `cpu_limit` | int | `0` | Max CPU cores to use. `0` = no limit |
 | `pcap_file` | string | `""` | Read from a pcap file instead of a live interface |
+| `tunnel_allowed_sources` | []string | `[]` | Outer source IPs/CIDRs allowed to deliver VXLAN, GRE, ERSPAN or IP-in-IP traffic. Other tunneled packets are dropped. Empty = any |
 
 > **Note:** To receive incoming HEP from other agents (collector/proxy mode), use the top-level [`collector_settings`](#collector_settings) section, not `socket`.
 
@@ -92,8 +93,11 @@ Array of HEP destinations. Multiple active **primary** entries (`failover_only: 
 | `port` | int | `9060` | Destination port |
 | `transport` | string | `"udp"` | Network transport: `udp`, `tcp`, `tls`, `grpc-flight` |
 | `password` | string | `""` | HEP authentication password |
-| `payload_zip` | bool | `false` | Compress HEP payload with zlib |
+| `payload_zip` | bool | `false` | Gzip each HEP packet. UDP only: on `tcp`/`tls` the receiver cannot find message boundaries (a warning is logged) |
 | `skip_verify` | bool | `false` | Skip TLS certificate verification |
+| `ca_file` | string | `""` | PEM CA bundle used to verify the server (TLS and `grpc-flight` with TLS). Empty = system roots |
+| `cert_file` / `key_file` | string | `""` | Client certificate and key for mutual TLS. Set both or neither |
+| `server_name` | string | `""` | Name to verify in the server certificate. Default: `host` |
 | `keepalive` | int | `5` | TCP keepalive interval in seconds. `0` = disabled |
 | `max_retries` | int | `0` | Max reconnect attempts. `0` = unlimited |
 
@@ -385,6 +389,10 @@ Lua scripting engine for per-packet custom processing and filtering.
 | `active` | bool | `false` | Enable Lua scripting engine |
 | `file` | string | `""` | Path to the Lua script file |
 | `hep_filter` | string | `""` | Comma-separated HEP ProtoTypes to pass to the script (e.g. `"1,5"` for SIP and RTCP). Empty = all types |
+| `timeout_ms` | int | `100` | Time limit for one script call; a call that runs longer is aborted. `-1` disables the limit |
+| `unsafe` | bool | `false` | Open the full Lua standard library. By default only `base` (without `dofile`, `loadfile`, `load`, `require`), `table`, `string`, `math` and `os.time`/`os.date`/`os.clock`/`os.difftime` are available |
+
+`HashTable` holds at most 100000 keys; `set` on a new key beyond that raises a script error.
 
 **Example:**
 
@@ -453,7 +461,16 @@ Equivalent CLI flag: `-hin proto:host:port`
 | `active` | bool | `false` | Enable the HEP collector listener |
 | `host` | string | `"0.0.0.0"` | Listen host |
 | `port` | int | `9060` | Listen port |
-| `proto` | string | `"udp"` | Listen protocol: `udp`, `tcp`, `both`, or `http2` |
+| `proto` | string | `"udp"` | Listen protocol: `udp`, `tcp`, `both`, `http2` or `tls` |
+| `allowed_cidrs` | []string | `[]` | Source IPs/CIDRs allowed to send HEP. Empty = any |
+| `auth_token` | string | `""` | Required auth key (HEP chunk 0x0e) on every packet |
+| `cert_file` | string | `""` | Server certificate for `proto: "tls"` |
+| `key_file` | string | `""` | Server key for `proto: "tls"` |
+| `max_connections` | int | `1024` | Maximum concurrent TCP/TLS connections |
+| `workers` | int | `8` | Packet processing goroutines |
+| `read_timeout_sec` | int | `60` | Idle timeout per TCP/TLS connection |
+
+See [COLLECTOR.md](COLLECTOR.md#securing-the-collector) for a hardened example.
 
 **Example:**
 

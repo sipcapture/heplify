@@ -100,8 +100,12 @@ HEP destination targets. Up to 5 transports (indices 0–4).
 | `HEPLIFY_TRANSPORT__0__TRANSPORT` | string | Network transport: `udp`, `tcp`, `tls`, `grpc-flight` |
 | `HEPLIFY_TRANSPORT__0__PORT` | int | Destination port |
 | `HEPLIFY_TRANSPORT__0__PASSWORD` | string | HEP auth password |
-| `HEPLIFY_TRANSPORT__0__PAYLOAD_ZIP` | bool | Compress HEP payload with zlib |
+| `HEPLIFY_TRANSPORT__0__PAYLOAD_ZIP` | bool | Gzip each HEP packet (UDP only) |
 | `HEPLIFY_TRANSPORT__0__SKIP_VERIFY` | bool | Skip TLS certificate verification |
+| `HEPLIFY_TRANSPORT__0__CA_FILE` | string | PEM CA bundle to verify the server |
+| `HEPLIFY_TRANSPORT__0__CERT_FILE` | string | Client certificate for mutual TLS |
+| `HEPLIFY_TRANSPORT__0__KEY_FILE` | string | Client key for mutual TLS |
+| `HEPLIFY_TRANSPORT__0__SERVER_NAME` | string | Name to verify in the server certificate |
 | `HEPLIFY_TRANSPORT__0__KEEPALIVE` | int | TCP keep-alive interval in seconds (0 = disabled) |
 | `HEPLIFY_TRANSPORT__0__MAX_RETRIES` | int | Max reconnect attempts (0 = unlimited) |
 | `HEPLIFY_TRANSPORT__0__TLS_ENABLED` | bool | Enable TLS (for `grpc-flight`) |
@@ -227,6 +231,8 @@ Lua scripting hook for HEP packet manipulation.
 | `HEPLIFY_SCRIPT_SETTINGS_ACTIVE` | bool | Enable Lua scripting |
 | `HEPLIFY_SCRIPT_SETTINGS_FILE` | string | Path to Lua script file |
 | `HEPLIFY_SCRIPT_SETTINGS_HEP_FILTER` | string | HEP type filter for the script (e.g. `1` for SIP) |
+| `HEPLIFY_SCRIPT_SETTINGS_TIMEOUT_MS` | int | Time limit per script call (default `100`, `-1` = none) |
+| `HEPLIFY_SCRIPT_SETTINGS_UNSAFE` | bool | Open the full Lua standard library (`io`, `os`, `require`) |
 
 ---
 
@@ -268,7 +274,14 @@ address and heplify re-forwards it via the configured transports.
 | `HEPLIFY_COLLECTOR_SETTINGS_ACTIVE` | bool | Enable the HEP collector listener |
 | `HEPLIFY_COLLECTOR_SETTINGS_HOST` | string | Listen host |
 | `HEPLIFY_COLLECTOR_SETTINGS_PORT` | int | Listen port |
-| `HEPLIFY_COLLECTOR_SETTINGS_PROTO` | string | Protocol: `udp`, `tcp`, `both`, `http2` |
+| `HEPLIFY_COLLECTOR_SETTINGS_PROTO` | string | Protocol: `udp`, `tcp`, `both`, `http2`, `tls` |
+| `HEPLIFY_COLLECTOR_SETTINGS_ALLOWED_CIDRS__N` | string | Source IP/CIDR allowed to send HEP (N = 0..4) |
+| `HEPLIFY_COLLECTOR_SETTINGS_AUTH_TOKEN` | string | Required auth key on every received packet |
+| `HEPLIFY_COLLECTOR_SETTINGS_CERT_FILE` | string | Server certificate for `tls` |
+| `HEPLIFY_COLLECTOR_SETTINGS_KEY_FILE` | string | Server key for `tls` |
+| `HEPLIFY_COLLECTOR_SETTINGS_MAX_CONNECTIONS` | int | Max concurrent TCP/TLS connections (default `1024`) |
+| `HEPLIFY_COLLECTOR_SETTINGS_WORKERS` | int | Packet processing goroutines (default `8`) |
+| `HEPLIFY_COLLECTOR_SETTINGS_READ_TIMEOUT_SEC` | int | Idle timeout per TCP/TLS connection (default `60`) |
 
 ---
 
@@ -327,6 +340,12 @@ export HEPLIFY_LOG_SETTINGS_STDOUT=true
 ```dockerfile
 FROM sipcapture/heplify:latest
 ```
+
+The image runs as the unprivileged `heplify` user with the `NET_RAW`
+capability, which is enough for capture. To let heplify switch an interface
+into promiscuous mode, add `--user root --cap-add NET_ADMIN`, or enable
+promiscuous mode on the host interface instead. Relative output paths
+(buffer file, pcap dumps) are written to `/var/lib/heplify`.
 
 ```bash
 docker run --rm --net=host \

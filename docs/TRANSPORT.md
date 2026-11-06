@@ -18,8 +18,11 @@ Each entry describes a single remote HEP server or Arrow Flight endpoint.
 | `host` | string | — | Remote host or IP |
 | `port` | int | — | Remote port |
 | `password` | string | `""` | HEP node password (sent as HEP chunk 0x000e) |
-| `payload_zip` | bool | `false` | Compress HEP payload with zlib |
+| `payload_zip` | bool | `false` | Gzip each HEP packet. UDP only: on `tcp`/`tls` the receiver cannot find message boundaries (a warning is logged) |
 | `skip_verify` | bool | `false` | Skip TLS certificate verification (TLS only) |
+| `ca_file` | string | `""` | PEM CA bundle used to verify the server (TLS and `grpc-flight` with TLS). Empty = system roots |
+| `cert_file` / `key_file` | string | `""` | Client certificate and key for mutual TLS. Set both or neither |
+| `server_name` | string | `""` | Name to verify in the server certificate. Default: `host` |
 | `keepalive` | int | `0` | TCP keep-alive interval in seconds (0 = off) |
 | `max_retries` | int | `0` | Max reconnection attempts (0 = unlimited) |
 
