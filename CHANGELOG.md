@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Package tests ([#380](https://github.com/sipcapture/heplify/issues/380))**: the `Package check` workflow now also installs, upgrades (from the latest release), reinstalls, removes and purges the deb/rpm in clean Debian, Ubuntu and Rocky containers, and runs the packaged service on the runner VM to check the `homer` user, its capabilities and that a SIP packet on `lo` arrives as HEP3 (`scripts/test_package.sh`).
 - **Dependabot ([#376](https://github.com/sipcapture/heplify/issues/376))**: weekly version updates for Go modules (minor/patch grouped), GitHub Actions and the Docker base image. All GitHub Actions are now pinned by commit SHA (with the version in a comment), which Dependabot keeps up to date.
 - **Package checks ([#381](https://github.com/sipcapture/heplify/issues/381))**: new `Package check` workflow and `scripts/check_package.sh` that build the deb/rpm like the release and run static checks on them (contents/modes/owners against an expected list, `lintian`, `rpmlint`, `systemd-analyze verify` on the unit, `shellcheck` on the maintainer scripts). Known lintian/rpmlint findings are listed in `scripts/package/`.
 - `-version` and the `Starting heplify` log line show the libpcap version and whether the binary is statically or dynamically linked (#386).
