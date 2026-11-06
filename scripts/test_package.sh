@@ -168,7 +168,10 @@ e2e() {
 
     echo "==> configure: capture SIP on lo, HEP over UDP to 127.0.0.1:9060"
     cfg="$(mktemp)"
-    python3 - /etc/heplify/heplify.json "${cfg}" <<'EOF'
+    # The packaged config is root:homer 0640: read it through sudo.
+    # shellcheck disable=SC2024 # the redirect is meant to run as the caller
+    sudo cat /etc/heplify/heplify.json > "${cfg}"
+    python3 - "${cfg}" <<'EOF'
 import json, sys
 c = json.load(open(sys.argv[1]))
 s = c["socket"][0]
@@ -178,7 +181,7 @@ t.update(host="127.0.0.1", port=9060, transport="udp", active=True)
 for other in c["transport"][1:]:
     other["active"] = False
 c["log_settings"].update(level="info", stdout=True)
-json.dump(c, open(sys.argv[2], "w"), indent=2)
+json.dump(c, open(sys.argv[1], "w"), indent=2)
 EOF
     sudo install -m 0640 -o root -g homer "${cfg}" /etc/heplify/heplify.json
     rm -f "${cfg}"
@@ -195,6 +198,14 @@ while True:
     if data[:4] == b"HEP3" and marker in data:
         open(path, "wb").write(data)
         break
+# Keep the port open while the sender stops, so heplify does not log
+# "connection refused" for the resent copies.
+s.settimeout(3)
+try:
+    while True:
+        s.recvfrom(65535)
+except socket.timeout:
+    pass
 EOF
     listener_pid=$!
 
@@ -217,9 +228,9 @@ EOF
     ok "CapEff ${capeff}"
 
     echo "==> send a SIP OPTIONS over lo"
-    python3 - "${marker}" <<'EOF'
-import socket, sys, time
-m = sys.argv[1]
+    python3 - "${marker}" "${out}/hep" <<'EOF'
+import os, socket, sys, time
+m, done = sys.argv[1], sys.argv[2]
 msg = ("OPTIONS sip:e2e@127.0.0.1 SIP/2.0\r\n"
        "Via: SIP/2.0/UDP 127.0.0.1:5070;branch=z9hG4bK-" + m + "\r\n"
        "From: <sip:test@127.0.0.1>;tag=1\r\n"
@@ -234,6 +245,8 @@ s.bind(("127.0.0.1", 5070))
 for _ in range(10):
     s.sendto(msg, ("127.0.0.1", 5060))
     time.sleep(1)
+    if os.path.exists(done):
+        break
 EOF
     if ! wait "${listener_pid}"; then
         sudo journalctl -u heplify.service --no-pager | tail -50
