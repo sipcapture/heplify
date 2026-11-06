@@ -422,13 +422,20 @@ jobs:
       github.repository == 'sipcapture/heplify' &&
       (github.event_name != 'workflow_dispatch' || inputs.release)
     runs-on: ubuntu-latest
+    # The default branch is protected (changes go through pull requests), so
+    # the bump is pushed to its own branch and proposed as a pull request.
+    # Needs "Allow GitHub Actions to create and approve pull requests" in the
+    # repository settings. Pull requests opened with GITHUB_TOKEN do not
+    # trigger other workflows, so CI does not run on it (formula-only change).
     permissions:
       contents: write
+      pull-requests: write
     env:
       EVENT_NAME: ${{ github.event_name }}
       INPUT_TAG: ${{ github.event.inputs.tag }}
       REF_NAME: ${{ github.ref_name }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout
@@ -459,17 +466,19 @@ jobs:
           ./scripts/update_formula.sh "${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="homebrew/bump-${VERSION}"
+          git switch -c "${BRANCH}"
           git add Formula/heplify.rb
           git commit -m "chore(homebrew): bump formula to ${VERSION}"
-          for attempt in 1 2 3; do
-            if git pull --rebase origin "${DEFAULT_BRANCH}" && git push origin "HEAD:${DEFAULT_BRANCH}"; then
-              exit 0
-            fi
-            echo "push failed (attempt ${attempt}/3), retrying..."
-            sleep $((attempt * 5))
-          done
-          echo "::error::could not push the formula update to ${DEFAULT_BRANCH}"
-          exit 1
+          # The branch belongs to this job: re-running the release replaces it.
+          git push --force origin "HEAD:refs/heads/${BRANCH}"
+          if [ -n "$(gh pr list --head "${BRANCH}" --base "${DEFAULT_BRANCH}" --state open --json number --jq '.[].number')" ]; then
+            echo "A pull request for ${BRANCH} is already open, updated it."
+            exit 0
+          fi
+          gh pr create --base "${DEFAULT_BRANCH}" --head "${BRANCH}" \
+            --title "chore(homebrew): bump formula to ${VERSION}" \
+            --body "Points \`Formula/heplify.rb\` at the ${VERSION} release (\`scripts/update_formula.sh ${VERSION}\`, sha256 of the published \`heplify_darwin_arm64\` asset). Opened by the release workflow."
 
   # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
   # Same repos as homer-core: qxip/sipcapture/any/any and rpm_any/rpm_any
