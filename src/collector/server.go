@@ -20,8 +20,6 @@ import (
 	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/hep"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
 )
 
 const (
@@ -373,11 +371,16 @@ func (s *Server) startHTTP2(addr string) {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	h2s := &http2.Server{MaxConcurrentStreams: 250, IdleTimeout: s.readTimeout}
+	// Cleartext HTTP/2 with prior knowledge, served by net/http itself.
+	// HTTP/1.1 stays enabled for clients that do not speak HTTP/2.
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
 	srv := &http.Server{
-		Addr: addr,
-		//nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
-		Handler:           h2c.NewHandler(mux, h2s),
+		Addr:              addr,
+		Handler:           mux,
+		Protocols:         &protocols,
+		HTTP2:             &http.HTTP2Config{MaxConcurrentStreams: 250},
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       s.readTimeout,
 		WriteTimeout:      30 * time.Second,

@@ -486,7 +486,7 @@ func (c *HEPClient) write(conn net.Conn, msg []byte, zip bool) (n, wireLen int, 
 	if zip {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		if _, err := gz.Write(msg); err == nil && gz.Close() == nil {
+		if _, werr := gz.Write(msg); werr == nil && gz.Close() == nil {
 			data = b.Bytes()
 		}
 	}

@@ -67,9 +67,10 @@ func startServer(t *testing.T, mut func(*config.Config)) (*Server, *captureSende
 	return s, snd, port
 }
 
-func waitCount(snd *captureSender, want int) int {
+// waitOne waits up to 2s for the first packet and returns the count seen.
+func waitOne(snd *captureSender) int {
 	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && snd.count() < want {
+	for time.Now().Before(deadline) && snd.count() < 1 {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return snd.count()
@@ -92,7 +93,7 @@ func TestCollectorAuthToken(t *testing.T) {
 	sendUDP(t, port, hepPacket("wrong"))
 	sendUDP(t, port, hepPacket(""))
 	sendUDP(t, port, hepPacket("s3cret"))
-	if got := waitCount(snd, 1); got != 1 {
+	if got := waitOne(snd); got != 1 {
 		t.Fatalf("forwarded %d packets, want only the one with the right token", got)
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -111,7 +112,7 @@ func TestCollectorAllowList(t *testing.T) {
 
 	_, snd2, port2 := startServer(t, func(c *config.Config) { c.CollectorSettings.AllowedCIDRs = []string{"127.0.0.1"} })
 	sendUDP(t, port2, hepPacket(""))
-	if waitCount(snd2, 1) != 1 {
+	if waitOne(snd2) != 1 {
 		t.Fatal("packet from allowed address not forwarded")
 	}
 }
@@ -120,7 +121,7 @@ func TestCollectorMalformedHEPDoesNotCrash(t *testing.T) {
 	_, snd, port := startServer(t, nil)
 	sendUDP(t, port, []byte{'H', 'E', 'P', '3', 0, 12, 0, 0, 0, 1, 0, 6})
 	sendUDP(t, port, hepPacket(""))
-	if waitCount(snd, 1) != 1 {
+	if waitOne(snd) != 1 {
 		t.Fatal("collector stopped forwarding after a malformed packet")
 	}
 }
@@ -173,7 +174,7 @@ func TestCollectorHTTP2RejectsOversizedBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || waitCount(snd, 1) != 1 {
+	if resp.StatusCode != http.StatusOK || waitOne(snd) != 1 {
 		t.Fatalf("valid packet: status %d, forwarded %d", resp.StatusCode, snd.count())
 	}
 }
@@ -191,5 +192,24 @@ func TestReEncodeKeepsExtraChunks(t *testing.T) {
 	}
 	if out.TCPFlag != 3 || out.IPTos != 4 || out.MOS != 420 || out.NodePW != "pw" {
 		t.Fatalf("lost chunks on re-encode: %+v", out)
+	}
+}
+
+func TestCollectorHTTP2PriorKnowledge(t *testing.T) {
+	_, snd, port := startServer(t, func(c *config.Config) { c.CollectorSettings.Proto = "http2" })
+	var protocols http.Protocols
+	protocols.SetUnencryptedHTTP2(true)
+	client := &http.Client{Transport: &http.Transport{Protocols: &protocols}, Timeout: 5 * time.Second}
+	url := "http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port)) + "/hep"
+	resp, err := client.Post(url, "application/octet-stream", bytes.NewReader(hepPacket("")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.ProtoMajor != 2 {
+		t.Fatalf("expected HTTP/2, got %s", resp.Proto)
+	}
+	if resp.StatusCode != http.StatusOK || waitOne(snd) != 1 {
+		t.Fatalf("status %d, forwarded %d", resp.StatusCode, snd.count())
 	}
 }

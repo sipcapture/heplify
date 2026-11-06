@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -119,10 +118,26 @@ func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// secretEqual compares two secrets in time that depends only on their
+// lengths, not on where they differ. Unlike subtle.ConstantTimeCompare it
+// does not return early when the lengths differ.
 func secretEqual(got, want string) bool {
-	g := sha256.Sum256([]byte(got))
-	w := sha256.Sum256([]byte(want))
-	return subtle.ConstantTimeCompare(g[:], w[:]) == 1
+	n := len(got)
+	if len(want) > n {
+		n = len(want)
+	}
+	var diff byte
+	for i := 0; i < n; i++ {
+		var a, b byte
+		if i < len(got) {
+			a = got[i]
+		}
+		if i < len(want) {
+			b = want[i]
+		}
+		diff |= a ^ b
+	}
+	return subtle.ConstantTimeEq(int32(len(got)), int32(len(want)))&subtle.ConstantTimeByteEq(diff, 0) == 1
 }
 
 // registerAPI mounts /health and /api/stats on mux.
