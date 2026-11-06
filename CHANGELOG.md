@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### CI
 
-- Builds use the latest Go 1.25 patch; new `govulncheck` and `gosec` jobs, fuzz smoke tests on every PR, a nightly fuzz workflow and Dependabot.
+- Builds move to Go 1.26 (latest patch): Go 1.25 is out of support and its last release, 1.25.14, still has open `net/http`, `crypto/tls`, `crypto/x509` and `html/template` vulnerabilities. `golang.org/x/net` is updated to v0.60.0 and `klauspost/compress` to v1.20.2 for known vulnerabilities. New `govulncheck` and `gosec` jobs, fuzz smoke tests on every PR, a nightly fuzz workflow and Dependabot.
 
 ## [2.0.28] - 2026-09-04
 

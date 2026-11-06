@@ -28,7 +28,7 @@ concurrency:
 
 env:
   # Go minor version used for builds; setup-go picks its latest patch.
-  GO_VERSION: "1.25.x"
+  GO_VERSION: "1.26.x"
   IMAGE_NAME: ghcr.io/sipcapture/heplify
 
 jobs:
