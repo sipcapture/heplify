@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"sync"
@@ -72,15 +71,11 @@ func newArrowFlightClient(cfg config.TransportSettings) (*ArrowFlightClient, err
 
 	var dialOpts []grpc.DialOption
 	if cfg.TLSEnabled {
-		if cfg.SkipVerify {
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec
-			})))
-		} else {
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				MinVersion: tls.VersionTLS12,
-			})))
+		tlsCfg, err := buildTLSConfig(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("arrow flight tls %s: %w", addr, err)
 		}
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}

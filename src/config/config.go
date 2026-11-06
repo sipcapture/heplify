@@ -108,7 +108,21 @@ type Config struct {
 		Active bool   `json:"active" mapstructure:"active"`
 		Host   string `json:"host" mapstructure:"host"`
 		Port   int    `json:"port" mapstructure:"port"`
-		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2"
+		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2", "tls"
+		// AllowedCIDRs limits which source addresses may send HEP. Empty = any.
+		AllowedCIDRs []string `json:"allowed_cidrs" mapstructure:"allowed_cidrs"`
+		// AuthToken, when set, must match the NodePW (auth key) of every received
+		// packet; packets with another or no token are dropped.
+		AuthToken string `json:"auth_token" mapstructure:"auth_token"`
+		// CertFile / KeyFile: server certificate for proto "tls".
+		CertFile string `json:"cert_file" mapstructure:"cert_file"`
+		KeyFile  string `json:"key_file" mapstructure:"key_file"`
+		// MaxConnections caps concurrent TCP/TLS connections (default 1024).
+		MaxConnections int `json:"max_connections" mapstructure:"max_connections"`
+		// Workers is the number of goroutines decoding received HEP (default 8).
+		Workers int `json:"workers" mapstructure:"workers"`
+		// ReadTimeoutSec closes idle TCP/TLS/HTTP connections (default 60).
+		ReadTimeoutSec int `json:"read_timeout_sec" mapstructure:"read_timeout_sec"`
 	} `json:"collector_settings" mapstructure:"collector_settings"`
 }
 
@@ -148,6 +162,11 @@ type SocketSettings struct {
 	// "any", no promiscuous-mode changes are made to any interface.
 	// Example: ["eth0", "eth1"]
 	PromiscInterfaces []string `json:"promisc_interfaces" mapstructure:"promisc_interfaces"`
+	// TunnelAllowedSources limits which outer source addresses (IPs or CIDRs)
+	// may deliver tunneled traffic (VXLAN, GRE, ERSPAN, IP-in-IP). Packets from
+	// other tunnel endpoints are dropped, so a host that can reach the capture
+	// interface cannot inject SIP with a forged inner address. Empty = any.
+	TunnelAllowedSources []string `json:"tunnel_allowed_sources" mapstructure:"tunnel_allowed_sources"`
 }
 
 type TransportSettings struct {
@@ -163,8 +182,15 @@ type TransportSettings struct {
 	Password     string `json:"password" mapstructure:"password"`
 	PayloadZip   bool   `json:"payload_zip" mapstructure:"payload_zip"`
 	SkipVerify   bool   `json:"skip_verify" mapstructure:"skip_verify"`
-	KeepAlive    int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
-	MaxRetries   int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
+	// TLS options (transport "tls" and grpc-flight with tls_enabled):
+	// CAFile verifies the server against a private CA, CertFile/KeyFile
+	// present a client certificate (mTLS), ServerName overrides the name checked.
+	CAFile     string `json:"ca_file" mapstructure:"ca_file"`
+	CertFile   string `json:"cert_file" mapstructure:"cert_file"`
+	KeyFile    string `json:"key_file" mapstructure:"key_file"`
+	ServerName string `json:"server_name" mapstructure:"server_name"`
+	KeepAlive  int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
+	MaxRetries int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
 	// Arrow Flight fields (used when transport = "grpc-flight")
 	TLSEnabled      bool   `json:"tls_enabled"       mapstructure:"tls_enabled"`
 	StreamName      string `json:"stream_name"       mapstructure:"stream_name"`
@@ -198,6 +224,13 @@ type ScriptSettings struct {
 	Active    bool   `json:"active" mapstructure:"active"`
 	File      string `json:"file" mapstructure:"file"`
 	HEPFilter string `json:"hep_filter" mapstructure:"hep_filter"`
+	// TimeoutMs limits one call into the script (onPacket and others).
+	// 0 uses the default (100 ms); a negative value disables the limit.
+	TimeoutMs int `json:"timeout_ms" mapstructure:"timeout_ms"`
+	// Unsafe opens the full Lua standard library (io, os, package, debug,
+	// load/dofile). By default scripts get base, table, string, math and
+	// os.time/os.date/os.clock only.
+	Unsafe bool `json:"unsafe" mapstructure:"unsafe"`
 }
 
 func (c *Config) Validate() error {
@@ -214,6 +247,9 @@ func (c *Config) Validate() error {
 			default:
 				return fmt.Errorf("transport[%d] has unsupported transport: %s", i, t.Transport)
 			}
+			if (t.CertFile == "") != (t.KeyFile == "") {
+				return fmt.Errorf("transport[%d]: cert_file and key_file must be set together", i)
+			}
 		}
 	}
 
@@ -228,6 +264,12 @@ func (c *Config) Validate() error {
 			if s.SnapLen < 0 {
 				return fmt.Errorf("socket[%d] has invalid snap_len: %d", i, s.SnapLen)
 			}
+			for _, src := range s.TunnelAllowedSources {
+				src = strings.TrimSpace(src)
+				if _, _, err := net.ParseCIDR(src); err != nil && net.ParseIP(src) == nil {
+					return fmt.Errorf("socket[%d] tunnel_allowed_sources has invalid entry: %s", i, src)
+				}
+			}
 		}
 	}
 
@@ -237,8 +279,20 @@ func (c *Config) Validate() error {
 		}
 		switch strings.ToLower(c.CollectorSettings.Proto) {
 		case "udp", "tcp", "both", "http2", "":
+		case "tls":
+			if c.CollectorSettings.CertFile == "" || c.CollectorSettings.KeyFile == "" {
+				return fmt.Errorf("collector_settings.proto is tls but cert_file or key_file is not set")
+			}
 		default:
 			return fmt.Errorf("collector_settings.proto has unsupported value: %s", c.CollectorSettings.Proto)
+		}
+		for _, cidr := range c.CollectorSettings.AllowedCIDRs {
+			if _, _, err := net.ParseCIDR(cidr); err != nil && net.ParseIP(cidr) == nil {
+				return fmt.Errorf("collector_settings.allowed_cidrs has invalid entry: %s", cidr)
+			}
+		}
+		if c.CollectorSettings.MaxConnections < 0 || c.CollectorSettings.Workers < 0 || c.CollectorSettings.ReadTimeoutSec < 0 {
+			return fmt.Errorf("collector_settings limits must be >= 0")
 		}
 	}
 

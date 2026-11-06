@@ -65,6 +65,13 @@ type Decoder struct {
 	// IP defragmenters — always active (set to nil to disable via DisableIPDefrag).
 	defrag4 *ip4defrag.IPv4Defragmenter
 	defrag6 *ip6defrag.IPv6Defragmenter
+	// ip4Flows mirrors the flows held by defrag4, which has no size limit of
+	// its own, so the decoder can cap their number and buffered bytes.
+	ip4Flows map[ip4FragKey]*ip4FragState
+
+	// TunnelSourceAllowed, when set, is asked for the outer source address of
+	// every tunneled packet; packets it rejects are dropped.
+	TunnelSourceAllowed func(net.IP) bool
 
 	// TCPAssembler is optional. When set, all TCP packets are fed to it
 	// instead of being returned from Decode (reassembled SIP arrives via callback).
@@ -108,6 +115,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		decodedLayers: make([]gopacket.LayerType, 0, 20),
 		defrag4:       ip4defrag.NewIPv4Defragmenter(),
 		defrag6:       ip6defrag.NewIPv6Defragmenter(),
+		ip4Flows:      make(map[ip4FragKey]*ip4FragState),
 	}
 
 	dlp := gopacket.NewDecodingLayerParser(lt)
@@ -170,12 +178,22 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 	var foundIP, foundTransport bool
 	var ip4Fragment, ip6Fragment bool
 
+	// The parser reuses one IPv4/IPv6 struct, so for a tunnel the outer
+	// header is already overwritten by the inner one. Read the outer source
+	// from the raw frame instead.
+	tunnelOK := func() bool {
+		return d.TunnelSourceAllowed == nil || d.TunnelSourceAllowed(outerSrcIP(d.layerType, data))
+	}
+
 	for _, layerType := range d.decodedLayers {
 		switch layerType {
 		case layers.LayerTypeDot1Q:
 			pkt.Vlan = d.d1q.VLANIdentifier
 
 		case layers.LayerTypeIPv4:
+			if foundIP && !tunnelOK() {
+				return nil, nil // IP-in-IP or GRE from an unknown endpoint
+			}
 			pkt.Version = 0x02
 			pkt.SrcIP = d.ip4.SrcIP
 			pkt.DstIP = d.ip4.DstIP
@@ -186,6 +204,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case layers.LayerTypeIPv6:
+			if foundIP && !tunnelOK() {
+				return nil, nil
+			}
 			pkt.Version = 0x0a
 			pkt.SrcIP = d.ip6.SrcIP
 			pkt.DstIP = d.ip6.DstIP
@@ -217,6 +238,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			foundTransport = true
 
 		case layers.LayerTypeVXLAN:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			if len(d.vxl.Payload) > 0 {
 				if innerPkt := d.decodeInnerPacket(d.vxl.Payload, ci); innerPkt != nil {
 					return innerPkt, nil
@@ -224,6 +248,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case ownlayers.LayerTypeERSPAN:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			if d.erspan.VLan > 0 {
 				pkt.Vlan = d.erspan.VLan
 			}
@@ -234,6 +261,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case layers.LayerTypeGRE:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			log.Debug().
 				Str("gre_proto", d.gre.Protocol.String()).
 				Int("gre_payload_len", len(d.gre.Payload)).
@@ -324,12 +354,17 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 
 	// IPv4 defragmentation
 	if ip4Fragment && d.defrag4 != nil {
+		key := newIP4FragKey(&d.ip4)
+		if !d.trackIP4Fragment(key, len(d.ip4.Payload), ci.Timestamp) {
+			return nil, nil // over the reassembly limits, drop
+		}
 		// Pass a copy: ip4defrag stores the pointer; d.ip4 is reused on every Decode().
 		ip4Copy := d.ip4
 		ip4New, err := d.defrag4.DefragIPv4WithTimestamp(&ip4Copy, ci.Timestamp)
 		if err != nil || ip4New == nil {
 			return nil, nil // fragment buffered, wait for more
 		}
+		delete(d.ip4Flows, key)
 		// Reassembled — decode transport from the assembled payload.
 		proto, sp, dp, flags, payload, ok := decodeTransport(ip4New.Protocol, ip4New.Payload)
 		if !ok {
@@ -394,6 +429,51 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 	}
 
 	return pkt, nil
+}
+
+// outerSrcIP returns the source address of the first IP header in a frame
+// of the given link layer, or nil if it cannot be found.
+func outerSrcIP(lt gopacket.LayerType, data []byte) net.IP {
+	off := 0
+	var etherType uint16
+	switch lt {
+	case layers.LayerTypeEthernet:
+		if len(data) < 14 {
+			return nil
+		}
+		etherType = binary.BigEndian.Uint16(data[12:14])
+		off = 14
+		for (etherType == 0x8100 || etherType == 0x88a8) && len(data) >= off+4 {
+			etherType = binary.BigEndian.Uint16(data[off+2 : off+4])
+			off += 4
+		}
+	case layers.LayerTypeLinuxSLL:
+		if len(data) < 16 {
+			return nil
+		}
+		etherType = binary.BigEndian.Uint16(data[14:16])
+		off = 16
+	default: // raw IP
+		if len(data) == 0 {
+			return nil
+		}
+		if data[0]>>4 == 6 {
+			etherType = 0x86dd
+		} else {
+			etherType = 0x0800
+		}
+	}
+	switch etherType {
+	case 0x0800:
+		if len(data) >= off+20 {
+			return net.IP(data[off+12 : off+16])
+		}
+	case 0x86dd:
+		if len(data) >= off+40 {
+			return net.IP(data[off+8 : off+24])
+		}
+	}
+	return nil
 }
 
 // decodeInnerPacket decodes an inner Ethernet frame (e.g., from VXLAN or ERSPAN)
@@ -601,11 +681,61 @@ func (d *Decoder) DisableDefrag() {
 func (d *Decoder) DiscardStaleFragments(cutoff time.Time) (ipv4Flows, ipv6Flows int) {
 	if d.defrag4 != nil {
 		ipv4Flows = d.defrag4.DiscardOlderThan(cutoff)
+		for k, st := range d.ip4Flows {
+			if st.lastSeen.Before(cutoff) {
+				delete(d.ip4Flows, k)
+			}
+		}
 	}
 	if d.defrag6 != nil {
 		ipv6Flows = d.defrag6.DiscardOlderThan(cutoff)
 	}
 	return ipv4Flows, ipv6Flows
+}
+
+// Limits for IPv4 reassembly, matching the IPv6 defragmenter.
+const (
+	ip4MaxFragFlows = ip6defrag.IPv6MaximumFlows
+	ip4MaxFlowBytes = ip6defrag.IPv6MaximumFlowBytes
+)
+
+type ip4FragKey struct {
+	src, dst [4]byte
+	id       uint16
+}
+
+type ip4FragState struct {
+	bytes    int
+	lastSeen time.Time
+}
+
+func newIP4FragKey(ip *layers.IPv4) ip4FragKey {
+	var k ip4FragKey
+	copy(k.src[:], ip.SrcIP.To4())
+	copy(k.dst[:], ip.DstIP.To4())
+	k.id = ip.Id
+	return k
+}
+
+// trackIP4Fragment accounts one fragment and reports whether it may be
+// handed to the defragmenter. New flows are refused once ip4MaxFragFlows
+// are open, and a flow stops accepting fragments after ip4MaxFlowBytes;
+// such a flow is freed by DiscardStaleFragments.
+func (d *Decoder) trackIP4Fragment(key ip4FragKey, n int, ts time.Time) bool {
+	st, ok := d.ip4Flows[key]
+	if !ok {
+		if len(d.ip4Flows) >= ip4MaxFragFlows {
+			return false
+		}
+		st = &ip4FragState{}
+		d.ip4Flows[key] = st
+	}
+	st.lastSeen = ts
+	if st.bytes+n > ip4MaxFlowBytes {
+		return false
+	}
+	st.bytes += n
+	return true
 }
 
 // boolToUint8 converts bool to uint8 (0 or 1)

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.29] - 2026-11-06
+## [2.1.0] - 2026-11-06
 
 ### Security
 
@@ -20,6 +20,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lua deadlock**: any script calling `GetHEP*`, `SetHEPField`, `GetRawMessage`, `SetRawMessage` or `HashTable` from `onPacket` deadlocked capture on the first packet. Packet binding and the script call are now atomic, so fanout workers no longer see each other's packets.
 - **TCP stream memory**: each reassembled stream buffers at most 1 MiB (SIP, Diameter, HTTP upgrade); WebSocket frames, including ping/pong/close, are consumed one frame at a time instead of dropping the whole buffer.
 - **Panic safety**: panics while handling one packet (capture, syslog, collector) are recovered, logged and counted in `heplify_packet_panics_total` instead of killing the process.
+- **Collector access control**: `collector_settings.allowed_cidrs` and `auth_token` restrict who may send HEP; new `proto: "tls"`. A warning is logged when the collector is open to anyone.
+- **Collector limits**: bounded worker pool (`workers`, queue of 10000), `max_connections`, per-connection `read_timeout_sec`, HTTP/2 body limit (64 KiB) and server timeouts; `Stop()` closes live connections. Re-encoded packets keep the TCP flag, IP TOS and MOS chunks.
+- **API server**: read/write/idle timeouts, TLS 1.2 minimum, constant-time password check on hashes, warning for Basic Auth over plain HTTP.
+- **HEP transport**: dial and write deadlines, so a stalled collector can no longer block capture; `ca_file`, `cert_file`/`key_file` (mutual TLS) and `server_name` for `tls` and `grpc-flight`; warning when `node_pw` is sent in clear text.
+- **Memory limits**: IPv4/IPv6 reassembly holds at most 8192 datagrams and 128 KiB per datagram; overlapping IPv6 fragments drop the datagram (RFC 5722). The dedup cache keys on a 64-bit hash instead of the full payload. RTCP correlation caches hold at most 200k entries; one SDP caches at most 32 media.
+- **Files**: buffer and pcap files are created `0600` with `O_NOFOLLOW`, directories `0750`. The buffer drain no longer loses messages appended while it runs. Rotated pcap names are unique, so fanout workers no longer overwrite each other's files.
+- **Lua sandbox**: scripts get `base`, `table`, `string`, `math` and the time functions of `os` only; `script_settings.unsafe` restores the full library. Every call is limited by `script_settings.timeout_ms` (default 100 ms); `HashTable` is capped at 100k keys.
+- **Tunnel spoofing**: `socket[].tunnel_allowed_sources` drops VXLAN/GRE/ERSPAN/IP-in-IP traffic from unknown outer sources.
+- **Logs**: `Authorization` and `Proxy-Authorization` values are masked in payload debug logs; `Logp` strips control characters.
+- **Deployment**: the systemd unit runs as a dynamic user with only `CAP_NET_RAW`, `CAP_NET_ADMIN` and `CAP_NET_BIND_SERVICE` and a sandbox; the Docker image runs as user `heplify` with file capabilities. **Note:** promiscuous mode in Docker now needs `--user root --cap-add NET_ADMIN`, and mounted output directories must be writable by the `heplify` user.
+
+### Fixed
+
+- **Pcap replay (`-rf`)** no longer starts a live capture on `any` when fanout workers are configured.
+- **Shutdown crash**: stopping AF_PACKET capture no longer segfaults (the ring was unmapped while a worker was reading it); capture goroutines are stopped and awaited first.
+- **Pcap replay** flushes TCP streams and IP fragments on packet time and at EOF, so the last messages of a capture are sent; `-eof-exit` shuts down through the normal path instead of `os.Exit`.
+- **SIP headers** are parsed per line, case-insensitively and only in the header section: `CONTENT-LENGTH` is found, and `c:` no longer matches inside `Contact`.
+- **Compound RTCP**: the first packet is parsed within its own length, so report blocks are not read from the next packet.
+- **`payload_zip`**: the buffer drain now compresses too, and drain and send worker no longer interleave writes on one connection. A warning is logged when it is used on a stream transport.
+
+### CI
+
+- Builds move to Go 1.26 (latest patch): Go 1.25 is out of support and its last release, 1.25.14, still has open `net/http`, `crypto/tls`, `crypto/x509` and `html/template` vulnerabilities. `golang.org/x/net` is updated to v0.60.0 and `klauspost/compress` to v1.20.2 for known vulnerabilities. New `govulncheck` and `gosec` jobs, fuzz smoke tests on every PR, a nightly fuzz workflow and Dependabot.
 
 ## [2.0.28] - 2026-09-04
 

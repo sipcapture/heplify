@@ -362,7 +362,7 @@ func cleanStringSlicesRecursive(v reflect.Value) {
 		return
 	}
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if !v.IsNil() {
 			cleanStringSlicesRecursive(v.Elem())
 		}
@@ -428,7 +428,7 @@ func extractFields(obj interface{}, prefix string) []FieldInfo {
 	objVal := reflect.ValueOf(obj)
 	objType := objVal.Type()
 
-	if objType.Kind() == reflect.Ptr {
+	if objType.Kind() == reflect.Pointer {
 		objVal = objVal.Elem()
 		objType = objVal.Type()
 	}

@@ -406,9 +406,12 @@ func main() {
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigChan
-
-	log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
+	select {
+	case sig := <-sigChan:
+		log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
+	case <-sniff.Done():
+		log.Info().Msg("Capture finished, shutting down")
+	}
 
 	// Cleanup: close packet sources first so that capture goroutines return and
 	// their deferred cleanup (e.g. restoring promiscuous mode) is executed.

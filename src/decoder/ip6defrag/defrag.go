@@ -29,6 +29,12 @@ const (
 	IPv6MaximumSize            = 65535 // Maximum size of a fragment (2^16)
 	IPv6MaximumFragmentOffset  = 8183  // Maximum offset of a fragment
 	IPv6MaximumFragmentListLen = 8192  // Back out if we get more than this many fragments
+	// IPv6MaximumFlowBytes caps the payload bytes buffered for one datagram.
+	// A valid datagram never needs more than IPv6MaximumSize; the slack allows
+	// a few retransmitted fragments.
+	IPv6MaximumFlowBytes = 2 * IPv6MaximumSize
+	// IPv6MaximumFlows caps the number of datagrams being reassembled at once.
+	IPv6MaximumFlows = 8192
 )
 
 // DefragIPv6 takes in an IPv6 packet with a fragment payload.
@@ -83,16 +89,23 @@ func (d *IPv6Defragmenter) DefragIPv6WithTimestamp(in *layers.IPv6, inFragment *
 
 	// have we already seen a flow between src/dst with that Id?
 	ipf := newIPv6(in, inFragment)
-	var fl *fragmentList
-	var exist bool
 	d.Lock()
-	fl, exist = d.ipFlows[ipf]
+	defer d.Unlock()
+	fl, exist := d.ipFlows[ipf]
 	if !exist {
+		if len(d.ipFlows) >= IPv6MaximumFlows {
+			return nil, fmt.Errorf("defrag: too many flows in reassembly (%d), dropping fragment",
+				IPv6MaximumFlows)
+		}
 		debug.Printf("defrag: unknown flow, creating a new one\n")
 		fl = new(fragmentList)
 		d.ipFlows[ipf] = fl
 	}
-	d.Unlock()
+	if fl.Bytes+len(inFragment.Payload) > IPv6MaximumFlowBytes {
+		delete(d.ipFlows, ipf)
+		return nil, fmt.Errorf("defrag: flow buffered more than %d bytes, flushing it",
+			IPv6MaximumFlowBytes)
+	}
 	// insert, and if final build it
 	out, err2 := fl.insert(in, inFragment, t)
 
@@ -100,20 +113,28 @@ func (d *IPv6Defragmenter) DefragIPv6WithTimestamp(in *layers.IPv6, inFragment *
 	// without any defrag success, we just drop everything and
 	// raise an error
 	if out == nil && fl.List.Len()+1 > IPv6MaximumFragmentListLen {
-		d.flush(ipf)
-		return nil, fmt.Errorf("defrag: Fragment List hits its maximum"+
-			"size(%d), without success. Flushing the list",
+		delete(d.ipFlows, ipf)
+		return nil, fmt.Errorf("defrag: fragment list hit its maximum "+
+			"size (%d) without success, flushing it",
 			IPv6MaximumFragmentListLen)
 	}
 
-	// if we got a packet, it's a new one, and he is defragmented
+	// if we got a packet, it's a new one, and he is defragmented.
+	// A build error (hole or overlap) also ends the flow.
+	if out != nil || err2 != nil {
+		delete(d.ipFlows, ipf)
+	}
 	if out != nil {
-		// when defrag is done for a flow between two ip
-		// clean the list
-		d.flush(ipf)
 		return out, nil
 	}
 	return nil, err2
+}
+
+// Len returns the number of datagrams currently being reassembled.
+func (d *IPv6Defragmenter) Len() int {
+	d.RLock()
+	defer d.RUnlock()
+	return len(d.ipFlows)
 }
 
 // DiscardOlderThan forgets all packets without any activity since
@@ -132,14 +153,6 @@ func (d *IPv6Defragmenter) DiscardOlderThan(t time.Time) int {
 	return nb
 }
 
-// flush the fragment list for a particular flow
-func (d *IPv6Defragmenter) flush(ipf ipv6) {
-	d.Lock()
-	fl := new(fragmentList)
-	d.ipFlows[ipf] = fl
-	d.Unlock()
-}
-
 // securityChecks performs the needed security checks
 func (d *IPv6Defragmenter) securityChecks(ip *layers.IPv6Fragment) (bool, error) {
 	// don't allow too big fragment offset
@@ -151,7 +164,7 @@ func (d *IPv6Defragmenter) securityChecks(ip *layers.IPv6Fragment) (bool, error)
 	// don't allow fragment that would oversize an IP packet
 	if fragOffset+uint32(len(ip.Payload)) > IPv6MaximumSize {
 		return false, fmt.Errorf("defrag: fragment will overrun "+
-			"(handcrafted? %d > %d)", fragOffset+uint32(len(ip.Payload)), IPv6MaximumFragmentOffset)
+			"(handcrafted? %d > %d)", fragOffset+uint32(len(ip.Payload)), IPv6MaximumSize)
 	}
 	return true, nil
 }
@@ -164,6 +177,7 @@ type fragmentList struct {
 	List          list.List
 	Highest       uint16
 	Current       uint16
+	Bytes         int // payload bytes stored, duplicates included
 	FinalReceived bool
 	LastSeen      time.Time
 }
@@ -179,35 +193,41 @@ func (f *fragmentList) insert(in *layers.IPv6, fragment *layers.IPv6Fragment, t 
 	if fragOffset >= f.Highest {
 		f.List.PushBack(fragment)
 	} else {
+		fragEnd := int(fragOffset) + len(fragment.Payload)
+		prevEnd := 0
+		inserted := false
 		for e := f.List.Front(); e != nil; e = e.Next() {
 			frag, _ := e.Value.(*layers.IPv6Fragment)
-			if fragment.FragmentOffset == frag.FragmentOffset {
-				// TODO: what if we receive a fragment
-				// that begins with duplicate data but
-				// *also* has new data? For example:
-				//
-				// AAAA
-				//     BB
-				//     BBCC
-				//         DDDD
-				//
-				// In this situation we completely
-				// ignore CC and the complete packet can
-				// never be reassembled.
+			start := int(frag.FragmentOffset) * 8
+			if fragment.FragmentOffset == frag.FragmentOffset && len(fragment.Payload) == len(frag.Payload) {
+				// Exact retransmission of a fragment we already have.
 				debug.Printf("defrag: ignoring frag %d as we already have it (duplicate?)\n",
 					fragOffset)
 				return nil, nil
 			}
-			if fragment.FragmentOffset < frag.FragmentOffset {
+			if int(fragOffset) <= start {
+				// RFC 5722: a fragment that overlaps another one invalidates
+				// the whole datagram.
+				if int(fragOffset) < prevEnd || fragEnd > start {
+					return nil, fmt.Errorf("defrag: overlapping fragment at offset %d", fragOffset)
+				}
 				debug.Printf("defrag: inserting frag %d before existing frag %d\n",
-					fragOffset, frag.FragmentOffset*8)
+					fragOffset, start)
 				f.List.InsertBefore(fragment, e)
+				inserted = true
 				break
 			}
+			prevEnd = start + len(frag.Payload)
+		}
+		if !inserted {
+			// Below Highest but after every stored fragment: it must still
+			// not overlap the last one.
+			return nil, fmt.Errorf("defrag: overlapping fragment at offset %d", fragOffset)
 		}
 	}
 
 	f.LastSeen = t
+	f.Bytes += len(fragment.Payload)
 
 	fragLength := uint16(len(fragment.Payload))
 	// After inserting the Fragment, we update the counters

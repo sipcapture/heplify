@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
+	"github.com/sipcapture/heplify/src/fsutil"
 )
 
 type clientState string
@@ -29,6 +31,11 @@ const (
 	initialReconnectBackoff = time.Second
 	maxReconnectBackoff     = 30 * time.Second
 	maxDrainBatchMessages   = 1000
+
+	// dialTimeout and writeTimeout keep a dead or stalled HEP server from
+	// blocking the single send worker forever.
+	dialTimeout  = 10 * time.Second
+	writeTimeout = 5 * time.Second
 )
 
 // clientKind identifies the underlying transport type.
@@ -50,12 +57,16 @@ type transportClient struct {
 
 // HEPClient represents a single HEP server connection
 type HEPClient struct {
-	addr         string
-	proto        string
-	skipVerify   bool
-	keepAlive    int
-	payloadZip   bool
+	addr       string
+	proto      string
+	skipVerify bool
+	keepAlive  int
+	payloadZip bool
+	// writeMu keeps the send worker and the buffer drain from interleaving
+	// messages on one connection, so buffered packets keep their order.
+	writeMu      sync.Mutex
 	maxRetries   int // 0 = unlimited
+	tlsConfig    *tls.Config
 	conn         net.Conn
 	errCnt       uint
 	state        clientState
@@ -135,8 +146,30 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 			proto = "udp"
 		}
 
+		var tlsCfg *tls.Config
+		if strings.ToLower(proto) == "tls" {
+			c, err := buildTLSConfig(t)
+			if err != nil {
+				log.Error().Str("component", "sender").Str("addr", fmt.Sprintf("%s:%d", t.Host, t.Port)).
+					Err(err).Msg("Invalid TLS settings, transport disabled")
+				continue
+			}
+			tlsCfg = c
+		} else if cfg.SystemSettings.NodePW != "" {
+			log.Warn().Str("component", "sender").Str("addr", fmt.Sprintf("%s:%d", t.Host, t.Port)).
+				Str("transport", proto).
+				Msg("node_pw is sent in clear text on this transport; use transport \"tls\" to protect it")
+		}
+
+		if t.PayloadZip && proto != "udp" {
+			log.Warn().Str("component", "sender").Str("addr", net.JoinHostPort(t.Host, fmt.Sprint(t.Port))).
+				Str("transport", proto).
+				Msg("payload_zip gzips whole HEP packets; on a stream transport the receiver cannot find message boundaries")
+		}
+
 		hc := &HEPClient{
-			addr:       fmt.Sprintf("%s:%d", t.Host, t.Port),
+			tlsConfig:  tlsCfg,
+			addr:       net.JoinHostPort(t.Host, fmt.Sprint(t.Port)),
 			proto:      proto,
 			skipVerify: t.SkipVerify,
 			keepAlive:  t.KeepAlive,
@@ -165,9 +198,9 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 	switch client.proto {
 	case "udp":
-		return net.Dial("udp", client.addr)
+		return net.DialTimeout("udp", client.addr, dialTimeout)
 	case "tcp":
-		conn, err := net.Dial("tcp", client.addr)
+		conn, err := net.DialTimeout("tcp", client.addr, dialTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -184,11 +217,11 @@ func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 		if client.skipVerify {
 			log.Warn().Str("addr", client.addr).Msg("TLS skip_verify is enabled; certificate verification is disabled")
 		}
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: client.skipVerify,
-			MinVersion:         tls.VersionTLS12,
+		tlsConfig := client.tlsConfig
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{InsecureSkipVerify: client.skipVerify, MinVersion: tls.VersionTLS12} //nolint:gosec // opt-in
 		}
-		tlsConn, err := tls.Dial("tcp", client.addr, tlsConfig)
+		tlsConn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, "tcp", client.addr, tlsConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -338,6 +371,12 @@ func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err er
 	s.scheduleReconnect(client, "write error")
 }
 
+// writeWithDeadline writes b with a write deadline. UDP ignores it.
+func writeWithDeadline(conn net.Conn, b []byte) (int, error) {
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	return conn.Write(b)
+}
+
 // startWorker processes the HEP queue
 func (s *Sender) startWorker() {
 	defer s.workerWG.Done()
@@ -408,21 +447,9 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 			continue
 		}
 
-		data := msg
-		if payloadZip {
-			var b bytes.Buffer
-			gz := gzip.NewWriter(&b)
-			if _, err := gz.Write(msg); err == nil {
-				gz.Close()
-				data = b.Bytes()
-			} else {
-				gz.Close()
-			}
-		}
-
-		n, err := conn.Write(data)
+		n, wireLen, err := client.write(conn, msg, payloadZip)
 		if err != nil {
-			s.handleWriteError(client, conn, err, msg, len(data))
+			s.handleWriteError(client, conn, err, msg, wireLen)
 			if !sent {
 				s.bufferToFile(msg)
 			}
@@ -450,6 +477,23 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 		return false
 	}
 	return sent
+}
+
+// write sends one HEP message on conn, gzipped when zip is set. It returns
+// the bytes written and the size of the encoded message.
+func (c *HEPClient) write(conn net.Conn, msg []byte, zip bool) (n, wireLen int, err error) {
+	data := msg
+	if zip {
+		var b bytes.Buffer
+		gz := gzip.NewWriter(&b)
+		if _, werr := gz.Write(msg); werr == nil && gz.Close() == nil {
+			data = b.Bytes()
+		}
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	n, err = writeWithDeadline(conn, data)
+	return n, len(data), err
 }
 
 // SendRecord dispatches a structured PacketRecord to all Arrow Flight clients.
@@ -503,7 +547,7 @@ func (s *Sender) bufferToFile(data []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	f, err := os.OpenFile(s.bufferFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := fsutil.Append(s.bufferFile)
 	if err != nil {
 		log.Error().Str("component", "sender").Err(err).Msg("Failed to open buffer file")
 		return
@@ -591,19 +635,19 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 
 		client.mu.Lock()
 		conn := client.conn
+		payloadZip := client.payloadZip
+		client.mu.Unlock()
 		if conn == nil {
-			client.mu.Unlock()
 			break
 		}
-		_, err := conn.Write(msg)
-		client.mu.Unlock()
+		_, wireLen, err := client.write(conn, msg, payloadZip)
 		if err != nil {
 			ev := log.Error().Str("component", "sender").Err(err).Str("reason", "buffer drain write")
 			if isMessageTooLong(err) {
-				ev = enrichMessageTooLongLog(ev, msg, len(msg), s.cfg.DebugSettings.PrintOutBadMessage)
+				ev = enrichMessageTooLongLog(ev, msg, wireLen, s.cfg.DebugSettings.PrintOutBadMessage)
 			}
 			ev.Msg("Failed to send buffered HEP")
-			s.handleWriteError(client, conn, err, msg, len(msg))
+			s.handleWriteError(client, conn, err, msg, wireLen)
 			break
 		}
 		sentCount++
@@ -620,18 +664,43 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 			Msg("Sent buffered HEP messages")
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if bytesConsumed >= len(data) {
+		// bufferToFile may have appended while we were sending (it only
+		// appends), so keep everything after what we consumed, including
+		// those new messages. Rewriting from the old snapshot lost them.
+		current, err := os.ReadFile(s.bufferFile)
+		if err != nil {
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to re-read buffer file")
+			return
+		}
+		if len(current) < bytesConsumed {
+			// Someone else truncated the file; nothing safe to rewrite.
+			return
+		}
+		remaining := current[bytesConsumed:]
+		if len(remaining) == 0 {
 			_ = os.Truncate(s.bufferFile, 0)
 			apiserver.SetBufferSizeBytes(0)
 			return
 		}
-		remaining := data[bytesConsumed:]
-		tmpFile := s.bufferFile + ".tmp"
-		if err := os.WriteFile(tmpFile, remaining, 0600); err != nil {
+		tmp, err := os.CreateTemp(filepath.Dir(s.bufferFile), filepath.Base(s.bufferFile)+".*.tmp")
+		if err != nil {
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to create temporary drain file")
+			return
+		}
+		tmpFile := tmp.Name()
+		if _, err := tmp.Write(remaining); err != nil {
+			tmp.Close()
+			_ = os.Remove(tmpFile)
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to write temporary drain file")
+			return
+		}
+		if err := tmp.Close(); err != nil {
+			_ = os.Remove(tmpFile)
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to write temporary drain file")
 			return
 		}
 		if err := os.Rename(tmpFile, s.bufferFile); err != nil {
+			_ = os.Remove(tmpFile)
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to atomically replace buffer file")
 			return
 		}

@@ -27,6 +27,9 @@ const (
 	chunkCID       = 17
 	chunkVlan      = 18
 	chunkNodeName  = 19
+	chunkTCPFlag   = 0x17
+	chunkIPTos     = 0x18
+	chunkMOS       = 0x20
 )
 
 // chunkBodyLen is the exact body size of each fixed-size chunk type.
@@ -46,6 +49,9 @@ var chunkBodyLen = map[uint16]int{
 	chunkProtoType: 1,
 	chunkNodeID:    4,
 	chunkVlan:      2,
+	chunkTCPFlag:   1,
+	chunkIPTos:     1,
+	chunkMOS:       2,
 }
 
 // HEP holds a decoded HEP v2/v3 packet.
@@ -67,6 +73,9 @@ type HEP struct {
 	ProtoString string
 	Timestamp   time.Time
 	NodeName    string
+	TCPFlag     uint8
+	IPTos       uint8
+	MOS         uint16
 }
 
 // DecodeHEP parses a raw HEP3 packet and returns a populated HEP struct.
@@ -163,6 +172,12 @@ func (h *HEP) parseHEP(packet []byte) error {
 			h.Vlan = uint32(binary.BigEndian.Uint16(body))
 		case chunkNodeName:
 			h.NodeName = string(body)
+		case chunkTCPFlag:
+			h.TCPFlag = body[0]
+		case chunkIPTos:
+			h.IPTos = body[0]
+		case chunkMOS:
+			h.MOS = binary.BigEndian.Uint16(body)
 		}
 		currentByte += chunkLen
 	}

@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
-	"syscall"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/fsutil"
 )
 
 // dumpPacket holds raw packet data destined for pcap writing.
@@ -55,7 +56,7 @@ func (s *Sniffer) createPcap(baseFilename string, snaplen int, lt layers.LinkTyp
 		baseFilename += ".gz"
 	}
 	log.Info().Str("file", baseFilename).Msg("Opening pcap file")
-	f, err := os.Create(baseFilename)
+	f, err := fsutil.Create(baseFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +79,29 @@ func (s *Sniffer) createPcap(baseFilename string, snaplen int, lt layers.LinkTyp
 
 // movePcap renames tmpName to a date-stamped path under outDir.
 // Final path: outDir/YYYY/MM/DD/DD.MM.YYYYTHH-MM-SS_nodeNN.pcap[.gz]
+var movePcapMu sync.Mutex
+
+// uniquePath returns path, or path with _2, _3, ... before its extension when
+// path already exists.
+func uniquePath(path string) string {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+	base, ext := path, ""
+	for _, e := range []string{".pcap.gz", ".pcap"} {
+		if strings.HasSuffix(path, e) {
+			base, ext = strings.TrimSuffix(path, e), e
+			break
+		}
+	}
+	for i := 2; ; i++ {
+		p := fmt.Sprintf("%s_%d%s", base, i, ext)
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return p
+		}
+	}
+}
+
 func (s *Sniffer) movePcap(tmpName, outDir string) error {
 	dateStr := time.Now().Format("2006/01/02/02.01.2006T15-04-05") +
 		"_node" + strconv.Itoa(int(s.cfg.SystemSettings.NodeID)) + ".pcap"
@@ -86,9 +110,17 @@ func (s *Sniffer) movePcap(tmpName, outDir string) error {
 		tmpName += ".gz"
 	}
 	newName := filepath.Join(outDir, dateStr)
-	if err := os.MkdirAll(filepath.Dir(newName), 0o777); err != nil {
+	if err := os.MkdirAll(filepath.Dir(newName), fsutil.DirMode); err != nil {
 		return err
 	}
+	if _, err := os.Stat(tmpName); os.IsNotExist(err) {
+		return nil
+	}
+	// Fanout workers rotate in the same second: never overwrite another
+	// worker's file, pick name_2.pcap, name_3.pcap, ... instead.
+	movePcapMu.Lock()
+	defer movePcapMu.Unlock()
+	newName = uniquePath(newName)
 	err := os.Rename(tmpName, newName)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -109,7 +141,13 @@ func (s *Sniffer) dumpPcap(ch <-chan dumpPacket, device string, lt layers.LinkTy
 	}
 
 	snaplen := 65535
-	tmpName := fmt.Sprintf("%s_interface.pcap.tmp", device)
+	// Keep the in-progress file in outDir (not the working directory) so the
+	// final rename stays on one filesystem.
+	if err := os.MkdirAll(outDir, fsutil.DirMode); err != nil {
+		log.Error().Err(err).Str("dir", outDir).Msg("Failed to create pcap directory, pcap writing disabled")
+		return
+	}
+	tmpName := filepath.Join(outDir, fmt.Sprintf("%s_interface.pcap.tmp", filepath.Base(device)))
 
 	// Attempt to move any leftover tmp file from a previous run.
 	if err := s.movePcap(tmpName, outDir); err != nil {
@@ -122,8 +160,6 @@ func (s *Sniffer) dumpPcap(ch <-chan dumpPacket, device string, lt layers.LinkTy
 		return
 	}
 
-	signals := make(chan os.Signal, 2)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	ticker := time.NewTicker(time.Duration(rotateMin) * time.Minute)
 	defer ticker.Stop()
 
@@ -159,14 +195,6 @@ func (s *Sniffer) dumpPcap(ch <-chan dumpPacket, device string, lt layers.LinkTy
 				return
 			}
 
-		case <-signals:
-			log.Info().Msg("pcap writer received stop signal")
-			err = w.Close()
-			if err != nil {
-				log.Error().Err(err).Msg("Error closing pcap on signal")
-			}
-			_ = s.movePcap(tmpName, outDir)
-			os.Exit(0)
 		}
 	}
 }

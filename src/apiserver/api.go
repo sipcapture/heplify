@@ -60,15 +60,16 @@ func RegisterStatsGetter(fn func() WebStats) {
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	healthMu.RLock()
+	connected := healthConnectedTotal
 	payload := map[string]interface{}{
 		"status":               "ok",
-		"connected_transports": healthConnectedTotal,
+		"connected_transports": connected,
 		"queue_size":           healthQueueSize,
 		"buffer_size_bytes":    healthBufferSize,
 	}
 	healthMu.RUnlock()
 
-	if healthConnectedTotal == 0 {
+	if connected == 0 {
 		payload["status"] = "degraded"
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -104,15 +105,39 @@ func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
-		if !ok ||
-			subtle.ConstantTimeCompare([]byte(u), []byte(username)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(p), []byte(password)) != 1 {
+		// Compare fixed-size hashes so the response time does not reveal the
+		// credential lengths; evaluate both to avoid an early exit.
+		userOK := secretEqual(u, username)
+		passOK := secretEqual(p, password)
+		if !ok || !userOK || !passOK {
 			w.Header().Set("WWW-Authenticate", `Basic realm="heplify stats"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		h(w, r)
 	}
+}
+
+// secretEqual compares two secrets in time that depends only on their
+// lengths, not on where they differ. Unlike subtle.ConstantTimeCompare it
+// does not return early when the lengths differ.
+func secretEqual(got, want string) bool {
+	n := len(got)
+	if len(want) > n {
+		n = len(want)
+	}
+	var diff byte
+	for i := 0; i < n; i++ {
+		var a, b byte
+		if i < len(got) {
+			a = got[i]
+		}
+		if i < len(want) {
+			b = want[i]
+		}
+		diff |= a ^ b
+	}
+	return subtle.ConstantTimeEq(int32(len(got)), int32(len(want)))&subtle.ConstantTimeByteEq(diff, 0) == 1
 }
 
 // registerAPI mounts /health and /api/stats on mux.
