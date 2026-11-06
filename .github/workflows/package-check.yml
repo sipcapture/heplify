@@ -1,0 +1,48 @@
+name: Package check
+
+# Build the deb/rpm the way the release does and run static checks on them
+# (scripts/check_package.sh). Only when packaging inputs change.
+on:
+  pull_request:
+    paths:
+      - nfpm.yaml
+      - .goreleaser.yml
+      - Makefile
+      - examples/**
+      - scripts/**
+      - .github/workflows/package-check.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y flex bison lintian rpmlint rpm shellcheck
+
+      # Same key as release.yml, so both workflows share the cache.
+      - name: Cache local libpcap
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/libpcap
+          key: libpcap-1.10.4-amd64-${{ runner.os }}
+
+      - name: Build packages
+        run: make package VERSION=0.0.0
+
+      - name: Check packages
+        run: ./scripts/check_package.sh heplify-0.0.0-amd64.deb heplify-0.0.0-amd64.rpm

@@ -11,7 +11,7 @@
 . /lib/lsb/init-functions
 
 prog=heplify
-BINARY=/usr/local/bin/heplify
+BINARY=/usr/bin/heplify
 CONFIG=/etc/heplify/heplify.json
 PIDFILE=/var/run/${prog}.pid
 DESC="heplify HEP Agent"

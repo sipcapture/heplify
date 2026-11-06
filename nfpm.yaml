@@ -22,18 +22,27 @@ homepage: "https://github.com/sipcapture/heplify"
 # license omitted: nfpm writes "License:" into deb control; Packagecloud may 500.
 contents:
   - src: ./heplify
-    dst: /usr/local/bin/heplify
+    dst: /usr/bin/heplify
 
   - src: ./examples/heplify.json
     dst: /etc/heplify/heplify.json
     type: config|noreplace
+    file_info:
+      mode: 0640
 
   - src: ./examples/example.lua
     dst: /etc/heplify/example.lua
     type: config|noreplace
 
   - src: ./examples/heplify.service
-    dst: /etc/systemd/system/heplify.service
+    dst: /usr/lib/systemd/system/heplify.service
 
   - src: ./examples/heplify.init
     dst: /etc/init.d/heplify
+    file_info:
+      mode: 0755
+
+scripts:
+  postinstall: ./scripts/package/postinstall.sh
+  preremove: ./scripts/package/preremove.sh
+  postremove: ./scripts/package/postremove.sh

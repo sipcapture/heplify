@@ -1,0 +1,8 @@
+# Files, modes and owners expected in the deb and the rpm (directories and
+# maintainer scripts excluded). Format: <mode> <owner>/<group> <path>
+# Checked by scripts/check_package.sh; update it together with nfpm.yaml.
+-rwxr-xr-x root/root /etc/init.d/heplify
+-rw-r--r-- root/root /etc/heplify/example.lua
+-rw-r----- root/root /etc/heplify/heplify.json
+-rw-r--r-- root/root /usr/lib/systemd/system/heplify.service
+-rwxr-xr-x root/root /usr/bin/heplify

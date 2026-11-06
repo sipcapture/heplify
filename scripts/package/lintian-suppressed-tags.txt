@@ -1,0 +1,16 @@
+# Lintian findings that are known and accepted (or tracked for a follow-up).
+# scripts/check_package.sh fails on any other lintian error; this list should
+# only shrink.
+
+# Intentional: the release binary is statically linked against its own libpcap
+# (no DBus/RDMA dependencies, see scripts/build_libpcap.sh).
+statically-linked-binary
+embedded-library
+
+# To do: ship /usr/share/doc/heplify/{copyright,changelog.gz}.
+no-copyright-file
+no-changelog
+
+# To do: the sysv init script is not marked as a conffile nor registered with
+# update-rc.d; drop it or fix it.
+file-in-etc-not-marked-as-conffile
