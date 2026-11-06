@@ -400,7 +400,7 @@ jobs:
           echo "TAG=${TAG}"         >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
 
@@ -451,7 +451,7 @@ jobs:
     env:
       PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: pkgs
           pattern: heplify-linux-*
