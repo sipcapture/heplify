@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-version` and the `Starting heplify` log line show the libpcap version and whether the binary is statically or dynamically linked (#386).
+- Docs: how each artifact (release binaries, deb/rpm, Docker, macOS, Windows) is built and linked, and the NSS limitation of the static Linux binaries (#385, #386).
+- Bug report issue template that asks for the `heplify -version` output.
+
 ## [2.1.0] - 2026-11-06
 
 ### Security

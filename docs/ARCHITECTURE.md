@@ -438,6 +438,32 @@ Shared state is protected by `sync.RWMutex` (sender client list) and
 Systemd unit: `examples/heplify.service`
 SysV init: `examples/heplify.init`
 
+### How each artifact is built and linked
+
+The artifacts are not built the same way, so behaviour can differ between them
+(libpcap version, BPF handling, host name resolution). `heplify -version` and the
+`Starting heplify` log line print the libpcap version and the linkage
+(`static` / `dynamic`), so a bug report shows which build it is about.
+
+| Artifact | libc | libpcap | Built on |
+|----------|------|---------|----------|
+| Release binaries `heplify_linux_amd64` / `_arm64` | static glibc | private copy built by `scripts/build_libpcap.sh` (1.10.4, no DBus/RDMA) | GitHub runners |
+| `.deb` / `.rpm` | static (same binary as the release asset) | same private copy | GitHub runners |
+| Docker image | dynamic, the image's glibc | distribution `libpcap0.8` | `docker/Dockerfile` builder stage |
+| macOS binary / Homebrew | dynamic | libpcap from the build host | `macos-latest` |
+| Windows binary | dynamic | Npcap (`wpcap.dll`), loaded at run time | `windows-latest` |
+
+Which one to use: the Docker image uses the system libpcap and receives its
+updates with the base image; the static Linux binary (and the packages, for now)
+is the portable choice for hosts without libpcap or with an old distribution.
+
+**Static binaries and host names.** glibc cannot load NSS modules (LDAP/sssd,
+mDNS, `nss-resolve`, NIS) into a statically linked program. Names in
+`/etc/hosts` and in DNS resolve normally, but a HEP destination that only an NSS
+module can answer will not resolve with the static binary. Use an IP address,
+an `/etc/hosts` entry or a DNS name in that case, or use a dynamically linked
+build (Docker image, or build from source).
+
 ---
 
 ## Configuration Quick Reference

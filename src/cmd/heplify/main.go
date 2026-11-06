@@ -287,6 +287,8 @@ func main() {
 		Str("git_commit", GitCommit).
 		Str("go_version", runtime.Version()).
 		Str("os_arch", runtime.GOOS+"/"+runtime.GOARCH).
+		Str("linkage", linkage()).
+		Str("libpcap", libpcapVersion()).
 		Msg("Starting heplify")
 
 	var cfg *config.Config
