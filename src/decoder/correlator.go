@@ -10,10 +10,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// CIDCache stores Call-ID correlations for RTCP
-type CIDCache struct {
-	mu    sync.RWMutex
-	items map[string]cacheItem
+// ttlCache is a size-bounded map with per-entry expiry. Both caches below are
+// filled from captured traffic, so without a bound a flood of SDP or RTCP
+// packets with unique addresses could grow them without limit.
+type ttlCache struct {
+	mu         sync.RWMutex
+	items      map[string]cacheItem
+	ttl        time.Duration
+	maxEntries int
 }
 
 type cacheItem struct {
@@ -21,84 +25,85 @@ type cacheItem struct {
 	expires time.Time
 }
 
+// CIDCache stores Call-ID correlations for RTCP
+type CIDCache struct{ ttlCache }
+
 // RTCPCache stores RTCP to Call-ID mappings
-type RTCPCache struct {
-	mu    sync.RWMutex
-	items map[string]cacheItem
-}
+type RTCPCache struct{ ttlCache }
 
 var (
+	// Cache timeouts
+	cidCacheTimeout  = 20 * time.Minute
+	rtcpCacheTimeout = 12 * time.Hour
+
+	// Cache size limits. Each entry is a short key plus a Call-ID.
+	cidCacheMaxEntries  = 200000
+	rtcpCacheMaxEntries = 200000
+
 	// cidCache stores IP:port -> Call-ID mappings from SDP
 	cidCache = NewCIDCache()
 	// rtcpCache stores IP:port:SSRC -> Call-ID mappings
 	rtcpCache = NewRTCPCache()
-
-	// Cache timeouts
-	cidCacheTimeout  = 20 * time.Minute
-	rtcpCacheTimeout = 12 * time.Hour
 )
+
+// maxSDPMedia caps how many m= sections of one SDP body are cached.
+const maxSDPMedia = 32
 
 // NewCIDCache creates a new CID cache
 func NewCIDCache() *CIDCache {
-	c := &CIDCache{
-		items: make(map[string]cacheItem),
-	}
-	go c.cleanup()
+	c := &CIDCache{newTTLCache(cidCacheTimeout, cidCacheMaxEntries)}
+	go c.cleanupEvery(1 * time.Minute)
 	return c
 }
 
 // NewRTCPCache creates a new RTCP cache
 func NewRTCPCache() *RTCPCache {
-	c := &RTCPCache{
-		items: make(map[string]cacheItem),
-	}
-	go c.cleanup()
+	c := &RTCPCache{newTTLCache(rtcpCacheTimeout, rtcpCacheMaxEntries)}
+	go c.cleanupEvery(5 * time.Minute)
 	return c
 }
 
-func (c *CIDCache) Set(key string, value []byte) {
+func newTTLCache(ttl time.Duration, maxEntries int) ttlCache {
+	return ttlCache{items: make(map[string]cacheItem), ttl: ttl, maxEntries: maxEntries}
+}
+
+// Set stores a copy of value under key.
+func (c *ttlCache) Set(key string, value []byte) {
+	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if _, exists := c.items[key]; !exists && c.maxEntries > 0 && len(c.items) >= c.maxEntries {
+		c.evictLocked(now)
+	}
 	c.items[key] = cacheItem{
-		value:   value,
-		expires: time.Now().Add(cidCacheTimeout),
+		// Copy: value usually points into a captured packet buffer.
+		value:   bytes.Clone(value),
+		expires: now.Add(c.ttl),
 	}
 }
 
-func (c *CIDCache) Get(key string) ([]byte, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	item, ok := c.items[key]
-	if !ok || time.Now().After(item.expires) {
-		return nil, false
-	}
-	return item.value, true
-}
-
-func (c *CIDCache) cleanup() {
-	ticker := time.NewTicker(1 * time.Minute)
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		for k, v := range c.items {
-			if now.After(v.expires) {
-				delete(c.items, k)
-			}
+// evictLocked frees room for one entry: expired entries first, otherwise
+// an arbitrary tenth of the cache (map order is random in Go).
+func (c *ttlCache) evictLocked(now time.Time) {
+	for k, v := range c.items {
+		if now.After(v.expires) {
+			delete(c.items, k)
 		}
-		c.mu.Unlock()
+	}
+	if len(c.items) < c.maxEntries {
+		return
+	}
+	n := c.maxEntries/10 + 1
+	for k := range c.items {
+		delete(c.items, k)
+		n--
+		if n == 0 {
+			break
+		}
 	}
 }
 
-func (c *RTCPCache) Set(key string, value []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.items[key] = cacheItem{
-		value:   value,
-		expires: time.Now().Add(rtcpCacheTimeout),
-	}
-}
-
-func (c *RTCPCache) Get(key string) ([]byte, bool) {
+func (c *ttlCache) Get(key string) ([]byte, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	item, ok := c.items[key]
@@ -108,8 +113,15 @@ func (c *RTCPCache) Get(key string) ([]byte, bool) {
 	return item.value, true
 }
 
-func (c *RTCPCache) cleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
+// Len returns the number of stored entries, expired ones included.
+func (c *ttlCache) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.items)
+}
+
+func (c *ttlCache) cleanupEvery(interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		c.mu.Lock()
 		now := time.Now()
@@ -181,6 +193,7 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 	var rtpPort []byte
 	var rtcpMux bool
 	session := true
+	mediaCount := 0
 
 	posLine := 0
 	for posLine < len(content) {
@@ -222,6 +235,12 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 		case 'm':
 			// Media line
 			session = false
+			mediaCount++
+			if mediaCount > maxSDPMedia {
+				// Stop parsing: the previous media is cached below.
+				posLine = len(content)
+				break
+			}
 			// Add keys for previous media
 			if len(rtcpIP) > 0 && len(rtcpPort) > 0 {
 				cacheCID(srcIPb, rtcpIP, rtcpPort, callID)

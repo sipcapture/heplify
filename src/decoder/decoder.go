@@ -65,6 +65,9 @@ type Decoder struct {
 	// IP defragmenters — always active (set to nil to disable via DisableIPDefrag).
 	defrag4 *ip4defrag.IPv4Defragmenter
 	defrag6 *ip6defrag.IPv6Defragmenter
+	// ip4Flows mirrors the flows held by defrag4, which has no size limit of
+	// its own, so the decoder can cap their number and buffered bytes.
+	ip4Flows map[ip4FragKey]*ip4FragState
 
 	// TCPAssembler is optional. When set, all TCP packets are fed to it
 	// instead of being returned from Decode (reassembled SIP arrives via callback).
@@ -108,6 +111,7 @@ func NewDecoder(datalink layers.LinkType) *Decoder {
 		decodedLayers: make([]gopacket.LayerType, 0, 20),
 		defrag4:       ip4defrag.NewIPv4Defragmenter(),
 		defrag6:       ip6defrag.NewIPv6Defragmenter(),
+		ip4Flows:      make(map[ip4FragKey]*ip4FragState),
 	}
 
 	dlp := gopacket.NewDecodingLayerParser(lt)
@@ -324,12 +328,17 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 
 	// IPv4 defragmentation
 	if ip4Fragment && d.defrag4 != nil {
+		key := newIP4FragKey(&d.ip4)
+		if !d.trackIP4Fragment(key, len(d.ip4.Payload), ci.Timestamp) {
+			return nil, nil // over the reassembly limits, drop
+		}
 		// Pass a copy: ip4defrag stores the pointer; d.ip4 is reused on every Decode().
 		ip4Copy := d.ip4
 		ip4New, err := d.defrag4.DefragIPv4WithTimestamp(&ip4Copy, ci.Timestamp)
 		if err != nil || ip4New == nil {
 			return nil, nil // fragment buffered, wait for more
 		}
+		delete(d.ip4Flows, key)
 		// Reassembled — decode transport from the assembled payload.
 		proto, sp, dp, flags, payload, ok := decodeTransport(ip4New.Protocol, ip4New.Payload)
 		if !ok {
@@ -601,11 +610,61 @@ func (d *Decoder) DisableDefrag() {
 func (d *Decoder) DiscardStaleFragments(cutoff time.Time) (ipv4Flows, ipv6Flows int) {
 	if d.defrag4 != nil {
 		ipv4Flows = d.defrag4.DiscardOlderThan(cutoff)
+		for k, st := range d.ip4Flows {
+			if st.lastSeen.Before(cutoff) {
+				delete(d.ip4Flows, k)
+			}
+		}
 	}
 	if d.defrag6 != nil {
 		ipv6Flows = d.defrag6.DiscardOlderThan(cutoff)
 	}
 	return ipv4Flows, ipv6Flows
+}
+
+// Limits for IPv4 reassembly, matching the IPv6 defragmenter.
+const (
+	ip4MaxFragFlows = ip6defrag.IPv6MaximumFlows
+	ip4MaxFlowBytes = ip6defrag.IPv6MaximumFlowBytes
+)
+
+type ip4FragKey struct {
+	src, dst [4]byte
+	id       uint16
+}
+
+type ip4FragState struct {
+	bytes    int
+	lastSeen time.Time
+}
+
+func newIP4FragKey(ip *layers.IPv4) ip4FragKey {
+	var k ip4FragKey
+	copy(k.src[:], ip.SrcIP.To4())
+	copy(k.dst[:], ip.DstIP.To4())
+	k.id = ip.Id
+	return k
+}
+
+// trackIP4Fragment accounts one fragment and reports whether it may be
+// handed to the defragmenter. New flows are refused once ip4MaxFragFlows
+// are open, and a flow stops accepting fragments after ip4MaxFlowBytes;
+// such a flow is freed by DiscardStaleFragments.
+func (d *Decoder) trackIP4Fragment(key ip4FragKey, n int, ts time.Time) bool {
+	st, ok := d.ip4Flows[key]
+	if !ok {
+		if len(d.ip4Flows) >= ip4MaxFragFlows {
+			return false
+		}
+		st = &ip4FragState{}
+		d.ip4Flows[key] = st
+	}
+	st.lastSeen = ts
+	if st.bytes+n > ip4MaxFlowBytes {
+		return false
+	}
+	st.bytes += n
+	return true
 }
 
 // boolToUint8 converts bool to uint8 (0 or 1)

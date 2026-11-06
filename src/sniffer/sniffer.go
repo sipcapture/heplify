@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"hash/maphash"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -63,6 +64,7 @@ type Sniffer struct {
 	sender     Sender            // global fallback sender (used by SetSender / syslog)
 	senders    map[string]Sender // per-socket senders keyed by socket.Name
 	dedupCache *lru.Cache
+	dedupSeed  maphash.Seed
 	stats      *Stats
 	carriers   *carrierResolver
 	sipMethods sipMethodSet
@@ -130,6 +132,7 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 		lua:        lua,
 		senders:    make(map[string]Sender),
 		dedupCache: cache,
+		dedupSeed:  maphash.MakeSeed(),
 		stats:      NewStats(),
 		carriers:   newCarrierResolver(cfg.PrometheusSettings.Carriers),
 		sipMethods: newSIPMethodSet(cfg.PrometheusSettings.SIPMethods),
@@ -755,9 +758,11 @@ func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decod
 		}
 	}
 
-	// Deduplication (global, keyed on full payload)
+	// Deduplication (global). The key is a seeded 64-bit hash of the payload,
+	// so the cache holds 8 bytes per entry instead of a copy of every packet.
+	// The random seed keeps outsiders from crafting colliding payloads.
 	if s.cfg.HepSettings.Deduplicate && s.dedupCache != nil {
-		key := string(pkt.Payload)
+		key := maphash.Bytes(s.dedupSeed, pkt.Payload)
 		if s.dedupCache.Contains(key) {
 			s.stats.Inc(StatDuplicates)
 			return
