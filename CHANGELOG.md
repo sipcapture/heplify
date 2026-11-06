@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Service user is `homer:homer`**: the Docker image and the systemd unit now run as `homer:homer`, the user of the other HOMER components, instead of `heplify` / a dynamic user. The unit uses an existing `homer` user when there is one. Mounted output directories must be writable by `homer`.
+
 ## [2.1.0] - 2026-11-06
 
 ### Security

@@ -341,7 +341,7 @@ export HEPLIFY_LOG_SETTINGS_STDOUT=true
 FROM sipcapture/heplify:latest
 ```
 
-The image runs as the unprivileged `heplify` user with the `NET_RAW`
+The image runs as the unprivileged `homer:homer` user with the `NET_RAW`
 capability, which is enough for capture. To let heplify switch an interface
 into promiscuous mode, add `--user root --cap-add NET_ADMIN`, or enable
 promiscuous mode on the host interface instead. Relative output paths

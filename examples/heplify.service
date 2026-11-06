@@ -19,9 +19,13 @@ RestartSec=3s
 Type=simple
 LimitNOFILE=65536
 
-# Run as an unprivileged, throw-away user with only the capabilities that
+# Run as an unprivileged user with only the capabilities that
 # packet capture needs: NET_RAW for AF_PACKET/pcap, NET_ADMIN for promiscuous
 # mode and fanout, NET_BIND_SERVICE for collector/API ports below 1024.
+# Runs as homer:homer. If that user exists (for example from a HOMER
+# install) it is used; otherwise systemd creates it dynamically.
+User=homer
+Group=homer
 DynamicUser=yes
 AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
