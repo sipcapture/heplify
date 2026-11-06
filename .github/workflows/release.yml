@@ -94,7 +94,7 @@ jobs:
       - name: Cache local libpcap
         if: matrix.goos == 'linux'
         id: cache-libpcap
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build/libpcap
           key: libpcap-1.10.4-${{ matrix.goarch }}-${{ runner.os }}
