@@ -115,18 +115,39 @@ func (e *Engine) Close() {
 	e.L.Close()
 }
 
-// SetPacket sets the current packet for Lua functions
+// SetPacket sets the current packet for Lua functions.
+//
+// Deprecated: SetPacket followed by OnPacket is not atomic, so with several
+// capture workers one worker's script can see another worker's packet. Use
+// ProcessPacket instead.
 func (e *Engine) SetPacket(pkt *decoder.Packet) {
 	e.mu.Lock()
 	e.pkt = pkt
 	e.mu.Unlock()
 }
 
+// ProcessPacket runs onPacket for pkt. The packet is bound and the script
+// runs under one lock hold, so concurrent capture workers cannot swap packets.
+func (e *Engine) ProcessPacket(pkt *decoder.Packet, packetInfo string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.pkt = pkt
+	e.callOnPacketLocked(packetInfo)
+	e.pkt = nil
+}
+
 // OnPacket calls the onPacket function in Lua with protocol info
 func (e *Engine) OnPacket(packetInfo string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.callOnPacketLocked(packetInfo)
+}
 
+// callOnPacketLocked runs onPacket; e.mu must be held. The Go functions the
+// script calls (GetHEPSrcIP, HashTable, ...) run inside this call on the same
+// goroutine and must not lock e.mu again: sync.Mutex is not reentrant and the
+// capture goroutine would deadlock on the first packet.
+func (e *Engine) callOnPacketLocked(packetInfo string) {
 	fn := e.L.GetGlobal("onPacket")
 	if fn == lua.LNil {
 		return
@@ -158,12 +179,10 @@ func (e *Engine) Run(funcName string) error {
 	})
 }
 
-// Lua function implementations
+// Lua function implementations. They are only called from Lua code that runs
+// while e.mu is held (ProcessPacket, OnPacket, Run), so they must not lock.
 
 func (e *Engine) getHEPProtoType(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LNumber(0))
 		return 1
@@ -173,9 +192,6 @@ func (e *Engine) getHEPProtoType(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPSrcIP(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LString(""))
 		return 1
@@ -185,9 +201,6 @@ func (e *Engine) getHEPSrcIP(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPSrcPort(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LNumber(0))
 		return 1
@@ -197,9 +210,6 @@ func (e *Engine) getHEPSrcPort(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPDstIP(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LString(""))
 		return 1
@@ -209,9 +219,6 @@ func (e *Engine) getHEPDstIP(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPDstPort(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LNumber(0))
 		return 1
@@ -221,9 +228,6 @@ func (e *Engine) getHEPDstPort(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPTimeSeconds(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LNumber(0))
 		return 1
@@ -233,9 +237,6 @@ func (e *Engine) getHEPTimeSeconds(L *lua.LState) int {
 }
 
 func (e *Engine) getHEPTimeUseconds(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LNumber(0))
 		return 1
@@ -245,9 +246,6 @@ func (e *Engine) getHEPTimeUseconds(L *lua.LState) int {
 }
 
 func (e *Engine) getRawMessage(L *lua.LState) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.pkt == nil {
 		L.Push(lua.LString(""))
 		return 1
@@ -258,9 +256,6 @@ func (e *Engine) getRawMessage(L *lua.LState) int {
 
 func (e *Engine) setRawMessage(L *lua.LState) int {
 	value := L.CheckString(1)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	if e.pkt == nil {
 		log.Error().Msg("Cannot set RawMessage: packet is nil")
@@ -273,9 +268,6 @@ func (e *Engine) setRawMessage(L *lua.LState) int {
 func (e *Engine) setHEPField(L *lua.LState) int {
 	field := L.CheckString(1)
 	value := L.CheckString(2)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	if e.pkt == nil {
 		log.Error().Msg("Cannot set HEP field: packet is nil")
@@ -313,9 +305,6 @@ func (e *Engine) setHEPField(L *lua.LState) int {
 func (e *Engine) hashTable(L *lua.LState) int {
 	op := L.CheckString(1)
 	key := L.CheckString(2)
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	switch op {
 	case "set":

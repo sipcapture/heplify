@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -557,6 +558,8 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 }
 
 func (s *Sniffer) processPacket(data []byte, ci gopacket.CaptureInfo, dec *decoder.Decoder, socket config.SocketSettings, sender Sender) {
+	// One malformed packet must never take down the capture process.
+	defer recoverPacketPanic("capture", data)
 	processedNum := atomic.AddUint64(&processedPacketsForDebug, 1)
 	pkt, err := dec.Decode(data, ci)
 	if err != nil || pkt == nil {
@@ -865,8 +868,7 @@ func (s *Sniffer) callLua(pkt *decoder.Packet) {
 	if s.lua == nil {
 		return
 	}
-	s.lua.SetPacket(pkt)
-	s.lua.OnPacket(fmt.Sprintf("%d", pkt.ProtoType))
+	s.lua.ProcessPacket(pkt, fmt.Sprintf("%d", pkt.ProtoType))
 }
 
 func (s *Sniffer) sendHEP(pkt *decoder.Packet, protoType byte, sender Sender) {
@@ -938,11 +940,30 @@ func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16
 		log.Debug().Str("payload", string(pkt.Payload[:min(200, len(pkt.Payload))])).Msg("[payload]")
 	}
 
-	sender.SendNoErr(hep.Encode(msg))
+	data := hep.Encode(msg)
+	if data == nil {
+		log.Debug().Int("payload", len(pkt.Payload)).Int("cid", len(pkt.CID)).Msg("HEP packet too large, dropped")
+		return
+	}
+	sender.SendNoErr(data)
 	s.stats.Inc(StatHEPSent)
 }
 
 // --- helpers ---
+
+// recoverPacketPanic logs and swallows a panic raised while handling one
+// untrusted packet, so a parser bug drops that packet instead of the process.
+func recoverPacketPanic(where string, data []byte) {
+	if r := recover(); r != nil {
+		apiserver.IncPacketPanic(where)
+		log.Error().
+			Str("where", where).
+			Interface("panic", r).
+			Str("stack", string(debug.Stack())).
+			Str("packet_hex", formatPayloadHex(data)).
+			Msg("Recovered from panic while processing packet")
+	}
+}
 
 func matchProtocol(setting config.ProtocolSettings, proto byte) bool {
 	for _, p := range setting.Protocol {

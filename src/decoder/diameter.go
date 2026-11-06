@@ -197,11 +197,7 @@ func parseOneDiameter(payload []byte) (DiameterMessage, bool) {
 		}
 		report.AVPs = append(report.AVPs, avp)
 
-		pad := length
-		if pad%4 != 0 {
-			pad += 4 - (pad % 4)
-		}
-		avpData = avpData[pad:]
+		avpData = avpData[diameterPaddedLen(length, len(avpData)):]
 	}
 
 	js, err := json.Marshal(report)
@@ -254,13 +250,22 @@ func parseGroupedAVPs(data []byte) []DiameterAVP {
 			avp.Vendor = diameterVendorName(vendorID)
 		}
 		avps = append(avps, avp)
-		pad := length
-		if pad%4 != 0 {
-			pad += 4 - (pad % 4)
-		}
-		buf = buf[pad:]
+		buf = buf[diameterPaddedLen(length, len(buf)):]
 	}
 	return avps
+}
+
+// diameterPaddedLen returns the AVP length rounded up to 4 bytes, capped at
+// avail. The last AVP of a message may omit its padding.
+func diameterPaddedLen(length uint32, avail int) int {
+	pad := int(length)
+	if pad%4 != 0 {
+		pad += 4 - (pad % 4)
+	}
+	if pad > avail {
+		pad = avail
+	}
+	return pad
 }
 
 func decodeDiameterAVPData(code uint32, raw []byte) interface{} {

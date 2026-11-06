@@ -41,6 +41,7 @@ func (s *Sniffer) startSyslogCapture() {
 
 // processSyslog parses a syslog line, extracts Call-ID and sends HEP type=100.
 func (s *Sniffer) processSyslog(payload []byte, remote net.Addr) {
+	defer recoverPacketPanic("syslog", payload)
 	cid := extractSyslogCID(payload)
 
 	udpAddr, _ := net.ResolveUDPAddr("udp", remote.String())

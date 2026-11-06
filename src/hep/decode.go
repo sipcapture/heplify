@@ -29,6 +29,25 @@ const (
 	chunkNodeName  = 19
 )
 
+// chunkBodyLen is the exact body size of each fixed-size chunk type.
+// Chunks with a wrong size are rejected so the decoder never indexes past
+// the body (a 6-byte chunk with an empty body used to panic).
+var chunkBodyLen = map[uint16]int{
+	chunkVersion:   1,
+	chunkProtocol:  1,
+	chunkIP4SrcIP:  4,
+	chunkIP4DstIP:  4,
+	chunkIP6SrcIP:  16,
+	chunkIP6DstIP:  16,
+	chunkSrcPort:   2,
+	chunkDstPort:   2,
+	chunkTsec:      4,
+	chunkTmsec:     4,
+	chunkProtoType: 1,
+	chunkNodeID:    4,
+	chunkVlan:      2,
+}
+
 // HEP holds a decoded HEP v2/v3 packet.
 type HEP struct {
 	Version     uint32
@@ -80,6 +99,14 @@ func (h *HEP) parseHEP(packet []byte) error {
 			return fmt.Errorf("HEP chunk length %d invalid (available %d)", chunkLen, len(hepChunk))
 		}
 		body := hepChunk[6:chunkLen]
+		if binary.BigEndian.Uint16(hepChunk[0:2]) != 0 {
+			// Vendor-specific chunk: type IDs are not the generic ones, skip it.
+			currentByte += chunkLen
+			continue
+		}
+		if want, fixed := chunkBodyLen[chunkType]; fixed && len(body) != want {
+			return fmt.Errorf("HEP chunk type %d has body length %d, want %d", chunkType, len(body), want)
+		}
 
 		switch chunkType {
 		case chunkVersion:

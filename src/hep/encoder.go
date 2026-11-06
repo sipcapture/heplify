@@ -51,9 +51,28 @@ type Msg struct {
 	MOS       uint16
 }
 
+// MaxPacketSize is the largest HEP3 packet: the total length field is 16 bits.
+const MaxPacketSize = 0xFFFF
+
 // Encode serialises a Msg into a HEP3 binary packet.
+//
+// A payload that would push the packet past MaxPacketSize is truncated, since
+// the 16-bit length fields would otherwise wrap. On a TCP/TLS transport a
+// wrapped length makes the server read the rest of the payload as new HEP
+// packets, which lets captured traffic inject forged HEP. Encode returns nil
+// when even the headers do not fit (for example a huge CID).
 func Encode(m *Msg) []byte {
 	size := m.size()
+	if size > MaxPacketSize {
+		over := size - MaxPacketSize
+		if len(m.Payload) <= over {
+			return nil
+		}
+		trimmed := *m
+		trimmed.Payload = m.Payload[:len(m.Payload)-over]
+		m = &trimmed
+		size = m.size()
+	}
 	buf := make([]byte, size)
 	n := 0
 

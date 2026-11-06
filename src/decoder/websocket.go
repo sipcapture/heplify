@@ -87,6 +87,21 @@ func ReadWSHeader(data []byte) (WSHeader, error) {
 	return h, nil
 }
 
+// WSFrameLen returns the total length (header + payload) of the WebSocket
+// frame at the start of data. It returns ErrWSHeaderTooShort when the header
+// is incomplete; the frame body itself may still be partial.
+func WSFrameLen(data []byte) (int, error) {
+	h, err := ReadWSHeader(data)
+	if err != nil {
+		return 0, err
+	}
+	const maxInt = int64(^uint(0) >> 1)
+	if h.Length < 0 || h.Length > maxInt-int64(h.Offset) {
+		return 0, ErrWSHeaderLengthUnexpected
+	}
+	return h.Offset + int(h.Length), nil
+}
+
 // WSPayload extracts and unmasks WebSocket payload
 func WSPayload(data []byte) ([]byte, error) {
 	h, err := ReadWSHeader(data)
@@ -94,7 +109,9 @@ func WSPayload(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if int64(len(data)) < int64(h.Offset)+h.Length {
+	// Compare without adding: Offset+Length can overflow int64 for a
+	// 63-bit length and slip past a naive bounds check.
+	if h.Length < 0 || h.Length > int64(len(data)-h.Offset) {
 		return nil, ErrWSHeaderTooShort
 	}
 
