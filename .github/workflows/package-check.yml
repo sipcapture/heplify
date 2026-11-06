@@ -1,7 +1,9 @@
 name: Package check
 
-# Build the deb/rpm the way the release does and run static checks on them
-# (scripts/check_package.sh). Only when packaging inputs change.
+# Build the deb/rpm the way the release does, run static checks on them
+# (scripts/check_package.sh), then install/upgrade/remove tests in clean
+# containers and an end-to-end run of the service on the runner VM
+# (scripts/test_package.sh). Only when packaging inputs change.
 on:
   pull_request:
     paths:
@@ -42,8 +44,81 @@ jobs:
           path: build/libpcap
           key: libpcap-1.10.4-amd64-${{ runner.os }}
 
+      # Higher than any release, so installing it over the latest release is
+      # an upgrade.
       - name: Build packages
-        run: make package VERSION=0.0.0
+        run: make package VERSION=99.0.0
 
       - name: Check packages
-        run: ./scripts/check_package.sh heplify-0.0.0-amd64.deb heplify-0.0.0-amd64.rpm
+        run: ./scripts/check_package.sh heplify-99.0.0-amd64.deb heplify-99.0.0-amd64.rpm
+
+      - name: Upload packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: |
+            heplify-99.0.0-amd64.deb
+            heplify-99.0.0-amd64.rpm
+          retention-days: 3
+
+  # Install, upgrade from the latest published release, reinstall, remove and
+  # purge in clean containers. No systemd there: see the e2e job for that.
+  lifecycle:
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12", pkg: deb }
+          - { image: "debian:13", pkg: deb }
+          - { image: "ubuntu:22.04", pkg: deb }
+          - { image: "ubuntu:24.04", pkg: deb }
+          - { image: "rockylinux:9", pkg: rpm }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+
+      - name: Download the latest release package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PKG: ${{ matrix.pkg }}
+        run: |
+          mkdir -p old
+          gh release download --repo "${GITHUB_REPOSITORY}" --dir old --pattern "heplify_*_amd64.${PKG}"
+          ls -l old
+
+      - name: Fresh install
+        env:
+          IMAGE: ${{ matrix.image }}
+          PKG: ${{ matrix.pkg }}
+        run: ./scripts/test_package.sh lifecycle "${IMAGE}" "heplify-99.0.0-amd64.${PKG}"
+
+      - name: Upgrade from the latest release
+        env:
+          IMAGE: ${{ matrix.image }}
+          PKG: ${{ matrix.pkg }}
+        run: ./scripts/test_package.sh lifecycle "${IMAGE}" "heplify-99.0.0-amd64.${PKG}" old/heplify_*_amd64."${PKG}"
+
+  # The runner is a full VM with systemd: run the packaged service for real
+  # (homer user, reduced capabilities, sandbox) and check that a SIP packet on
+  # lo arrives as HEP3 at a local listener.
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+
+      - name: End-to-end test
+        run: ./scripts/test_package.sh e2e heplify-99.0.0-amd64.deb
