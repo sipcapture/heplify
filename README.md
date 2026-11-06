@@ -114,15 +114,13 @@ journalctl -u heplify -f
     ReadWritePaths=/path/to/dir
     ```
 
-  - *Ports below 1024* (for example a collector or API listening on UDP 514 or TCP 443) fail with `bind: permission denied`, because the service only has `CAP_NET_RAW` and `CAP_NET_ADMIN`. Either use a port of 1024 or above, or grant the capability:
-
-    ```ini
-    [Service]
-    AmbientCapabilities=CAP_NET_BIND_SERVICE
-    CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-    ```
-
   - *Files named in the configuration* (TLS certificates and keys, Lua scripts, pcap files to read) must be readable by the `homer` user and must not be under `/home` or `/root`. For a key owned by another group, add `SupplementaryGroups=<group>` in the drop-in.
+
+The static Linux release binaries and the `.rpm` are statically linked (the `.deb` uses the system libc and libpcap). With the static ones, host names of HEP
+destinations (`-hs`, `transport[]`) must resolve through `/etc/hosts` or DNS: glibc cannot
+load NSS modules (LDAP/sssd, mDNS, `nss-resolve`) into a static binary. See
+[how each artifact is built](docs/ARCHITECTURE.md#how-each-artifact-is-built-and-linked).
+`heplify -version` shows the libpcap version and whether the binary is static.
 
 ### macOS (Apple Silicon)
 

@@ -23,5 +23,7 @@ func printVersion() {
 	fmt.Printf("  Git commit : %s\n", GitCommit)
 	fmt.Printf("  Go version : %s\n", runtime.Version())
 	fmt.Printf("  OS/Arch    : %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("  Linkage    : %s\n", linkage())
+	fmt.Printf("  libpcap    : %s\n", libpcapVersion())
 	fmt.Printf("  Go MAXPROCS: %d / NumCPU: %d\n", runtime.GOMAXPROCS(0), runtime.NumCPU())
 }
