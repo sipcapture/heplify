@@ -10,8 +10,8 @@
 class Heplify < Formula
   desc "HEP capture agent for Homer / SIP capture (SIP, RTCP, logs, HEP forward)"
   homepage "https://github.com/sipcapture/heplify"
-  url "https://github.com/sipcapture/heplify/releases/download/2.0.28/heplify_darwin_arm64"
-  sha256 "6c1cf3039112ecb146b7f1696dcd9f4cd8912ed46a2d571ceea714c790e28b4b"
+  url "https://github.com/sipcapture/heplify/releases/download/2.1.0/heplify_darwin_arm64"
+  sha256 "5348d7b0666046002d821049e3bf3e20d4b0ebe1568620899d54e1a4cfc07971"
   license "AGPL-3.0-or-later"
 
   livecheck do
