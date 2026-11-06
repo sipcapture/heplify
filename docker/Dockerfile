@@ -31,9 +31,11 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends libpcap0.8 ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system heplify && \
-    useradd --system --gid heplify --home-dir /var/lib/heplify --create-home \
-            --shell /usr/sbin/nologin heplify
+# Same user and group as the other HOMER components, so files shared
+# with them (pcap dumps, buffer files on a volume) have one owner.
+RUN groupadd --system homer && \
+    useradd --system --gid homer --home-dir /var/lib/heplify --create-home \
+            --shell /usr/sbin/nologin homer
 
 COPY --from=builder /build/heplify /usr/local/bin/heplify
 
@@ -56,8 +58,8 @@ ENV HEPLIFY_CONFIG=/etc/heplify/heplify.json
 # well: either enable promisc on the host interface, or run the container
 # with --user root --cap-add NET_ADMIN.
 # Relative output paths (buffer file, pcap dumps) land in /var/lib/heplify,
-# so a mounted output volume must be writable by the heplify user.
-USER heplify
+# so a mounted output volume must be writable by the homer user.
+USER homer:homer
 WORKDIR /var/lib/heplify
 
 ENTRYPOINT ["heplify"]
