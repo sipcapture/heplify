@@ -177,6 +177,13 @@ type TransportSettings struct {
 	Password     string `json:"password" mapstructure:"password"`
 	PayloadZip   bool   `json:"payload_zip" mapstructure:"payload_zip"`
 	SkipVerify   bool   `json:"skip_verify" mapstructure:"skip_verify"`
+	// TLS options (transport "tls" and grpc-flight with tls_enabled):
+	// CAFile verifies the server against a private CA, CertFile/KeyFile
+	// present a client certificate (mTLS), ServerName overrides the name checked.
+	CAFile     string `json:"ca_file" mapstructure:"ca_file"`
+	CertFile   string `json:"cert_file" mapstructure:"cert_file"`
+	KeyFile    string `json:"key_file" mapstructure:"key_file"`
+	ServerName string `json:"server_name" mapstructure:"server_name"`
 	KeepAlive    int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
 	MaxRetries   int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
 	// Arrow Flight fields (used when transport = "grpc-flight")
@@ -227,6 +234,9 @@ func (c *Config) Validate() error {
 			case "udp", "tcp", "tls", "grpc-flight", "":
 			default:
 				return fmt.Errorf("transport[%d] has unsupported transport: %s", i, t.Transport)
+			}
+			if (t.CertFile == "") != (t.KeyFile == "") {
+				return fmt.Errorf("transport[%d]: cert_file and key_file must be set together", i)
 			}
 		}
 	}

@@ -29,6 +29,11 @@ const (
 	initialReconnectBackoff = time.Second
 	maxReconnectBackoff     = 30 * time.Second
 	maxDrainBatchMessages   = 1000
+
+	// dialTimeout and writeTimeout keep a dead or stalled HEP server from
+	// blocking the single send worker forever.
+	dialTimeout  = 10 * time.Second
+	writeTimeout = 5 * time.Second
 )
 
 // clientKind identifies the underlying transport type.
@@ -56,6 +61,7 @@ type HEPClient struct {
 	keepAlive    int
 	payloadZip   bool
 	maxRetries   int // 0 = unlimited
+	tlsConfig    *tls.Config
 	conn         net.Conn
 	errCnt       uint
 	state        clientState
@@ -135,8 +141,24 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 			proto = "udp"
 		}
 
+		var tlsCfg *tls.Config
+		if strings.ToLower(proto) == "tls" {
+			c, err := buildTLSConfig(t)
+			if err != nil {
+				log.Error().Str("component", "sender").Str("addr", fmt.Sprintf("%s:%d", t.Host, t.Port)).
+					Err(err).Msg("Invalid TLS settings, transport disabled")
+				continue
+			}
+			tlsCfg = c
+		} else if cfg.SystemSettings.NodePW != "" {
+			log.Warn().Str("component", "sender").Str("addr", fmt.Sprintf("%s:%d", t.Host, t.Port)).
+				Str("transport", proto).
+				Msg("node_pw is sent in clear text on this transport; use transport \"tls\" to protect it")
+		}
+
 		hc := &HEPClient{
-			addr:       fmt.Sprintf("%s:%d", t.Host, t.Port),
+			tlsConfig:  tlsCfg,
+			addr:       net.JoinHostPort(t.Host, fmt.Sprint(t.Port)),
 			proto:      proto,
 			skipVerify: t.SkipVerify,
 			keepAlive:  t.KeepAlive,
@@ -165,9 +187,9 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 	switch client.proto {
 	case "udp":
-		return net.Dial("udp", client.addr)
+		return net.DialTimeout("udp", client.addr, dialTimeout)
 	case "tcp":
-		conn, err := net.Dial("tcp", client.addr)
+		conn, err := net.DialTimeout("tcp", client.addr, dialTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -184,11 +206,11 @@ func (s *Sender) dial(client *HEPClient) (net.Conn, error) {
 		if client.skipVerify {
 			log.Warn().Str("addr", client.addr).Msg("TLS skip_verify is enabled; certificate verification is disabled")
 		}
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: client.skipVerify,
-			MinVersion:         tls.VersionTLS12,
+		tlsConfig := client.tlsConfig
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{InsecureSkipVerify: client.skipVerify, MinVersion: tls.VersionTLS12} //nolint:gosec // opt-in
 		}
-		tlsConn, err := tls.Dial("tcp", client.addr, tlsConfig)
+		tlsConn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, "tcp", client.addr, tlsConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -338,6 +360,12 @@ func (s *Sender) handleWriteError(client *HEPClient, failedConn net.Conn, err er
 	s.scheduleReconnect(client, "write error")
 }
 
+// writeWithDeadline writes b with a write deadline. UDP ignores it.
+func writeWithDeadline(conn net.Conn, b []byte) (int, error) {
+	_ = conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	return conn.Write(b)
+}
+
 // startWorker processes the HEP queue
 func (s *Sender) startWorker() {
 	defer s.workerWG.Done()
@@ -420,7 +448,7 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 			}
 		}
 
-		n, err := conn.Write(data)
+		n, err := writeWithDeadline(conn, data)
 		if err != nil {
 			s.handleWriteError(client, conn, err, msg, len(data))
 			if !sent {
@@ -595,7 +623,7 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 			client.mu.Unlock()
 			break
 		}
-		_, err := conn.Write(msg)
+		_, err := writeWithDeadline(conn, msg)
 		client.mu.Unlock()
 		if err != nil {
 			ev := log.Error().Str("component", "sender").Err(err).Str("reason", "buffer drain write")
