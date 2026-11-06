@@ -40,7 +40,8 @@ type PacketSource interface {
 
 // pcapWrapper wraps pcap.Handle to implement PacketSource
 type pcapWrapper struct {
-	handle *pcap.Handle
+	handle    *pcap.Handle
+	closeOnce sync.Once
 }
 
 func (p *pcapWrapper) ReadPacketData() ([]byte, gopacket.CaptureInfo, error) {
@@ -48,7 +49,7 @@ func (p *pcapWrapper) ReadPacketData() ([]byte, gopacket.CaptureInfo, error) {
 }
 
 func (p *pcapWrapper) Close() {
-	p.handle.Close()
+	p.closeOnce.Do(p.handle.Close)
 }
 
 func (p *pcapWrapper) LinkType() layers.LinkType {
@@ -72,6 +73,12 @@ type Sniffer struct {
 
 	mu      sync.Mutex     // guards sources
 	sources []PacketSource // all active capture sources; closed by Stop()
+
+	wg       sync.WaitGroup // capture goroutines and pcap writers
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	exitCh   chan struct{} // closed when pcap replay asks the process to exit
+	exitOnce sync.Once
 }
 
 type debugFlags struct {
@@ -130,7 +137,29 @@ func New(cfg *config.Config, lua *script.Engine) *Sniffer {
 			cfg.PrometheusSettings.PromTargetIP,
 			cfg.PrometheusSettings.PromTargetName,
 		),
-		debug: dbg,
+		debug:  dbg,
+		stopCh: make(chan struct{}),
+		exitCh: make(chan struct{}),
+	}
+}
+
+// Done is closed when capture asks the process to exit (pcap replay
+// finished with eof_exit or loop_count reached). main shuts down cleanly on it
+// instead of the capture goroutine calling os.Exit.
+func (s *Sniffer) Done() <-chan struct{} {
+	return s.exitCh
+}
+
+func (s *Sniffer) requestExit() {
+	s.exitOnce.Do(func() { close(s.exitCh) })
+}
+
+func (s *Sniffer) stopping() bool {
+	select {
+	case <-s.stopCh:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -178,18 +207,40 @@ func (s *Sniffer) deregisterSource(src PacketSource) {
 	}
 }
 
-// Stop gracefully closes all active packet sources.
-// Closing a source unblocks any goroutine blocked in ReadPacketData, which
-// causes the capture goroutine to return and execute its deferred cleanup
-// (including restoring promiscuous mode on any affected interfaces).
+// Stop asks every capture goroutine to finish and waits for them, so pcap
+// files are flushed and promiscuous mode is restored before exit.
+//
+// Sources are not closed from here at first: closing an AF_PACKET ring (or a
+// pcap handle) while another goroutine is inside ReadPacketData unmaps memory
+// under it and crashes the process (SIGSEGV). Each capture loop sees the stop
+// flag at its next read timeout (10 ms by default) and closes its own source.
+// Only if a loop is still stuck after 3 s are the sources closed forcibly.
 func (s *Sniffer) Stop() {
+	s.stopOnce.Do(func() { close(s.stopCh) })
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return
+	case <-time.After(3 * time.Second):
+	}
+
+	log.Warn().Msg("Capture goroutines did not stop in time, closing packet sources")
 	s.mu.Lock()
 	srcs := make([]PacketSource, len(s.sources))
 	copy(srcs, s.sources)
 	s.mu.Unlock()
-
 	for _, src := range srcs {
 		src.Close()
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		log.Warn().Msg("Timed out waiting for capture goroutines to stop")
 	}
 }
 
@@ -205,7 +256,8 @@ func (s *Sniffer) Start() error {
 			go s.startSyslogCapture()
 		}
 
-		if socket.SocketType == "afpacket" && socket.FanoutWorkers > 1 {
+		// A pcap file is always read by one goroutine; fanout applies to live AF_PACKET only.
+		if socket.SocketType == "afpacket" && socket.FanoutWorkers > 1 && socket.PcapFile == "" {
 			if socket.FanoutID == 0 {
 				// Without a shared non-zero FanoutID the kernel never creates
 				// a fanout group, so every socket receives the full traffic
@@ -221,10 +273,18 @@ func (s *Sniffer) Start() error {
 					Msg("Auto-assigned fanout group ID")
 			}
 			for i := 0; i < socket.FanoutWorkers; i++ {
-				go s.captureAFPacket(socket, i)
+				s.wg.Add(1)
+				go func(id int) {
+					defer s.wg.Done()
+					s.captureAFPacket(socket, id)
+				}(i)
 			}
 		} else {
-			go s.capture(socket)
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				s.capture(socket)
+			}()
 		}
 	}
 	// Start per-minute stats logging
@@ -267,7 +327,12 @@ func (s *Sniffer) capture(socket config.SocketSettings) {
 	var dumpCh chan<- dumpPacket
 	if s.cfg.PcapSettings.WriteFile != "" {
 		ch := make(chan dumpPacket, 100000)
-		go s.dumpPcap(ch, socket.Device, source.LinkType())
+		lt := source.LinkType() // read now: the goroutine may outlive source
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.dumpPcap(ch, socket.Device, lt)
+		}()
 		dumpCh = ch
 	}
 
@@ -293,7 +358,13 @@ func (s *Sniffer) captureAFPacket(socket config.SocketSettings, workerID int) {
 	var dumpCh chan<- dumpPacket
 	if s.cfg.PcapSettings.WriteFile != "" {
 		ch := make(chan dumpPacket, 100000)
-		go s.dumpPcap(ch, fmt.Sprintf("%s_w%d", socket.Device, workerID), source.LinkType())
+		lt := source.LinkType() // read now: the goroutine may outlive source
+		name := fmt.Sprintf("%s_w%d", socket.Device, workerID)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.dumpPcap(ch, name, lt)
+		}()
 		dumpCh = ch
 	}
 
@@ -437,33 +508,14 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 	return filter
 }
 
-func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings, dumpCh chan<- dumpPacket, sender Sender) {
-	dec := decoder.NewDecoder(source.LinkType())
-	packetCount := 0
-
-	// IP defragmentation: enabled by default, disabled via disable_ip_defrag.
+// newDecoder builds a decoder for one capture source with the configured
+// defragmentation and TCP reassembly. It is called again for every pcap replay
+// loop so later loops behave like the first one.
+func (s *Sniffer) newDecoder(linkType layers.LinkType, sender Sender) *decoder.Decoder {
+	dec := decoder.NewDecoder(linkType)
 	if s.cfg.DebugSettings.DisableIPDefrag {
 		dec.DisableDefrag()
-	} else {
-		// Drop stale incomplete fragment flows (legacy heplify v1: every 1 minute).
-		go func() {
-			interval := decoder.IPFragmentFlushInterval
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
-			for range ticker.C {
-				cutoff := time.Now().Add(-interval)
-				v4, v6 := dec.DiscardStaleFragments(cutoff)
-				if (v4 > 0 || v6 > 0) && s.debug.defrag {
-					log.Debug().
-						Int("ipv4_flows", v4).
-						Int("ipv6_flows", v6).
-						Dur("max_age", interval).
-						Msg("[defrag] discarded stale incomplete IP fragment flows")
-				}
-			}
-		}()
 	}
-
 	// TCP reassembly: enabled by default, disabled via disable_tcp_reassembly.
 	// The assembler also Length-frames Diameter (version 0x01) before SIP text.
 	if !s.cfg.DebugSettings.DisableTcpReassembly {
@@ -474,30 +526,70 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 			}
 			s.handleSIP(pkt, sender)
 		})
-		// Capture the assembler in a local variable so that the goroutine is not
-		// affected when dec is reassigned during pcap replay loops.
-		assembler := dec.TCPAssembler
-		// Flush streams that have been silent for >1 s, checked every 200 ms.
-		// The short window is intentional: it lets the assembler deliver data
-		// from half-open streams (no SYN captured) within ~1 s instead of
-		// waiting the full 30 s that would otherwise be needed.  For fully
-		// established streams, in-order segments are delivered immediately on
-		// arrival, so the flush timer only affects streams with gaps/loss;
-		// a 1 s patience is sufficient for typical TCP retransmission timers.
+	}
+	return dec
+}
+
+// Housekeeping intervals, measured in capture time (packet timestamps).
+const (
+	tcpFlushEvery = 200 * time.Millisecond
+	// tcpStreamIdle: streams silent for longer are flushed. The short window
+	// lets the assembler deliver data from half-open streams (no SYN captured)
+	// within ~1 s; in-order segments of established streams are delivered on
+	// arrival anyway.
+	tcpStreamIdle = time.Second
+)
+
+func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettings, dumpCh chan<- dumpPacket, sender Sender) {
+	if dumpCh != nil {
+		// Closing the channel lets the pcap writer flush and rotate its file.
+		defer close(dumpCh)
+	}
+	pcapFile := socket.PcapFile
+	dec := s.newDecoder(source.LinkType(), sender)
+	packetCount := 0
+
+	// Live capture: flush idle TCP streams on a wall-clock timer, so the last
+	// message of a quiet half-open stream is still delivered. The assembler
+	// has its own lock. For pcap replay the flush runs in the loop below on
+	// packet time instead: a wall-clock cutoff would close every stream of an
+	// old capture on each tick.
+	stop := make(chan struct{})
+	defer close(stop)
+	var assemblerMu sync.Mutex
+	currentAssembler := func() *decoder.SIPAssembler {
+		assemblerMu.Lock()
+		defer assemblerMu.Unlock()
+		return dec.TCPAssembler
+	}
+	if pcapFile == "" && dec.TCPAssembler != nil {
 		go func() {
-			ticker := time.NewTicker(200 * time.Millisecond)
+			ticker := time.NewTicker(tcpFlushEvery)
 			defer ticker.Stop()
-			for range ticker.C {
-				assembler.FlushOlderThan(time.Now().Add(-time.Second))
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					if a := currentAssembler(); a != nil {
+						a.FlushOlderThan(time.Now().Add(-tcpStreamIdle))
+					}
+				}
 			}
 		}()
 	}
 
+	// Stale IP fragments are dropped from this goroutine (the defragmenters
+	// are not safe for concurrent use), on capture time.
+	var lastFragFlush, lastTCPFlush time.Time
+
 	loopCount := s.cfg.PcapSettings.LoopCount
 	loopsDone := 0
-	pcapFile := socket.PcapFile
 
 	for {
+		if s.stopping() {
+			return
+		}
 		data, ci, err := source.ReadPacketData()
 		if err != nil {
 			if afh, ok := source.(*afpacketHandle); ok && afh.IsErrTimeout(err) {
@@ -507,9 +599,14 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 				if pcapFile != "" {
 					// pcap replay finished
 					loopsDone++
+					if dec.TCPAssembler != nil {
+						// Deliver whatever the last streams of the file still hold.
+						dec.TCPAssembler.FlushAll()
+					}
 					if s.cfg.PcapSettings.EOFExit || (loopCount > 0 && loopsDone >= loopCount) {
 						log.Info().Msg("End of pcap file, exiting")
-						os.Exit(0)
+						s.requestExit()
+						return
 					}
 					// Loop: reopen the file
 					newHandle, rerr := pcap.OpenOffline(pcapFile)
@@ -517,13 +614,22 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 						log.Error().Err(rerr).Msg("Failed to reopen pcap file for loop")
 						return
 					}
+					s.deregisterSource(source)
 					source.Close()
 					source = &pcapWrapper{handle: newHandle}
-					dec = decoder.NewDecoder(source.LinkType())
+					s.registerSource(source)
+					newDec := s.newDecoder(source.LinkType(), sender)
+					assemblerMu.Lock()
+					dec = newDec
+					assemblerMu.Unlock()
+					lastFragFlush, lastTCPFlush = time.Time{}, time.Time{}
 					log.Info().Int("loop", loopsDone+1).Msg("Restarting pcap replay")
 					continue
 				}
 				log.Info().Msg("End of pcap file")
+				return
+			}
+			if s.stopping() {
 				return
 			}
 			log.Debug().Err(err).Msg("Error reading packet")
@@ -554,6 +660,29 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 		}
 
 		s.processPacket(data, ci, dec, socket, sender)
+
+		now := ci.Timestamp
+		if lastFragFlush.IsZero() {
+			lastFragFlush = now
+		} else if now.Sub(lastFragFlush) >= decoder.IPFragmentFlushInterval {
+			v4, v6 := dec.DiscardStaleFragments(now.Add(-decoder.IPFragmentFlushInterval))
+			lastFragFlush = now
+			if (v4 > 0 || v6 > 0) && s.debug.defrag {
+				log.Debug().
+					Int("ipv4_flows", v4).
+					Int("ipv6_flows", v6).
+					Dur("max_age", decoder.IPFragmentFlushInterval).
+					Msg("[defrag] discarded stale incomplete IP fragment flows")
+			}
+		}
+		if pcapFile != "" && dec.TCPAssembler != nil {
+			if lastTCPFlush.IsZero() {
+				lastTCPFlush = now
+			} else if now.Sub(lastTCPFlush) >= tcpFlushEvery {
+				dec.TCPAssembler.FlushOlderThan(now.Add(-tcpStreamIdle))
+				lastTCPFlush = now
+			}
+		}
 	}
 }
 

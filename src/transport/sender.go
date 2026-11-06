@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
+	"github.com/sipcapture/heplify/src/fsutil"
 )
 
 type clientState string
@@ -531,7 +533,7 @@ func (s *Sender) bufferToFile(data []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	f, err := os.OpenFile(s.bufferFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := fsutil.Append(s.bufferFile)
 	if err != nil {
 		log.Error().Str("component", "sender").Err(err).Msg("Failed to open buffer file")
 		return
@@ -648,18 +650,43 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 			Msg("Sent buffered HEP messages")
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if bytesConsumed >= len(data) {
+		// bufferToFile may have appended while we were sending (it only
+		// appends), so keep everything after what we consumed, including
+		// those new messages. Rewriting from the old snapshot lost them.
+		current, err := os.ReadFile(s.bufferFile)
+		if err != nil {
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to re-read buffer file")
+			return
+		}
+		if len(current) < bytesConsumed {
+			// Someone else truncated the file; nothing safe to rewrite.
+			return
+		}
+		remaining := current[bytesConsumed:]
+		if len(remaining) == 0 {
 			_ = os.Truncate(s.bufferFile, 0)
 			apiserver.SetBufferSizeBytes(0)
 			return
 		}
-		remaining := data[bytesConsumed:]
-		tmpFile := s.bufferFile + ".tmp"
-		if err := os.WriteFile(tmpFile, remaining, 0600); err != nil {
+		tmp, err := os.CreateTemp(filepath.Dir(s.bufferFile), filepath.Base(s.bufferFile)+".*.tmp")
+		if err != nil {
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to create temporary drain file")
+			return
+		}
+		tmpFile := tmp.Name()
+		if _, err := tmp.Write(remaining); err != nil {
+			tmp.Close()
+			_ = os.Remove(tmpFile)
+			log.Error().Str("component", "sender").Err(err).Msg("Failed to write temporary drain file")
+			return
+		}
+		if err := tmp.Close(); err != nil {
+			_ = os.Remove(tmpFile)
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to write temporary drain file")
 			return
 		}
 		if err := os.Rename(tmpFile, s.bufferFile); err != nil {
+			_ = os.Remove(tmpFile)
 			log.Error().Str("component", "sender").Err(err).Msg("Failed to atomically replace buffer file")
 			return
 		}

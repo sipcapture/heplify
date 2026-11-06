@@ -12,6 +12,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/fsutil"
 )
 
 // Rotator manages PCAP file rotation
@@ -101,13 +102,13 @@ func (r *Rotator) rotateUnlocked() error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, fsutil.DirMode); err != nil {
 		return fmt.Errorf("failed to create directory: %v", err)
 	}
 
 	// Open new file
 	var err error
-	r.file, err = os.Create(filename)
+	r.file, err = fsutil.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create pcap file: %v", err)
 	}

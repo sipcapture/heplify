@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -110,7 +111,13 @@ type afpacketHandle struct {
 	TPacket       *afpacket.TPacket
 	linkType      layers.LinkType
 	promiscIfaces []string // interfaces put into promisc by us; restored in Close
+	closeOnce     sync.Once
 }
+
+// afpacketPollTimeout bounds how long ReadPacketData blocks on an idle
+// interface, so a capture loop notices Stop within this time and closes its
+// own ring (closing it from another goroutine mid-read crashes the process).
+const afpacketPollTimeout = 500 * time.Millisecond
 
 // newAfpacketHandle creates a new AF_PACKET handle
 func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
@@ -133,7 +140,7 @@ func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
 			afpacket.OptFrameSize(snaplen),
 			afpacket.OptBlockSize(blockSize),
 			afpacket.OptNumBlocks(numBlocks),
-			afpacket.OptPollTimeout(10*time.Second),
+			afpacket.OptPollTimeout(afpacketPollTimeout),
 			afpacket.OptBlockTimeout(timeout),
 			afpacket.OptAddVLANHeader(vlan),
 			afpacket.SocketRaw,
@@ -144,7 +151,7 @@ func newAfpacketHandle(device string, snaplen int, blockSize int, numBlocks int,
 			afpacket.OptFrameSize(snaplen),
 			afpacket.OptBlockSize(blockSize),
 			afpacket.OptNumBlocks(numBlocks),
-			afpacket.OptPollTimeout(10*time.Second),
+			afpacket.OptPollTimeout(afpacketPollTimeout),
 			afpacket.OptBlockTimeout(timeout),
 			afpacket.OptAddVLANHeader(vlan),
 			afpacket.SocketRaw,
@@ -238,6 +245,11 @@ func (h *afpacketHandle) LinkType() layers.LinkType {
 
 // Close closes the handle
 func (h *afpacketHandle) Close() {
+	// Closing twice would unmap the ring twice.
+	h.closeOnce.Do(h.close)
+}
+
+func (h *afpacketHandle) close() {
 	for _, name := range h.promiscIfaces {
 		if err := setInterfacePromisc(name, false); err != nil {
 			log.Warn().Err(err).Str("interface", name).Msg("Failed to restore promiscuous mode")

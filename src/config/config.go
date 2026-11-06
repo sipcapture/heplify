@@ -184,8 +184,8 @@ type TransportSettings struct {
 	CertFile   string `json:"cert_file" mapstructure:"cert_file"`
 	KeyFile    string `json:"key_file" mapstructure:"key_file"`
 	ServerName string `json:"server_name" mapstructure:"server_name"`
-	KeepAlive    int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
-	MaxRetries   int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
+	KeepAlive  int    `json:"keepalive" mapstructure:"keepalive"`     // TCP keepalive in seconds, 0 = disabled
+	MaxRetries int    `json:"max_retries" mapstructure:"max_retries"` // max reconnect attempts, 0 = unlimited
 	// Arrow Flight fields (used when transport = "grpc-flight")
 	TLSEnabled      bool   `json:"tls_enabled"       mapstructure:"tls_enabled"`
 	StreamName      string `json:"stream_name"       mapstructure:"stream_name"`

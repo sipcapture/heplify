@@ -46,6 +46,13 @@ func (a *SIPAssembler) FlushOlderThan(t time.Time) {
 	a.asm.FlushOlderThan(t)
 }
 
+// FlushAll delivers and closes every stream (end of a pcap file).
+func (a *SIPAssembler) FlushAll() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.asm.FlushAll()
+}
+
 // ── stream factory ────────────────────────────────────────────────────────────
 
 type sipStreamFactory struct{ cb SIPCallback }
