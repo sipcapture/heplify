@@ -1,44 +1,63 @@
 # systemd unit for heplify
 #
-# Install:
+# Install (the deb/rpm packages do all of this, including creating the user):
+#   getent group homer >/dev/null || groupadd --system homer
+#   getent passwd homer >/dev/null || useradd --system --gid homer \
+#       --home-dir /var/lib/heplify --no-create-home --shell /usr/sbin/nologin homer
 #   cp heplify.service /etc/systemd/system/
+#   (the packages install the binary to /usr/bin/heplify; adjust ExecStart if
+#   you installed it elsewhere, e.g. /usr/local/bin/heplify)
 #   systemctl daemon-reload
 #   systemctl enable --now heplify
+#
+# The packages install this unit to /usr/lib/systemd/system/; customize it with
+# 'systemctl edit heplify' (drop-in) rather than by editing the file.
+#
+# The service runs as homer:homer, the user shared with the other HOMER
+# components, with only CAP_NET_RAW (packet capture), CAP_NET_ADMIN
+# (promiscuous mode, socket buffer sizing) and CAP_NET_BIND_SERVICE (collector,
+# API or Prometheus ports below 1024). The filesystem is read-only except
+# /var/lib/heplify (StateDirectory, also the working directory: relative paths
+# such as the HEP buffer file "hep-buffer.dump" end up there) and
+# /var/log/heplify.
+#
+# Adjust it with a drop-in ('systemctl edit heplify'), for example:
+#
+# - The configuration writes outside /var/lib/heplify (pcap output file, ...):
+#     [Service]
+#     ReadWritePaths=/path/to/dir
+#
+# - Files named in the configuration (TLS certificates and keys, Lua scripts,
+#   pcap files to read) must be readable by the homer user and must not live
+#   under /home or /root (ProtectHome=yes). For a key owned by another group,
+#   add it with SupplementaryGroups=<group> in a drop-in.
 
 [Unit]
 Description=heplify - HEP Agent and Collector
 Documentation=https://github.com/sipcapture/heplify
-After=network.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
+Type=simple
 Environment="HEPLIFY_CONFIG=/etc/heplify/heplify.json"
-ExecStart=/usr/local/bin/heplify -config ${HEPLIFY_CONFIG}
+ExecStart=/usr/bin/heplify -config ${HEPLIFY_CONFIG}
 Restart=always
 RestartSec=3s
-Type=simple
 LimitNOFILE=65536
 
-# Run as an unprivileged user with only the capabilities that
-# packet capture needs: NET_RAW for AF_PACKET/pcap, NET_ADMIN for promiscuous
-# mode and fanout, NET_BIND_SERVICE for collector/API ports below 1024.
-# Runs as homer:homer. If that user exists (for example from a HOMER
-# install) it is used; otherwise systemd creates it dynamically.
 User=homer
 Group=homer
-DynamicUser=yes
-AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
-
-# Relative paths in the config (hep-buffer.dump, pcap output) end up in
-# /var/lib/heplify, the only writable place besides /var/log/heplify.
 StateDirectory=heplify
+StateDirectoryMode=0750
 LogsDirectory=heplify
 WorkingDirectory=/var/lib/heplify
 UMask=0077
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 
 # Sandboxing
+NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
@@ -49,12 +68,12 @@ ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
-RestrictNamespaces=yes
-RestrictRealtime=yes
 RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_PACKET AF_NETLINK
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK AF_PACKET
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged

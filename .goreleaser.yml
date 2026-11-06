@@ -63,8 +63,8 @@ archives:
     files:
       - README.md
       - LICENSE
-      - heplify.json
-      - example.lua
+      - examples/heplify.json
+      - examples/example.lua
 
   - id: heplify-static
     ids:
@@ -75,8 +75,8 @@ archives:
     files:
       - README.md
       - LICENSE
-      - heplify.json
-      - example.lua
+      - examples/heplify.json
+      - examples/example.lua
 
 nfpms:
   - id: heplify-deb-rpm
@@ -93,12 +93,24 @@ nfpms:
       - rpm
     bindir: /usr/bin
     contents:
-      - src: heplify.json
+      - src: examples/heplify.json
         dst: /etc/heplify/heplify.json
         type: config|noreplace
-      - src: example.lua
+        file_info:
+          mode: 0640
+      - src: examples/example.lua
         dst: /etc/heplify/example.lua
         type: config|noreplace
+      - src: examples/heplify.service
+        dst: /usr/lib/systemd/system/heplify.service
+      - src: examples/heplify.init
+        dst: /etc/init.d/heplify
+        file_info:
+          mode: 0755
+    scripts:
+      postinstall: scripts/package/postinstall.sh
+      preremove: scripts/package/preremove.sh
+      postremove: scripts/package/postremove.sh
 
 checksum:
   name_template: "checksums.txt"

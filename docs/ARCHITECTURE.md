@@ -26,7 +26,7 @@ heplify/
 ├── script/             # Lua scripting engine (gopher-lua)
 ├── sniffer/            # Packet capture, decode loop, protocol dispatch
 ├── transport/          # HEP sender (TCP/UDP/TLS) and Arrow Flight client
-├── docker/             # Dockerfile and docker-compose
+├── docker/             # Dockerfile and Compose file
 ├── examples/           # systemd unit file and SysV init script
 ├── scripts/            # Package build helper (nfpm → deb/rpm)
 ├── docs/               # Documentation
@@ -448,13 +448,14 @@ The artifacts are not built the same way, so behaviour can differ between them
 | Artifact | libc | libpcap | Built on |
 |----------|------|---------|----------|
 | Release binaries `heplify_linux_amd64` / `_arm64` | static glibc | private copy built by `scripts/build_libpcap.sh` (1.10.4, no DBus/RDMA) | GitHub runners |
-| `.deb` / `.rpm` | static (same binary as the release asset) | same private copy | GitHub runners |
+| `.deb` | dynamic, system glibc (>= 2.34) | system `libpcap0.8` | Debian 12 container (`scripts/build_deb_binary.sh`) |
+| `.rpm` | static (same binary as the release asset) | same private copy | GitHub runners |
 | Docker image | dynamic, the image's glibc | distribution `libpcap0.8` | `docker/Dockerfile` builder stage |
 | macOS binary / Homebrew | dynamic | libpcap from the build host | `macos-latest` |
 | Windows binary | dynamic | Npcap (`wpcap.dll`), loaded at run time | `windows-latest` |
 
 Which one to use: the Docker image uses the system libpcap and receives its
-updates with the base image; the static Linux binary (and the packages, for now)
+updates with the base image; the `.deb` does the same on Debian/Ubuntu; the static Linux binary (and the `.rpm`)
 is the portable choice for hosts without libpcap or with an old distribution.
 
 **Static binaries and host names.** glibc cannot load NSS modules (LDAP/sssd,
@@ -462,7 +463,7 @@ mDNS, `nss-resolve`, NIS) into a statically linked program. Names in
 `/etc/hosts` and in DNS resolve normally, but a HEP destination that only an NSS
 module can answer will not resolve with the static binary. Use an IP address,
 an `/etc/hosts` entry or a DNS name in that case, or use a dynamically linked
-build (Docker image, or build from source).
+build (Docker image, `.deb`, or build from source).
 
 ---
 

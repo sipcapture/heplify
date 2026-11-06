@@ -1,0 +1,18 @@
+# rpmlint findings that are known and accepted (or tracked for a follow-up).
+# scripts/check_package.sh fails on any other rpmlint error; this list should
+# only shrink.
+
+# Intentional: statically linked binary (see scripts/build_libpcap.sh).
+addFilter("statically-linked-binary")
+
+# Intentional: heplify.json may hold passwords and is 0640 root:homer.
+addFilter("non-readable")
+
+# nfpm declares a self-referencing provides/replaces.
+addFilter("useless-provides")
+
+# Not produced by nfpm / not signed yet.
+addFilter("no-signature")
+addFilter("no-license")
+addFilter("no-group-tag")
+addFilter("no-changelogname-tag")

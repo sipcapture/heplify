@@ -1,4 +1,6 @@
-version: "3.9"
+# Usage (from the repository root):
+#   docker compose -f docker/compose.yaml up --build -d
+# Edit examples/heplify.json (or point the bind mount at your own copy) first.
 
 services:
   heplify:
@@ -10,18 +12,16 @@ services:
     restart: unless-stopped
     network_mode: host
     cap_add:
-      - NET_ADMIN
       - NET_RAW
+      - NET_ADMIN
     volumes:
-      - ./config/heplify.json:/etc/heplify/heplify.json:ro
-      - ./config/script.lua:/etc/heplify/script.lua:ro
-    environment:
-      - HEPLIFY_CONFIG=/etc/heplify/heplify.json
-    command:
-      - -config
-      - /etc/heplify/heplify.json
+      - ../examples/heplify.json:/etc/heplify/heplify.json:ro
+      - heplify-data:/var/lib/heplify
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
+
+volumes:
+  heplify-data:

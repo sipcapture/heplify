@@ -31,6 +31,8 @@ Agent B ──HEP──▶
 | `workers` | `8` | Goroutines that decode and forward received packets. The queue holds 10000 packets; more are dropped |
 | `read_timeout_sec` | `60` | Idle timeout for one TCP/TLS connection |
 
+> **Privileged ports:** a `port` below 1024 (for example `514`) needs `CAP_NET_BIND_SERVICE`. The packaged systemd unit and the Docker image grant it; when you run heplify some other way as a normal user, grant it yourself or use a port of 1024 or above. The same applies to the API and Prometheus listeners.
+
 ### Supported protocols
 
 | Value | Description |
