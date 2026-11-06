@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Go minor version used for builds; setup-go picks its latest patch.
+  GO_VERSION: "1.25.x"
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,7 +24,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest patch of the go.mod minor version: go.mod says 1.25.0, and
+          # building with that exact release ships stdlib bugs fixed since.
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
           cache: true
 
       - name: Install system dependencies
@@ -53,7 +60,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Latest patch of the go.mod minor version: go.mod says 1.25.0, and
+          # building with that exact release ships stdlib bugs fixed since.
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
           cache: true
 
       - name: Install system dependencies
@@ -70,3 +80,51 @@ jobs:
         with:
           version: v2.4
           args: --timeout=5m
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y libpcap-dev
+
+      # Fails on known vulnerabilities in reachable code, stdlib included.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      # Informational for now: report findings without failing the build.
+      - name: gosec
+        continue-on-error: true
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -quiet -exclude-dir=examples ./...
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
+      - name: Install system dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y libpcap-dev
+
+      - name: Fuzz parsers (20s each)
+        run: ./scripts/fuzz.sh 20s
