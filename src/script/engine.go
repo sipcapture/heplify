@@ -1,6 +1,7 @@
 package script
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -8,7 +9,9 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/config"
@@ -27,21 +30,88 @@ type Engine struct {
 	stopCh     chan struct{}
 }
 
-// New creates a new Lua engine
-func New(cfg *config.Config) *Engine {
-	L := lua.NewState(lua.Options{
+// defaultScriptTimeout bounds one call into the script, so a runaway loop
+// cannot stall the capture goroutine (and every other worker waiting on e.mu).
+const defaultScriptTimeout = 100 * time.Millisecond
+
+// maxHashEntries caps the HashTable store shared by all script calls.
+const maxHashEntries = 100000
+
+// newState creates a Lua state. Unless unsafe is set, only libraries that
+// cannot reach the file system, run programs or load code are opened.
+func newState(unsafe bool) *lua.LState {
+	opts := lua.Options{
 		CallStackSize: 120,
 		RegistrySize:  120 * 20,
-	})
+		SkipOpenLibs:  !unsafe,
+	}
+	L := lua.NewState(opts)
+	if unsafe {
+		return L
+	}
+	for _, lib := range []struct {
+		name string
+		fn   lua.LGFunction
+	}{
+		{lua.BaseLibName, lua.OpenBase},
+		{lua.TabLibName, lua.OpenTable},
+		{lua.StringLibName, lua.OpenString},
+		{lua.MathLibName, lua.OpenMath},
+		{lua.OsLibName, lua.OpenOs},
+	} {
+		L.Push(L.NewFunction(lib.fn))
+		L.Push(lua.LString(lib.name))
+		L.Call(1, 0)
+	}
+	// Base library functions that load code from files or strings.
+	for _, name := range []string{"dofile", "loadfile", "load", "loadstring", "require", "module"} {
+		L.SetGlobal(name, lua.LNil)
+	}
+	// Keep only the harmless part of os.
+	if osTab, ok := L.GetGlobal(lua.OsLibName).(*lua.LTable); ok {
+		safe := L.NewTable()
+		for _, name := range []string{"time", "date", "clock", "difftime"} {
+			safe.RawSetString(name, osTab.RawGetString(name))
+		}
+		L.SetGlobal(lua.OsLibName, safe)
+	}
+	return L
+}
 
+func (e *Engine) unsafeLibs() bool {
+	return e.cfg != nil && e.cfg.ScriptSettings.Unsafe
+}
+
+func (e *Engine) callTimeout() time.Duration {
+	if e.cfg == nil || e.cfg.ScriptSettings.TimeoutMs == 0 {
+		return defaultScriptTimeout
+	}
+	if e.cfg.ScriptSettings.TimeoutMs < 0 {
+		return 0
+	}
+	return time.Duration(e.cfg.ScriptSettings.TimeoutMs) * time.Millisecond
+}
+
+// callLocked runs fn with the call timeout applied; e.mu must be held.
+func (e *Engine) callLocked(fn lua.LValue, args ...lua.LValue) error {
+	if d := e.callTimeout(); d > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), d)
+		defer cancel()
+		e.L.SetContext(ctx)
+		defer e.L.RemoveContext()
+	}
+	return e.L.CallByParam(lua.P{Fn: fn, NRet: 0, Protect: true}, args...)
+}
+
+// New creates a new Lua engine
+func New(cfg *config.Config) *Engine {
 	e := &Engine{
-		L:        L,
 		cfg:      cfg,
 		hashData: make(map[string]interface{}),
 		stopCh:   make(chan struct{}),
 	}
 
-	// Register functions
+	e.L = newState(e.unsafeLibs())
 	e.registerFunctions()
 
 	return e
@@ -79,7 +149,11 @@ func (e *Engine) LoadScript(path string) error {
 }
 
 func (e *Engine) loadScriptLocked(path string) error {
-	if err := e.L.DoFile(path); err != nil {
+	fn, err := e.L.LoadFile(path)
+	if err == nil {
+		err = e.callLocked(fn)
+	}
+	if err != nil {
 		log.Error().Err(err).Str("file", path).Msg("Failed to load Lua script")
 		return err
 	}
@@ -98,10 +172,7 @@ func (e *Engine) Reload() error {
 
 	// Reset the Lua state
 	e.L.Close()
-	e.L = lua.NewState(lua.Options{
-		CallStackSize: 120,
-		RegistrySize:  120 * 20,
-	})
+	e.L = newState(e.unsafeLibs())
 	e.registerFunctions()
 
 	return e.loadScriptLocked(e.scriptFile)
@@ -153,11 +224,7 @@ func (e *Engine) callOnPacketLocked(packetInfo string) {
 		return
 	}
 
-	if err := e.L.CallByParam(lua.P{
-		Fn:      fn,
-		NRet:    0,
-		Protect: true,
-	}, lua.LString(packetInfo)); err != nil {
+	if err := e.callLocked(fn, lua.LString(packetInfo)); err != nil {
 		log.Debug().Err(err).Msg("Lua onPacket error")
 	}
 }
@@ -172,11 +239,7 @@ func (e *Engine) Run(funcName string) error {
 		return nil
 	}
 
-	return e.L.CallByParam(lua.P{
-		Fn:      fn,
-		NRet:    0,
-		Protect: true,
-	})
+	return e.callLocked(fn)
 }
 
 // Lua function implementations. They are only called from Lua code that runs
@@ -308,6 +371,10 @@ func (e *Engine) hashTable(L *lua.LState) int {
 
 	switch op {
 	case "set":
+		if _, exists := e.hashData[key]; !exists && len(e.hashData) >= maxHashEntries {
+			L.RaiseError("HashTable is full (%d entries); delete old keys", maxHashEntries)
+			return 0
+		}
 		val := L.Get(3)
 		switch v := val.(type) {
 		case lua.LString:
@@ -378,7 +445,14 @@ func (e *Engine) hashString(L *lua.LState) int {
 
 func (e *Engine) logp(L *lua.LState) int {
 	level := L.CheckString(1)
-	message := L.CheckString(2)
+	// The message often carries packet text; strip control characters so it
+	// cannot forge extra lines in plain-text log output.
+	message := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, L.CheckString(2))
 	data := L.Get(3)
 
 	var dataStr string

@@ -69,6 +69,10 @@ type Decoder struct {
 	// its own, so the decoder can cap their number and buffered bytes.
 	ip4Flows map[ip4FragKey]*ip4FragState
 
+	// TunnelSourceAllowed, when set, is asked for the outer source address of
+	// every tunneled packet; packets it rejects are dropped.
+	TunnelSourceAllowed func(net.IP) bool
+
 	// TCPAssembler is optional. When set, all TCP packets are fed to it
 	// instead of being returned from Decode (reassembled SIP arrives via callback).
 	TCPAssembler *SIPAssembler
@@ -174,12 +178,22 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 	var foundIP, foundTransport bool
 	var ip4Fragment, ip6Fragment bool
 
+	// The parser reuses one IPv4/IPv6 struct, so for a tunnel the outer
+	// header is already overwritten by the inner one. Read the outer source
+	// from the raw frame instead.
+	tunnelOK := func() bool {
+		return d.TunnelSourceAllowed == nil || d.TunnelSourceAllowed(outerSrcIP(d.layerType, data))
+	}
+
 	for _, layerType := range d.decodedLayers {
 		switch layerType {
 		case layers.LayerTypeDot1Q:
 			pkt.Vlan = d.d1q.VLANIdentifier
 
 		case layers.LayerTypeIPv4:
+			if foundIP && !tunnelOK() {
+				return nil, nil // IP-in-IP or GRE from an unknown endpoint
+			}
 			pkt.Version = 0x02
 			pkt.SrcIP = d.ip4.SrcIP
 			pkt.DstIP = d.ip4.DstIP
@@ -190,6 +204,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case layers.LayerTypeIPv6:
+			if foundIP && !tunnelOK() {
+				return nil, nil
+			}
 			pkt.Version = 0x0a
 			pkt.SrcIP = d.ip6.SrcIP
 			pkt.DstIP = d.ip6.DstIP
@@ -221,6 +238,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			foundTransport = true
 
 		case layers.LayerTypeVXLAN:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			if len(d.vxl.Payload) > 0 {
 				if innerPkt := d.decodeInnerPacket(d.vxl.Payload, ci); innerPkt != nil {
 					return innerPkt, nil
@@ -228,6 +248,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case ownlayers.LayerTypeERSPAN:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			if d.erspan.VLan > 0 {
 				pkt.Vlan = d.erspan.VLan
 			}
@@ -238,6 +261,9 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 			}
 
 		case layers.LayerTypeGRE:
+			if !tunnelOK() {
+				return nil, nil
+			}
 			log.Debug().
 				Str("gre_proto", d.gre.Protocol.String()).
 				Int("gre_payload_len", len(d.gre.Payload)).
@@ -403,6 +429,51 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 	}
 
 	return pkt, nil
+}
+
+// outerSrcIP returns the source address of the first IP header in a frame
+// of the given link layer, or nil if it cannot be found.
+func outerSrcIP(lt gopacket.LayerType, data []byte) net.IP {
+	off := 0
+	var etherType uint16
+	switch lt {
+	case layers.LayerTypeEthernet:
+		if len(data) < 14 {
+			return nil
+		}
+		etherType = binary.BigEndian.Uint16(data[12:14])
+		off = 14
+		for (etherType == 0x8100 || etherType == 0x88a8) && len(data) >= off+4 {
+			etherType = binary.BigEndian.Uint16(data[off+2 : off+4])
+			off += 4
+		}
+	case layers.LayerTypeLinuxSLL:
+		if len(data) < 16 {
+			return nil
+		}
+		etherType = binary.BigEndian.Uint16(data[14:16])
+		off = 16
+	default: // raw IP
+		if len(data) == 0 {
+			return nil
+		}
+		if data[0]>>4 == 6 {
+			etherType = 0x86dd
+		} else {
+			etherType = 0x0800
+		}
+	}
+	switch etherType {
+	case 0x0800:
+		if len(data) >= off+20 {
+			return net.IP(data[off+12 : off+16])
+		}
+	case 0x86dd:
+		if len(data) >= off+40 {
+			return net.IP(data[off+8 : off+24])
+		}
+	}
+	return nil
 }
 
 // decodeInnerPacket decodes an inner Ethernet frame (e.g., from VXLAN or ERSPAN)

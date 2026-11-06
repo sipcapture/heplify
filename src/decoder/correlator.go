@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"strconv"
 	"sync"
@@ -134,19 +135,12 @@ func (c *ttlCache) cleanupEvery(interval time.Duration) {
 	}
 }
 
-// Header names for SIP parsing
+var errHeaderNotFound = errors.New("header not found")
+
+// Header names for SIP parsing (full and compact forms).
 var (
-	contentTypeHeaderNames = [][]byte{
-		[]byte("Content-Type:"),
-		[]byte("content-type:"),
-		[]byte("c:"),
-	}
-	callIdHeaderNames = [][]byte{
-		[]byte("Call-ID:"),
-		[]byte("call-id:"),
-		[]byte("Call-Id:"),
-		[]byte("i:"),
-	}
+	contentTypeHeaderNames = []string{"Content-Type", "c"}
+	callIdHeaderNames      = []string{"Call-ID", "i"}
 )
 
 // ExtractCID extracts Call-ID from SIP and caches RTCP IP:port mappings from SDP
@@ -167,6 +161,7 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 	if err != nil {
 		return
 	}
+	contentType = bytes.ToLower(contentType)
 
 	multipart := false
 	if !bytes.HasPrefix(contentType, []byte("application/sdp")) {
@@ -174,7 +169,7 @@ func ExtractCID(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, payl
 			return
 		}
 		multipart = true
-		if !bytes.Contains(payload, []byte("application/sdp")) {
+		if !bytes.Contains(bytes.ToLower(content), []byte("application/sdp")) {
 			return
 		}
 	}
@@ -380,22 +375,9 @@ func CorrelateRTCP(srcIP net.IP, srcPort uint16, dstIP net.IP, dstPort uint16, p
 }
 
 // getHeaderValue extracts a header value from SIP headers
-func getHeaderValue(headerNames [][]byte, headers []byte) ([]byte, error) {
-	for _, name := range headerNames {
-		pos := bytes.Index(headers, name)
-		if pos < 0 {
-			continue
-		}
-
-		// Find end of line
-		rest := headers[pos+len(name):]
-		endPos := bytes.Index(rest, []byte("\r\n"))
-		if endPos < 0 {
-			endPos = len(rest)
-		}
-
-		value := bytes.TrimSpace(rest[:endPos])
-		return value, nil
+func getHeaderValue(headerNames []string, headers []byte) ([]byte, error) {
+	if v, ok := sipHeader(headers, headerNames...); ok {
+		return v, nil
 	}
-	return nil, bytes.ErrTooLarge
+	return nil, errHeaderNotFound
 }

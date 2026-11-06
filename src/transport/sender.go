@@ -57,11 +57,14 @@ type transportClient struct {
 
 // HEPClient represents a single HEP server connection
 type HEPClient struct {
-	addr         string
-	proto        string
-	skipVerify   bool
-	keepAlive    int
-	payloadZip   bool
+	addr       string
+	proto      string
+	skipVerify bool
+	keepAlive  int
+	payloadZip bool
+	// writeMu keeps the send worker and the buffer drain from interleaving
+	// messages on one connection, so buffered packets keep their order.
+	writeMu      sync.Mutex
 	maxRetries   int // 0 = unlimited
 	tlsConfig    *tls.Config
 	conn         net.Conn
@@ -156,6 +159,12 @@ func NewFromTransports(transports []config.TransportSettings, cfg *config.Config
 			log.Warn().Str("component", "sender").Str("addr", fmt.Sprintf("%s:%d", t.Host, t.Port)).
 				Str("transport", proto).
 				Msg("node_pw is sent in clear text on this transport; use transport \"tls\" to protect it")
+		}
+
+		if t.PayloadZip && proto != "udp" {
+			log.Warn().Str("component", "sender").Str("addr", net.JoinHostPort(t.Host, fmt.Sprint(t.Port))).
+				Str("transport", proto).
+				Msg("payload_zip gzips whole HEP packets; on a stream transport the receiver cannot find message boundaries")
 		}
 
 		hc := &HEPClient{
@@ -438,21 +447,9 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 			continue
 		}
 
-		data := msg
-		if payloadZip {
-			var b bytes.Buffer
-			gz := gzip.NewWriter(&b)
-			if _, err := gz.Write(msg); err == nil {
-				gz.Close()
-				data = b.Bytes()
-			} else {
-				gz.Close()
-			}
-		}
-
-		n, err := writeWithDeadline(conn, data)
+		n, wireLen, err := client.write(conn, msg, payloadZip)
 		if err != nil {
-			s.handleWriteError(client, conn, err, msg, len(data))
+			s.handleWriteError(client, conn, err, msg, wireLen)
 			if !sent {
 				s.bufferToFile(msg)
 			}
@@ -480,6 +477,23 @@ func (s *Sender) sendToGroup(msg []byte, failoverOnly bool) bool {
 		return false
 	}
 	return sent
+}
+
+// write sends one HEP message on conn, gzipped when zip is set. It returns
+// the bytes written and the size of the encoded message.
+func (c *HEPClient) write(conn net.Conn, msg []byte, zip bool) (n, wireLen int, err error) {
+	data := msg
+	if zip {
+		var b bytes.Buffer
+		gz := gzip.NewWriter(&b)
+		if _, err := gz.Write(msg); err == nil && gz.Close() == nil {
+			data = b.Bytes()
+		}
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	n, err = writeWithDeadline(conn, data)
+	return n, len(data), err
 }
 
 // SendRecord dispatches a structured PacketRecord to all Arrow Flight clients.
@@ -621,19 +635,19 @@ func (s *Sender) drainBuffer(client *HEPClient) {
 
 		client.mu.Lock()
 		conn := client.conn
+		payloadZip := client.payloadZip
+		client.mu.Unlock()
 		if conn == nil {
-			client.mu.Unlock()
 			break
 		}
-		_, err := writeWithDeadline(conn, msg)
-		client.mu.Unlock()
+		_, wireLen, err := client.write(conn, msg, payloadZip)
 		if err != nil {
 			ev := log.Error().Str("component", "sender").Err(err).Str("reason", "buffer drain write")
 			if isMessageTooLong(err) {
-				ev = enrichMessageTooLongLog(ev, msg, len(msg), s.cfg.DebugSettings.PrintOutBadMessage)
+				ev = enrichMessageTooLongLog(ev, msg, wireLen, s.cfg.DebugSettings.PrintOutBadMessage)
 			}
 			ev.Msg("Failed to send buffered HEP")
-			s.handleWriteError(client, conn, err, msg, len(msg))
+			s.handleWriteError(client, conn, err, msg, wireLen)
 			break
 		}
 		sentCount++

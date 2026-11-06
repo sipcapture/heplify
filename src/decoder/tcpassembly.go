@@ -343,40 +343,61 @@ func parseSIPMessage(data []byte) ([]byte, error) {
 }
 
 // sipContentLength extracts the numeric value of the Content-Length header.
-var clNames = [][]byte{
-	[]byte("\r\nContent-Length:"),
-	[]byte("\r\nContent-length:"),
-	[]byte("\r\ncontent-length:"),
-	[]byte("\r\nl:"),
+func sipContentLength(data []byte) int {
+	val, ok := sipHeader(data, "Content-Length", "l")
+	if !ok {
+		return -1
+	}
+	n, valid := 0, false
+	for _, c := range val {
+		if c < '0' || c > '9' {
+			break
+		}
+		n = n*10 + int(c-'0')
+		if n > maxStreamBuffer {
+			// Absurd length: report it as too big instead of overflowing int.
+			return maxStreamBuffer + 1
+		}
+		valid = true
+	}
+	if !valid {
+		return -1
+	}
+	return n
 }
 
-func sipContentLength(data []byte) int {
-	for _, name := range clNames {
-		pos := bytes.Index(data, name)
-		if pos < 0 {
+// sipHeader returns the value of the first header whose name matches one of
+// names (case-insensitive, as RFC 3261 requires). Only the header section is
+// searched: the start line is skipped and parsing stops at the first empty
+// line, so text in the body or in other header values never matches.
+func sipHeader(msg []byte, names ...string) ([]byte, bool) {
+	// Skip the start line.
+	eol := bytes.IndexByte(msg, '\n')
+	if eol < 0 {
+		return nil, false
+	}
+	rest := msg[eol+1:]
+	for len(rest) > 0 {
+		var line []byte
+		if i := bytes.IndexByte(rest, '\n'); i >= 0 {
+			line, rest = rest[:i], rest[i+1:]
+		} else {
+			line, rest = rest, nil
+		}
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		if len(line) == 0 {
+			break // end of headers
+		}
+		colon := bytes.IndexByte(line, ':')
+		if colon <= 0 {
 			continue
 		}
-		rest := data[pos+len(name):]
-		eol := bytes.Index(rest, []byte("\r\n"))
-		if eol < 0 {
-			continue
-		}
-		val := bytes.TrimSpace(rest[:eol])
-		n, valid := 0, false
-		for _, c := range val {
-			if c < '0' || c > '9' {
-				break
+		name := bytes.TrimSpace(line[:colon])
+		for _, n := range names {
+			if bytes.EqualFold(name, []byte(n)) {
+				return bytes.TrimSpace(line[colon+1:]), true
 			}
-			n = n*10 + int(c-'0')
-			if n > maxStreamBuffer {
-				// Absurd length: report it as too big instead of overflowing int.
-				return maxStreamBuffer + 1
-			}
-			valid = true
-		}
-		if valid {
-			return n
 		}
 	}
-	return -1
+	return nil, false
 }

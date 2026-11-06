@@ -514,8 +514,11 @@ func (s *Sniffer) buildBPFFilter(socket config.SocketSettings) string {
 // newDecoder builds a decoder for one capture source with the configured
 // defragmentation and TCP reassembly. It is called again for every pcap replay
 // loop so later loops behave like the first one.
-func (s *Sniffer) newDecoder(linkType layers.LinkType, sender Sender) *decoder.Decoder {
+func (s *Sniffer) newDecoder(linkType layers.LinkType, sender Sender, socket config.SocketSettings) *decoder.Decoder {
 	dec := decoder.NewDecoder(linkType)
+	if allowed := parseTunnelSources(socket.TunnelAllowedSources); allowed != nil {
+		dec.TunnelSourceAllowed = allowed
+	}
 	if s.cfg.DebugSettings.DisableIPDefrag {
 		dec.DisableDefrag()
 	}
@@ -549,7 +552,7 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 		defer close(dumpCh)
 	}
 	pcapFile := socket.PcapFile
-	dec := s.newDecoder(source.LinkType(), sender)
+	dec := s.newDecoder(source.LinkType(), sender, socket)
 	packetCount := 0
 
 	// Live capture: flush idle TCP streams on a wall-clock timer, so the last
@@ -621,7 +624,7 @@ func (s *Sniffer) processPackets(source PacketSource, socket config.SocketSettin
 					source.Close()
 					source = &pcapWrapper{handle: newHandle}
 					s.registerSource(source)
-					newDec := s.newDecoder(source.LinkType(), sender)
+					newDec := s.newDecoder(source.LinkType(), sender, socket)
 					assemblerMu.Lock()
 					dec = newDec
 					assemblerMu.Unlock()
@@ -850,7 +853,7 @@ func (s *Sniffer) handleSIP(pkt *decoder.Packet, sender Sender) {
 		log.Debug().
 			Str("source", fmt.Sprintf("%s:%d", pkt.SrcIP, pkt.SrcPort)).
 			Str("destination", fmt.Sprintf("%s:%d", pkt.DstIP, pkt.DstPort)).
-			Str("payload", string(pkt.Payload)).
+			Str("payload", maskSIPCredentials(pkt.Payload)).
 			Msg("SIP packet")
 	} else if sipNum <= 20 || sipNum%50 == 0 {
 		capTime := time.Unix(int64(pkt.Tsec), int64(pkt.Tmsec)*1000)
@@ -1071,7 +1074,7 @@ func (s *Sniffer) sendHEPWithMOS(pkt *decoder.Packet, protoType byte, mos uint16
 	}
 
 	if s.debug.payload {
-		log.Debug().Str("payload", string(pkt.Payload[:min(200, len(pkt.Payload))])).Msg("[payload]")
+		log.Debug().Str("payload", maskSIPCredentials(pkt.Payload[:min(200, len(pkt.Payload))])).Msg("[payload]")
 	}
 
 	data := hep.Encode(msg)

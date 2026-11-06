@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"testing"
@@ -101,5 +102,20 @@ func TestParseRTCP_XR_VoIPMetricsBlock(t *testing.T) {
 	}
 	if mos != 450 {
 		t.Fatalf("HEP MOS×100: got %d want 450", mos)
+	}
+}
+
+// An RR with no report blocks followed by another RR in the same compound
+// packet must not borrow the second packet's report block.
+func TestParseRTCPCompoundUsesOwnLength(t *testing.T) {
+	first := []byte{0x81, 201, 0x00, 0x01, 0, 0, 0, 1} // RC=1 but Length=1: no room for a block
+	second := make([]byte, 32)
+	second[0], second[1], second[3] = 0x81, 201, 7
+	_, js, _ := ParseRTCP(append(first, second...))
+	if js == nil {
+		t.Fatal("expected JSON for the first packet")
+	}
+	if bytes.Contains(js, []byte(`"report_blocks":[{`)) {
+		t.Fatalf("report block read from the next packet: %s", js)
 	}
 }

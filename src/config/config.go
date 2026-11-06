@@ -162,6 +162,11 @@ type SocketSettings struct {
 	// "any", no promiscuous-mode changes are made to any interface.
 	// Example: ["eth0", "eth1"]
 	PromiscInterfaces []string `json:"promisc_interfaces" mapstructure:"promisc_interfaces"`
+	// TunnelAllowedSources limits which outer source addresses (IPs or CIDRs)
+	// may deliver tunneled traffic (VXLAN, GRE, ERSPAN, IP-in-IP). Packets from
+	// other tunnel endpoints are dropped, so a host that can reach the capture
+	// interface cannot inject SIP with a forged inner address. Empty = any.
+	TunnelAllowedSources []string `json:"tunnel_allowed_sources" mapstructure:"tunnel_allowed_sources"`
 }
 
 type TransportSettings struct {
@@ -219,6 +224,13 @@ type ScriptSettings struct {
 	Active    bool   `json:"active" mapstructure:"active"`
 	File      string `json:"file" mapstructure:"file"`
 	HEPFilter string `json:"hep_filter" mapstructure:"hep_filter"`
+	// TimeoutMs limits one call into the script (onPacket and others).
+	// 0 uses the default (100 ms); a negative value disables the limit.
+	TimeoutMs int `json:"timeout_ms" mapstructure:"timeout_ms"`
+	// Unsafe opens the full Lua standard library (io, os, package, debug,
+	// load/dofile). By default scripts get base, table, string, math and
+	// os.time/os.date/os.clock only.
+	Unsafe bool `json:"unsafe" mapstructure:"unsafe"`
 }
 
 func (c *Config) Validate() error {
@@ -251,6 +263,12 @@ func (c *Config) Validate() error {
 		if s.Active {
 			if s.SnapLen < 0 {
 				return fmt.Errorf("socket[%d] has invalid snap_len: %d", i, s.SnapLen)
+			}
+			for _, src := range s.TunnelAllowedSources {
+				src = strings.TrimSpace(src)
+				if _, _, err := net.ParseCIDR(src); err != nil && net.ParseIP(src) == nil {
+					return fmt.Errorf("socket[%d] tunnel_allowed_sources has invalid entry: %s", i, src)
+				}
 			}
 		}
 	}

@@ -117,6 +117,12 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 	if header.Version != 2 {
 		return nil, nil, 0
 	}
+	// Only the first packet of a compound RTCP datagram is reported. Limit
+	// parsing to its own length so report and XR blocks are never read from
+	// the packet that follows it.
+	if pktLen := (int(header.Length) + 1) * 4; pktLen < len(data) {
+		data = data[:pktLen]
+	}
 
 	var pkt rtcpPacketJSON
 	var ssrc uint32
