@@ -108,7 +108,21 @@ type Config struct {
 		Active bool   `json:"active" mapstructure:"active"`
 		Host   string `json:"host" mapstructure:"host"`
 		Port   int    `json:"port" mapstructure:"port"`
-		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2"
+		Proto  string `json:"proto" mapstructure:"proto"` // "udp", "tcp", "both", "http2", "tls"
+		// AllowedCIDRs limits which source addresses may send HEP. Empty = any.
+		AllowedCIDRs []string `json:"allowed_cidrs" mapstructure:"allowed_cidrs"`
+		// AuthToken, when set, must match the NodePW (auth key) of every received
+		// packet; packets with another or no token are dropped.
+		AuthToken string `json:"auth_token" mapstructure:"auth_token"`
+		// CertFile / KeyFile: server certificate for proto "tls".
+		CertFile string `json:"cert_file" mapstructure:"cert_file"`
+		KeyFile  string `json:"key_file" mapstructure:"key_file"`
+		// MaxConnections caps concurrent TCP/TLS connections (default 1024).
+		MaxConnections int `json:"max_connections" mapstructure:"max_connections"`
+		// Workers is the number of goroutines decoding received HEP (default 8).
+		Workers int `json:"workers" mapstructure:"workers"`
+		// ReadTimeoutSec closes idle TCP/TLS/HTTP connections (default 60).
+		ReadTimeoutSec int `json:"read_timeout_sec" mapstructure:"read_timeout_sec"`
 	} `json:"collector_settings" mapstructure:"collector_settings"`
 }
 
@@ -237,8 +251,20 @@ func (c *Config) Validate() error {
 		}
 		switch strings.ToLower(c.CollectorSettings.Proto) {
 		case "udp", "tcp", "both", "http2", "":
+		case "tls":
+			if c.CollectorSettings.CertFile == "" || c.CollectorSettings.KeyFile == "" {
+				return fmt.Errorf("collector_settings.proto is tls but cert_file or key_file is not set")
+			}
 		default:
 			return fmt.Errorf("collector_settings.proto has unsupported value: %s", c.CollectorSettings.Proto)
+		}
+		for _, cidr := range c.CollectorSettings.AllowedCIDRs {
+			if _, _, err := net.ParseCIDR(cidr); err != nil && net.ParseIP(cidr) == nil {
+				return fmt.Errorf("collector_settings.allowed_cidrs has invalid entry: %s", cidr)
+			}
+		}
+		if c.CollectorSettings.MaxConnections < 0 || c.CollectorSettings.Workers < 0 || c.CollectorSettings.ReadTimeoutSec < 0 {
+			return fmt.Errorf("collector_settings limits must be >= 0")
 		}
 	}
 

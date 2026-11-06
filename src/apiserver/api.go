@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -60,15 +61,16 @@ func RegisterStatsGetter(fn func() WebStats) {
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	healthMu.RLock()
+	connected := healthConnectedTotal
 	payload := map[string]interface{}{
 		"status":               "ok",
-		"connected_transports": healthConnectedTotal,
+		"connected_transports": connected,
 		"queue_size":           healthQueueSize,
 		"buffer_size_bytes":    healthBufferSize,
 	}
 	healthMu.RUnlock()
 
-	if healthConnectedTotal == 0 {
+	if connected == 0 {
 		payload["status"] = "degraded"
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -104,15 +106,23 @@ func basicAuth(username, password string, h http.HandlerFunc) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, p, ok := r.BasicAuth()
-		if !ok ||
-			subtle.ConstantTimeCompare([]byte(u), []byte(username)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(p), []byte(password)) != 1 {
+		// Compare fixed-size hashes so the response time does not reveal the
+		// credential lengths; evaluate both to avoid an early exit.
+		userOK := secretEqual(u, username)
+		passOK := secretEqual(p, password)
+		if !ok || !userOK || !passOK {
 			w.Header().Set("WWW-Authenticate", `Basic realm="heplify stats"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		h(w, r)
 	}
+}
+
+func secretEqual(got, want string) bool {
+	g := sha256.Sum256([]byte(got))
+	w := sha256.Sum256([]byte(want))
+	return subtle.ConstantTimeCompare(g[:], w[:]) == 1
 }
 
 // registerAPI mounts /health and /api/stats on mux.

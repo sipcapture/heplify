@@ -3,13 +3,18 @@ package collector
 import (
 	"bufio"
 	"context"
+	"crypto/subtle"
+	"crypto/tls"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/sipcapture/heplify/src/apiserver"
@@ -19,14 +24,39 @@ import (
 	"golang.org/x/net/http2/h2c" //nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
 )
 
+const (
+	defaultMaxConnections = 1024
+	defaultWorkers        = 8
+	defaultReadTimeout    = 60 * time.Second
+	// queueSize bounds received-but-not-yet-decoded packets. Beyond it packets
+	// are dropped instead of spawning unbounded goroutines.
+	queueSize = 10000
+)
+
+type job struct {
+	data       []byte
+	remoteAddr string
+}
+
 type Server struct {
-	cfg      *config.Config
-	sender   Sender
-	udpConn  net.PacketConn
-	tcpLn    net.Listener
-	httpSrv  *http.Server
-	wg       sync.WaitGroup
-	shutdown chan struct{}
+	cfg    *config.Config
+	sender Sender
+
+	allow       *allowList
+	readTimeout time.Duration
+	connSlots   chan struct{}
+	jobs        chan job
+
+	mu      sync.Mutex // guards the fields below
+	udpConn net.PacketConn
+	tcpLn   net.Listener
+	httpSrv *http.Server
+	conns   map[net.Conn]struct{}
+
+	wg        sync.WaitGroup // listeners and connections
+	workersWG sync.WaitGroup
+	shutdown  chan struct{}
+	stopOnce  sync.Once
 }
 
 // Sender is the minimal interface for forwarding re-encoded HEP packets.
@@ -38,6 +68,7 @@ func New(cfg *config.Config) *Server {
 	return &Server{
 		cfg:      cfg,
 		shutdown: make(chan struct{}),
+		conns:    make(map[net.Conn]struct{}),
 	}
 }
 
@@ -47,113 +78,213 @@ func (s *Server) SetSender(sender Sender) {
 }
 
 func (s *Server) Start() error {
-	if !s.cfg.CollectorSettings.Active || s.cfg.CollectorSettings.Port == 0 {
+	cs := s.cfg.CollectorSettings
+	if !cs.Active || cs.Port == 0 {
 		return nil
 	}
 
-	host := s.cfg.CollectorSettings.Host
+	allow, err := newAllowList(cs.AllowedCIDRs)
+	if err != nil {
+		return err
+	}
+	s.allow = allow
+
+	maxConns := cs.MaxConnections
+	if maxConns <= 0 {
+		maxConns = defaultMaxConnections
+	}
+	s.connSlots = make(chan struct{}, maxConns)
+
+	s.readTimeout = defaultReadTimeout
+	if cs.ReadTimeoutSec > 0 {
+		s.readTimeout = time.Duration(cs.ReadTimeoutSec) * time.Second
+	}
+
+	workers := cs.Workers
+	if workers <= 0 {
+		workers = defaultWorkers
+	}
+	s.jobs = make(chan job, queueSize)
+	for i := 0; i < workers; i++ {
+		s.workersWG.Add(1)
+		go s.worker()
+	}
+
+	host := cs.Host
 	if host == "" {
 		host = "0.0.0.0"
 	}
-	port := s.cfg.CollectorSettings.Port
-	proto := s.cfg.CollectorSettings.Proto
+	proto := strings.ToLower(cs.Proto)
 	if proto == "" {
 		proto = "udp"
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprint(cs.Port))
 	log.Info().Str("addr", addr).Str("protocol", proto).Msg("Starting Collector Server")
+	if allow == nil && cs.AuthToken == "" {
+		log.Warn().Str("addr", addr).
+			Msg("Collector accepts HEP from any source without authentication; set collector_settings.allowed_cidrs and/or auth_token")
+	}
+	if s.cfg.HepSettings.ReplaceToken && cs.AuthToken == "" {
+		log.Warn().Msg("hep_settings.replace_token re-signs every received packet with node_pw; without collector_settings.auth_token any sender gets a valid token")
+	}
 
 	switch proto {
 	case "udp":
-		go s.startUDP(addr)
+		s.goListen(func() { s.startUDP(addr) })
 	case "tcp":
-		go s.startTCP(addr)
+		s.goListen(func() { s.startTCP(addr, nil) })
 	case "both":
-		go s.startUDP(addr)
-		go s.startTCP(addr)
+		s.goListen(func() { s.startUDP(addr) })
+		s.goListen(func() { s.startTCP(addr, nil) })
+	case "tls":
+		cert, err := tls.LoadX509KeyPair(cs.CertFile, cs.KeyFile)
+		if err != nil {
+			return fmt.Errorf("collector tls: %w", err)
+		}
+		tlsCfg := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		s.goListen(func() { s.startTCP(addr, tlsCfg) })
 	case "http2":
-		go s.startHTTP2(addr)
+		s.goListen(func() { s.startHTTP2(addr) })
 	default:
 		log.Warn().Str("proto", proto).Msg("Unknown collector protocol, defaulting to udp")
-		go s.startUDP(addr)
+		s.goListen(func() { s.startUDP(addr) })
 	}
 
 	return nil
 }
 
+func (s *Server) goListen(fn func()) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		fn()
+	}()
+}
+
+func (s *Server) stopping() bool {
+	select {
+	case <-s.shutdown:
+		return true
+	default:
+		return false
+	}
+}
+
+// enqueue hands a received packet to the worker pool, dropping it when full.
+func (s *Server) enqueue(data []byte, remoteAddr string) {
+	select {
+	case s.jobs <- job{data: data, remoteAddr: remoteAddr}:
+	default:
+		apiserver.HepDroppedCount.Inc()
+		log.Debug().Str("addr", remoteAddr).Msg("Collector queue full, dropping HEP packet")
+	}
+}
+
+func (s *Server) worker() {
+	defer s.workersWG.Done()
+	for {
+		select {
+		case <-s.shutdown:
+			return
+		case j := <-s.jobs:
+			s.processHEP(j.data, j.remoteAddr)
+		}
+	}
+}
+
 func (s *Server) startUDP(addr string) {
 	pc, err := net.ListenPacket("udp", addr)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to start UDP listener")
+		log.Error().Err(err).Str("addr", addr).Msg("Failed to start UDP collector listener")
+		return
 	}
+	s.mu.Lock()
 	s.udpConn = pc
+	s.mu.Unlock()
 	defer pc.Close()
 
 	log.Info().Str("addr", addr).Msg("UDP collector listening")
 
 	buf := make([]byte, 65535)
 	for {
-		select {
-		case <-s.shutdown:
-			return
-		default:
-		}
-
 		n, remoteAddr, err := pc.ReadFrom(buf)
 		if err != nil {
-			select {
-			case <-s.shutdown:
+			if s.stopping() || errors.Is(err, net.ErrClosed) {
 				return
-			default:
-				log.Debug().Err(err).Msg("UDP read error")
-				continue
 			}
+			log.Debug().Err(err).Msg("UDP read error")
+			continue
 		}
-
-		// Make a copy of the data
+		if !s.allow.allowedAddr(remoteAddr) {
+			continue
+		}
 		data := make([]byte, n)
 		copy(data, buf[:n])
-
-		go s.processHEP(data, remoteAddr.String())
+		s.enqueue(data, remoteAddr.String())
 	}
 }
 
-func (s *Server) startTCP(addr string) {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to start TCP listener")
+func (s *Server) startTCP(addr string, tlsCfg *tls.Config) {
+	var ln net.Listener
+	var err error
+	if tlsCfg != nil {
+		ln, err = tls.Listen("tcp", addr, tlsCfg)
+	} else {
+		ln, err = net.Listen("tcp", addr)
 	}
+	if err != nil {
+		log.Error().Err(err).Str("addr", addr).Msg("Failed to start TCP collector listener")
+		return
+	}
+	s.mu.Lock()
 	s.tcpLn = ln
+	s.mu.Unlock()
 	defer ln.Close()
 
-	log.Info().Str("addr", addr).Msg("TCP collector listening")
+	log.Info().Str("addr", addr).Bool("tls", tlsCfg != nil).Msg("TCP collector listening")
 
 	for {
-		select {
-		case <-s.shutdown:
-			return
-		default:
-		}
-
 		conn, err := ln.Accept()
 		if err != nil {
-			select {
-			case <-s.shutdown:
+			if s.stopping() || errors.Is(err, net.ErrClosed) {
 				return
-			default:
-				log.Error().Err(err).Msg("TCP accept error")
-				continue
 			}
+			log.Error().Err(err).Msg("TCP accept error")
+			time.Sleep(50 * time.Millisecond)
+			continue
 		}
-
+		if !s.allow.allowedAddr(conn.RemoteAddr()) {
+			_ = conn.Close()
+			continue
+		}
+		select {
+		case s.connSlots <- struct{}{}:
+		default:
+			log.Warn().Str("addr", conn.RemoteAddr().String()).Msg("Collector connection limit reached, closing connection")
+			_ = conn.Close()
+			continue
+		}
+		s.trackConn(conn, true)
 		s.wg.Add(1)
 		go s.handleTCPConnection(conn)
 	}
 }
 
+func (s *Server) trackConn(c net.Conn, add bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if add {
+		s.conns[c] = struct{}{}
+	} else {
+		delete(s.conns, c)
+	}
+}
+
 func (s *Server) handleTCPConnection(conn net.Conn) {
 	defer s.wg.Done()
+	defer func() { <-s.connSlots }()
+	defer s.trackConn(conn, false)
 	defer conn.Close()
 
 	remoteAddr := conn.RemoteAddr().String()
@@ -162,14 +293,13 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 	reader := bufio.NewReaderSize(conn, 65535)
 
 	for {
-		select {
-		case <-s.shutdown:
+		if s.stopping() {
 			return
-		default:
 		}
+		// An idle or stalled sender must not hold the connection slot forever.
+		_ = conn.SetReadDeadline(time.Now().Add(s.readTimeout))
 
-		// Read HEP packet
-		data, err := s.readHEPPacket(reader)
+		data, err := readHEPPacket(reader)
 		if err != nil {
 			if err == io.EOF {
 				log.Debug().Str("addr", remoteAddr).Msg("TCP connection closed")
@@ -178,46 +308,31 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			log.Debug().Err(err).Str("addr", remoteAddr).Msg("Error reading HEP packet")
 			return
 		}
-
-		if len(data) > 0 {
-			go s.processHEP(data, remoteAddr)
-		}
+		s.enqueue(data, remoteAddr)
 	}
 }
 
 // readHEPPacket reads a single HEP packet from the TCP stream
 // HEP3 format: "HEP3" + 2-byte length + chunks
-func (s *Server) readHEPPacket(reader *bufio.Reader) ([]byte, error) {
-	header := make([]byte, 4)
-	_, err := io.ReadFull(reader, header)
-	if err != nil {
+func readHEPPacket(reader *bufio.Reader) ([]byte, error) {
+	var head [6]byte
+	if _, err := io.ReadFull(reader, head[:]); err != nil {
 		return nil, err
 	}
-
-	if string(header) != "HEP3" {
-		return nil, fmt.Errorf("invalid HEP header: %v", header)
+	if string(head[:4]) != "HEP3" {
+		return nil, fmt.Errorf("invalid HEP header: %x", head[:4])
 	}
 
-	lenBuf := make([]byte, 2)
-	_, err = io.ReadFull(reader, lenBuf)
-	if err != nil {
-		return nil, err
-	}
-
-	totalLen := binary.BigEndian.Uint16(lenBuf)
+	totalLen := binary.BigEndian.Uint16(head[4:6])
 	if totalLen < 6 {
 		return nil, fmt.Errorf("invalid HEP packet length: %d", totalLen)
 	}
 
 	data := make([]byte, totalLen)
-	copy(data[0:4], header)
-	copy(data[4:6], lenBuf)
-
-	_, err = io.ReadFull(reader, data[6:])
-	if err != nil {
+	copy(data, head[:])
+	if _, err := io.ReadFull(reader, data[6:]); err != nil {
 		return nil, err
 	}
-
 	return data, nil
 }
 
@@ -231,36 +346,52 @@ func (s *Server) startHTTP2(addr string) {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		data, err := io.ReadAll(io.LimitReader(r.Body, 65535))
-		if err != nil {
-			http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		if !s.allow.allowedHostPort(r.RemoteAddr) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		defer r.Body.Close()
 
+		// Read one byte past the limit so an oversized body is rejected
+		// instead of being silently truncated into a broken packet.
+		data, err := io.ReadAll(io.LimitReader(r.Body, hep.MaxPacketSize+1))
+		if err != nil {
+			http.Error(w, "Failed to read body", http.StatusBadRequest)
+			return
+		}
+		if len(data) > hep.MaxPacketSize {
+			http.Error(w, "HEP packet too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		if len(data) < 6 || string(data[0:4]) != "HEP3" {
 			http.Error(w, "Not HEP3 Data", http.StatusBadRequest)
 			return
 		}
 
-		remoteAddr := r.RemoteAddr
-		go s.processHEP(data, remoteAddr)
+		s.enqueue(data, r.RemoteAddr)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	h2s := &http2.Server{}
-	s.httpSrv = &http.Server{
+	h2s := &http2.Server{MaxConcurrentStreams: 250, IdleTimeout: s.readTimeout}
+	srv := &http.Server{
 		Addr: addr,
 		//nolint:staticcheck // SA1019: h2c still required for cleartext HTTP/2 collector
-		Handler: h2c.NewHandler(mux, h2s),
+		Handler:           h2c.NewHandler(mux, h2s),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       s.readTimeout,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       s.readTimeout,
+		MaxHeaderBytes:    16 << 10,
 	}
+	s.mu.Lock()
+	s.httpSrv = srv
+	s.mu.Unlock()
 
 	log.Info().Str("addr", addr).Msg("HTTP/2 (h2c) collector listening")
 
-	if err := s.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal().Err(err).Msg("HTTP/2 collector failed")
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Error().Err(err).Str("addr", addr).Msg("HTTP/2 collector failed")
 	}
 }
 
@@ -278,6 +409,11 @@ func (s *Server) processHEP(data []byte, remoteAddr string) {
 	hepMsg, err := hep.DecodeHEP(data)
 	if err != nil {
 		log.Debug().Err(err).Str("addr", remoteAddr).Msg("Failed to decode HEP")
+		return
+	}
+
+	if token := s.cfg.CollectorSettings.AuthToken; token != "" && !tokenEqual(hepMsg.NodePW, token) {
+		log.Debug().Str("addr", remoteAddr).Msg("Dropping HEP packet with missing or wrong auth token")
 		return
 	}
 
@@ -307,6 +443,11 @@ func (s *Server) processHEP(data []byte, remoteAddr string) {
 	if s.sender != nil {
 		s.sender.SendNoErr(outData)
 	}
+}
+
+// tokenEqual compares in constant time, independent of where the strings differ.
+func tokenEqual(got, want string) bool {
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
 // reEncodeWithNewToken re-builds the HEP packet replacing NodePW (and optionally NodeID/NodeName).
@@ -343,26 +484,40 @@ func reEncodeWithNewToken(h *hep.HEP, newPW string, nodeID uint32, nodeName stri
 		CID:       []byte(h.CID),
 		Vlan:      uint16(h.Vlan),
 		NodeName:  nodeName,
+		TCPFlag:   h.TCPFlag,
+		IPTos:     h.IPTos,
+		MOS:       h.MOS,
 	}
 	return hep.Encode(msg)
 }
 
-// Stop gracefully stops the collector
+// Stop gracefully stops the collector: listeners and open connections are
+// closed, so blocked reads return and Stop does not hang.
 func (s *Server) Stop() {
-	close(s.shutdown)
+	s.stopOnce.Do(func() {
+		close(s.shutdown)
 
-	if s.udpConn != nil {
-		s.udpConn.Close()
-	}
+		s.mu.Lock()
+		if s.udpConn != nil {
+			_ = s.udpConn.Close()
+		}
+		if s.tcpLn != nil {
+			_ = s.tcpLn.Close()
+		}
+		srv := s.httpSrv
+		for c := range s.conns {
+			_ = c.Close()
+		}
+		s.mu.Unlock()
 
-	if s.tcpLn != nil {
-		s.tcpLn.Close()
-	}
+		if srv != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = srv.Shutdown(ctx)
+			cancel()
+		}
 
-	if s.httpSrv != nil {
-		_ = s.httpSrv.Shutdown(context.Background())
-	}
-
-	s.wg.Wait()
-	log.Info().Msg("Collector stopped")
+		s.wg.Wait()
+		s.workersWG.Wait()
+		log.Info().Msg("Collector stopped")
+	})
 }

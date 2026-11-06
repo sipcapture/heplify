@@ -2,16 +2,22 @@ package sniffer
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/decoder"
 )
 
 // syslog UDP port
-const syslogPort = 514
+const (
+	syslogPort      = 514
+	syslogWorkers   = 4
+	syslogQueueSize = 10000
+)
 
 // startSyslogCapture listens on UDP:514 for syslog messages, extracts Call-ID
 // and forwards them as HEP ProtoType=100.
@@ -26,16 +32,39 @@ func (s *Sniffer) startSyslogCapture() {
 
 	log.Info().Str("addr", addr).Msg("Syslog capture listening")
 
+	// A fixed worker pool with a bounded queue: a flood of datagrams drops
+	// messages instead of spawning one goroutine per packet.
+	type syslogMsg struct {
+		payload []byte
+		remote  net.Addr
+	}
+	queue := make(chan syslogMsg, syslogQueueSize)
+	for i := 0; i < syslogWorkers; i++ {
+		go func() {
+			for m := range queue {
+				s.processSyslog(m.payload, m.remote)
+			}
+		}()
+	}
+	defer close(queue)
+
 	buf := make([]byte, 65535)
 	for {
 		n, remote, err := conn.ReadFrom(buf)
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Debug().Err(err).Msg("Syslog read error")
 			continue
 		}
 		payload := make([]byte, n)
 		copy(payload, buf[:n])
-		go s.processSyslog(payload, remote)
+		select {
+		case queue <- syslogMsg{payload, remote}:
+		default:
+			apiserver.HepDroppedCount.Inc()
+		}
 	}
 }
 
