@@ -26,7 +26,7 @@ heplify/
 ├── script/             # Lua scripting engine (gopher-lua)
 ├── sniffer/            # Packet capture, decode loop, protocol dispatch
 ├── transport/          # HEP sender (TCP/UDP/TLS) and Arrow Flight client
-├── docker/             # Dockerfile and docker-compose
+├── docker/             # Dockerfile and Compose file
 ├── examples/           # systemd unit file and SysV init script
 ├── scripts/            # Package build helper (nfpm → deb/rpm)
 ├── docs/               # Documentation
