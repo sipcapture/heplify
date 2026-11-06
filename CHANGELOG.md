@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.29] - 2026-11-06
+
 ### Security
 
 - **RTCP XR hang**: an XR block length of `0xFFFF` wrapped to 0 and looped forever on one UDP packet.
