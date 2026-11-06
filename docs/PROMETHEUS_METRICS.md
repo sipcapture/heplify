@@ -78,6 +78,7 @@ For responses, class is the first status digit plus `xx` (e.g. `200` → `2xx`, 
 | `heplify_hep_queue_size` | Gauge | — | Current HEP send queue depth. |
 | `heplify_hep_buffer_size_bytes` | Gauge | — | On-disk HEP buffer file size in bytes; `0` when unused or empty. |
 | `heplify_hep_transport_connected` | Gauge | `addr`, `proto` | `1` if that transport is connected, else `0`. |
+| `heplify_packet_panics_total` | Counter | `where` | Panics recovered while handling one packet (`capture`, `syslog`, `collector`). The packet is dropped; any non-zero value is a parser bug worth reporting. |
 
 ### `type` label values for `heplify_packet_count`
 

@@ -8,9 +8,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/apiserver"
 	"github.com/sipcapture/heplify/src/config"
 	"github.com/sipcapture/heplify/src/hep"
 	"golang.org/x/net/http2"
@@ -263,6 +265,16 @@ func (s *Server) startHTTP2(addr string) {
 }
 
 func (s *Server) processHEP(data []byte, remoteAddr string) {
+	defer func() {
+		if r := recover(); r != nil {
+			apiserver.IncPacketPanic("collector")
+			log.Error().
+				Interface("panic", r).
+				Str("addr", remoteAddr).
+				Str("stack", string(debug.Stack())).
+				Msg("Recovered from panic while processing HEP")
+		}
+	}()
 	hepMsg, err := hep.DecodeHEP(data)
 	if err != nil {
 		log.Debug().Err(err).Str("addr", remoteAddr).Msg("Failed to decode HEP")
@@ -279,6 +291,9 @@ func (s *Server) processHEP(data []byte, remoteAddr string) {
 	if s.cfg.HepSettings.ReplaceToken && s.cfg.SystemSettings.NodePW != "" {
 		outData = reEncodeWithNewToken(hepMsg, s.cfg.SystemSettings.NodePW,
 			s.cfg.SystemSettings.NodeID, s.cfg.SystemSettings.NodeName)
+		if outData == nil {
+			return
+		}
 	}
 
 	log.Debug().

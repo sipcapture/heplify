@@ -113,6 +113,10 @@ func (s *sipStream) process() {
 			msgLen := DiameterMessageLength(s.buf)
 			if msgLen == 0 {
 				// Not a valid Diameter header — fall through to SIP/other.
+			} else if msgLen > maxStreamBuffer {
+				// Would never fit in the buffer: drop and resync.
+				s.resetBuffer()
+				return
 			} else if msgLen > len(s.buf) {
 				return // wait for more data
 			} else {
@@ -134,6 +138,9 @@ func (s *sipStream) process() {
 		if bytes.HasPrefix(s.buf, []byte("GET ")) || bytes.HasPrefix(s.buf, []byte("HTTP/")) {
 			end := bytes.Index(s.buf, []byte("\r\n\r\n"))
 			if end < 0 {
+				if len(s.buf) > maxStreamBuffer {
+					s.resetBuffer()
+				}
 				return // wait for more data
 			}
 			s.buf = s.buf[end+4:]
@@ -142,33 +149,47 @@ func (s *sipStream) process() {
 		}
 
 		// SIP-over-WebSocket: try to unwrap the WS frame first.
-		if IsWebSocketFrame(s.buf) {
-			sipPayload, err := ExtractSIPFromWebSocket(s.buf)
-			if err != nil || len(sipPayload) == 0 {
-				// Incomplete WS frame — wait for more.
+		if IsWebSocketFrame(s.buf) || isWSControlFrame(s.buf) {
+			frameLen, err := WSFrameLen(s.buf)
+			if err != nil {
+				if errors.Is(err, ErrWSHeaderTooShort) && len(s.buf) <= maxStreamBuffer {
+					return // incomplete WS frame, wait for more
+				}
+				s.resetBuffer()
 				return
 			}
-			pkt := s.buildPacket(sipPayload)
-			if pkt != nil {
-				s.cb(pkt)
+			if frameLen > maxStreamBuffer {
+				s.resetBuffer()
+				return
 			}
-			// Advance past the whole WS frame (frame length ≠ payload length).
-			// Use the full buffer length as a safe approximation; the next
-			// iteration will restart cleanly if there is trailing data.
-			s.buf = s.buf[:0]
-			s.clearTimestamp()
-			return
+			if frameLen > len(s.buf) {
+				return // wait for more data
+			}
+			if sipPayload, err := ExtractSIPFromWebSocket(s.buf[:frameLen]); err == nil && len(sipPayload) > 0 {
+				if pkt := s.buildPacket(sipPayload); pkt != nil {
+					s.cb(pkt)
+				}
+			}
+			// Skip exactly one frame (ping/pong/non-SIP frames are dropped too).
+			s.buf = s.buf[frameLen:]
+			if len(s.buf) == 0 {
+				s.clearTimestamp()
+			}
+			continue
 		}
 
 		payload, err := parseSIPMessage(s.buf)
 		switch {
 		case errors.Is(err, errSIPTruncated):
+			if len(s.buf) > maxStreamBuffer {
+				s.resetBuffer()
+			}
 			return // wait for more data
 		case err != nil:
-			// Not SIP or corrupted — safety valve: drop if buffer is huge.
-			if len(s.buf) > 1<<20 {
-				s.buf = s.buf[:0]
-				s.clearTimestamp()
+			// Too large, not SIP or corrupted: drop once the buffer is big
+			// (or right away for an oversized message).
+			if errors.Is(err, errSIPTooLarge) || len(s.buf) > maxStreamBuffer {
+				s.resetBuffer()
 			}
 			return
 		}
@@ -186,6 +207,18 @@ func (s *sipStream) process() {
 			s.clearTimestamp()
 		}
 	}
+}
+
+// isWSControlFrame reports a final close/ping/pong frame. Those carry no SIP
+// but must be skipped, or the stream stalls behind them.
+func isWSControlFrame(b []byte) bool {
+	return len(b) >= 2 && (b[0] == 0x88 || b[0] == 0x89 || b[0] == 0x8A)
+}
+
+// resetBuffer drops all buffered data for the stream.
+func (s *sipStream) resetBuffer() {
+	s.buf = s.buf[:0]
+	s.clearTimestamp()
 }
 
 func (s *sipStream) clearTimestamp() {
@@ -252,7 +285,12 @@ func (s *sipStream) buildPacket(payload []byte) *Packet {
 var (
 	errSIPTruncated = errors.New("truncated SIP message")
 	errNotSIP       = errors.New("not SIP")
+	errSIPTooLarge  = errors.New("SIP message exceeds stream buffer limit")
 )
+
+// maxStreamBuffer caps how much unparsed data one TCP stream may hold.
+// SIP and Diameter messages larger than this are dropped.
+const maxStreamBuffer = 1 << 20
 
 var sipPrefixes = [][]byte{
 	[]byte("SIP/2.0 "),
@@ -285,6 +323,9 @@ func parseSIPMessage(data []byte) ([]byte, error) {
 	bodyLen := sipContentLength(data)
 	if bodyLen < 0 {
 		bodyLen = 0
+	}
+	if bodyLen > maxStreamBuffer-headerEnd {
+		return nil, errSIPTooLarge
 	}
 
 	total := headerEnd + bodyLen
@@ -320,6 +361,10 @@ func sipContentLength(data []byte) int {
 				break
 			}
 			n = n*10 + int(c-'0')
+			if n > maxStreamBuffer {
+				// Absurd length: report it as too big instead of overflowing int.
+				return maxStreamBuffer + 1
+			}
 			valid = true
 		}
 		if valid {

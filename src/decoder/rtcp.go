@@ -182,7 +182,8 @@ func ParseRTCP(data []byte) (ssrcBytes []byte, jsonData []byte, mos uint16) {
 		offset := 8
 		for offset+4 <= len(data) {
 			blockType := data[offset]
-			blockLen := int(binary.BigEndian.Uint16(data[offset+2:offset+4])+1) * 4
+			// Widen before +1: uint16(0xFFFF)+1 wraps to 0 and would loop forever.
+			blockLen := (int(binary.BigEndian.Uint16(data[offset+2:offset+4])) + 1) * 4
 			if offset+blockLen > len(data) {
 				break
 			}

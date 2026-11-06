@@ -69,6 +69,13 @@ var (
 			Help: "Current size of on-disk HEP buffer file",
 		},
 	)
+	PacketPanicCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "heplify_packet_panics_total",
+			Help: "Panics recovered while processing a packet (each one dropped that packet)",
+		},
+		[]string{"where"},
+	)
 	HepTransportConnected = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "heplify_hep_transport_connected",
@@ -96,6 +103,12 @@ func init() {
 	prometheus.MustRegister(HepQueueSize)
 	prometheus.MustRegister(HepBufferSizeBytes)
 	prometheus.MustRegister(HepTransportConnected)
+	prometheus.MustRegister(PacketPanicCount)
+}
+
+// IncPacketPanic counts a recovered panic; where is a fixed label such as "capture".
+func IncPacketPanic(where string) {
+	PacketPanicCount.WithLabelValues(where).Inc()
 }
 
 func IncPacketCount(packetType string) {

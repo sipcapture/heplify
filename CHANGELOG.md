@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **RTCP XR hang**: an XR block length of `0xFFFF` wrapped to 0 and looped forever on one UDP packet.
+- **TCP SIP panic**: a huge `Content-Length` overflowed `int` and panicked on slicing; lengths above 1 MiB are now dropped.
+- **WebSocket panic**: a 63-bit frame length overflowed the bounds check and panicked in `make`.
+- **Diameter panic**: an unpadded last AVP sliced past the end of the message.
+- **HEP collector panic**: fixed-size chunks with a wrong body length (for example 6 bytes, empty body) indexed past the body; vendor chunks are now skipped.
+- **HEP length wrap**: packets over 65535 bytes had their 16-bit length fields wrap, so on TCP/TLS the rest of the payload was read as new HEP packets. The payload is now truncated to fit.
+- **Lua deadlock**: any script calling `GetHEP*`, `SetHEPField`, `GetRawMessage`, `SetRawMessage` or `HashTable` from `onPacket` deadlocked capture on the first packet. Packet binding and the script call are now atomic, so fanout workers no longer see each other's packets.
+- **TCP stream memory**: each reassembled stream buffers at most 1 MiB (SIP, Diameter, HTTP upgrade); WebSocket frames, including ping/pong/close, are consumed one frame at a time instead of dropping the whole buffer.
+- **Panic safety**: panics while handling one packet (capture, syslog, collector) are recovered, logged and counted in `heplify_packet_panics_total` instead of killing the process.
+
 ## [2.0.28] - 2026-09-04
 
 ### Fixed
