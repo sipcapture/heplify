@@ -268,7 +268,8 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 				Str("gre_proto", d.gre.Protocol.String()).
 				Int("gre_payload_len", len(d.gre.Payload)).
 				Msg("[gre] encountered GRE packet")
-			if d.gre.Protocol == layers.EthernetTypeTransparentEthernetBridging {
+			switch d.gre.Protocol {
+			case layers.EthernetTypeTransparentEthernetBridging:
 				// NVGRE: inner Ethernet frame with an 8-byte key header.
 				if len(d.gre.Payload) >= 8 {
 					if innerPkt := d.decodeInnerPacket(d.gre.Payload[8:], ci); innerPkt != nil {
@@ -280,8 +281,7 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 						return innerPkt, nil
 					}
 				}
-			} else if d.gre.Protocol == layers.EthernetTypeIPv4 ||
-				d.gre.Protocol == layers.EthernetTypeIPv6 {
+			case layers.EthernetTypeIPv4, layers.EthernetTypeIPv6:
 				// Standard GRE carrying an IP payload (e.g. ip tunnel / gre interfaces).
 				if innerPkt := d.decodeInnerIPPacket(d.gre.Payload, ci); innerPkt != nil {
 					log.Debug().
@@ -291,7 +291,7 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 						Msg("[gre] decoded inner raw IP payload")
 					return innerPkt, nil
 				}
-			} else if d.gre.Protocol == layers.EthernetTypeERSPAN {
+			case layers.EthernetTypeERSPAN:
 				// ERSPAN Type II/III over GRE (proto 0x88BE).
 				// gopacket maps 0x88BE → layers.LayerTypeERSPANII (id 145) which is not
 				// registered in our DecodingLayerParser, so the parser stops at GRE and
