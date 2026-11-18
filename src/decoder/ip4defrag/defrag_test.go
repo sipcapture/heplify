@@ -54,14 +54,14 @@ func TestDefragPingMultipleFrags(t *testing.T) {
 	validPayload = append(validPayload, testPing1Frag3[34:]...)
 	validPayload = append(validPayload, testPing1Frag4[34:]...)
 
-	if bytes.Compare(validPayload, ip.Payload) != 0 {
+	if !bytes.Equal(validPayload, ip.Payload) {
 		fmt.Println(bytediff.BashOutput.String(
 			bytediff.Diff(validPayload, ip.Payload)))
 		t.Errorf("defrag: payload is not correctly defragmented")
 	}
 
 	discarded := defrag.DiscardOlderThan(time.Now())
-	if 0 != discarded {
+	if discarded != 0 {
 		t.Errorf("defrag: discarded more fragments then expected: %d", discarded)
 	}
 }
@@ -83,7 +83,7 @@ func TestDefragPing1(t *testing.T) {
 	validPayload = append(validPayload, testPing1Frag3[34:]...)
 	validPayload = append(validPayload, testPing1Frag4[34:]...)
 
-	if bytes.Compare(validPayload, ip.Payload) != 0 {
+	if !bytes.Equal(validPayload, ip.Payload) {
 		fmt.Println(bytediff.BashOutput.String(
 			bytediff.Diff(validPayload, ip.Payload)))
 		t.Errorf("defrag: payload is not correctly defragmented")
@@ -96,7 +96,7 @@ func TestDefragPing1(t *testing.T) {
 	gentestDefrag(t, defrag, testPing1Frag2, false, "Ping1Frag2")
 	ip2 := gentestDefrag(t, defrag, testPing1Frag4, true, "Ping1Frag4")
 
-	if bytes.Compare(ip2.Payload, ip.Payload) != 0 {
+	if !bytes.Equal(ip2.Payload, ip.Payload) {
 		fmt.Println(bytediff.BashOutput.String(
 			bytediff.Diff(validPayload, ip.Payload)))
 		t.Errorf("defrag: ip and ip2 payload are different")
@@ -126,7 +126,7 @@ func TestDefragPing1and2(t *testing.T) {
 	validPayload = append(validPayload, testPing1Frag3[34:]...)
 	validPayload = append(validPayload, testPing1Frag4[34:]...)
 
-	if bytes.Compare(validPayload, ip.Payload) != 0 {
+	if !bytes.Equal(validPayload, ip.Payload) {
 		fmt.Println(bytediff.BashOutput.String(
 			bytediff.Diff(validPayload, ip.Payload)))
 		t.Errorf("defrag: payload Ping1 is not correctly defragmented")
@@ -142,7 +142,7 @@ func TestDefragPing1and2(t *testing.T) {
 	validPayload2 = append(validPayload2, testPing2Frag3[34:]...)
 	validPayload2 = append(validPayload2, testPing2Frag4[34:]...)
 
-	if bytes.Compare(validPayload2, ip.Payload) != 0 {
+	if !bytes.Equal(validPayload2, ip.Payload) {
 		fmt.Println(bytediff.BashOutput.String(
 			bytediff.Diff(validPayload2, ip.Payload)))
 		t.Errorf("defrag: payload Ping2 is not correctly defragmented")
@@ -256,7 +256,7 @@ func TestDefragDiscard(t *testing.T) {
 	gentestDefrag(t, defrag, testPing2Frag1, false, "Ping2Frag1")
 
 	discarded := defrag.DiscardOlderThan(time.Now())
-	if 2 != discarded {
+	if discarded != 2 {
 		t.Errorf("defrag: discarded more fragments then expected: %d", discarded)
 	}
 }
@@ -319,11 +319,7 @@ func gentestDefrag(t *testing.T, defrag *IPv4Defragmenter, buf []byte, expect bo
 	if err != nil {
 		t.Fatalf("defrag: %s", err)
 	}
-	status := false
-	if out != nil {
-		status = true
-	}
-	if status != expect {
+	if status := out != nil; status != expect {
 		t.Fatalf("defrag: a fragment was not detected (%s)", label)
 	}
 	return out

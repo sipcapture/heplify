@@ -89,7 +89,7 @@ func (d *IPv4Defragmenter) DefragIPv4(in *layers.IPv4) (*layers.IPv4, error) {
 // This is useful when operating on pcap files instead of live captured data
 func (d *IPv4Defragmenter) DefragIPv4WithTimestamp(in *layers.IPv4, t time.Time) (*layers.IPv4, error) {
 	// check if we need to defrag
-	if st := d.dontDefrag(in); st == true {
+	if d.dontDefrag(in) {
 		debug.Printf("defrag: do nothing, do not need anything")
 		return in, nil
 	}
