@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **IPv4 defragmentation ([#411](https://github.com/sipcapture/heplify/issues/411))**: a fragmented UDP datagram whose last fragment carried fewer than 8 bytes (e.g. a SIP INVITE 1–7 bytes over the MTU) was silently dropped and never sent as HEP. The gopacket `ip4defrag` package is now kept in `src/decoder/ip4defrag` with the 8-byte minimum applied only to fragments that have the More Fragments flag set, as RFC 791 allows. Fragments the defragmenter rejects are now logged at debug level.
+
 ### Changed
 
 - **Release workflow**: the Homebrew job opens a pull request (`homebrew/bump-<version>`) instead of pushing to the protected default branch, where the 2.1.0 push was rejected. Needs "Allow GitHub Actions to create and approve pull requests" in the repository settings.

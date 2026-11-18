@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/ip4defrag"
 	"github.com/google/gopacket/layers"
 	"github.com/rs/zerolog/log"
+	"github.com/sipcapture/heplify/src/decoder/ip4defrag"
 	"github.com/sipcapture/heplify/src/decoder/ip6defrag"
 	"github.com/sipcapture/heplify/src/decoder/ownlayers"
 )
@@ -268,7 +268,8 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 				Str("gre_proto", d.gre.Protocol.String()).
 				Int("gre_payload_len", len(d.gre.Payload)).
 				Msg("[gre] encountered GRE packet")
-			if d.gre.Protocol == layers.EthernetTypeTransparentEthernetBridging {
+			switch d.gre.Protocol {
+			case layers.EthernetTypeTransparentEthernetBridging:
 				// NVGRE: inner Ethernet frame with an 8-byte key header.
 				if len(d.gre.Payload) >= 8 {
 					if innerPkt := d.decodeInnerPacket(d.gre.Payload[8:], ci); innerPkt != nil {
@@ -280,8 +281,7 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 						return innerPkt, nil
 					}
 				}
-			} else if d.gre.Protocol == layers.EthernetTypeIPv4 ||
-				d.gre.Protocol == layers.EthernetTypeIPv6 {
+			case layers.EthernetTypeIPv4, layers.EthernetTypeIPv6:
 				// Standard GRE carrying an IP payload (e.g. ip tunnel / gre interfaces).
 				if innerPkt := d.decodeInnerIPPacket(d.gre.Payload, ci); innerPkt != nil {
 					log.Debug().
@@ -291,7 +291,7 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 						Msg("[gre] decoded inner raw IP payload")
 					return innerPkt, nil
 				}
-			} else if d.gre.Protocol == layers.EthernetTypeERSPAN {
+			case layers.EthernetTypeERSPAN:
 				// ERSPAN Type II/III over GRE (proto 0x88BE).
 				// gopacket maps 0x88BE → layers.LayerTypeERSPANII (id 145) which is not
 				// registered in our DecodingLayerParser, so the parser stops at GRE and
@@ -361,7 +361,16 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 		// Pass a copy: ip4defrag stores the pointer; d.ip4 is reused on every Decode().
 		ip4Copy := d.ip4
 		ip4New, err := d.defrag4.DefragIPv4WithTimestamp(&ip4Copy, ci.Timestamp)
-		if err != nil || ip4New == nil {
+		if err != nil {
+			log.Debug().Err(err).
+				Str("src_ip", d.ip4.SrcIP.String()).
+				Str("dst_ip", d.ip4.DstIP.String()).
+				Uint16("ip_id", d.ip4.Id).
+				Uint16("frag_offset", d.ip4.FragOffset).
+				Msg("IPv4 fragment dropped")
+			return nil, nil
+		}
+		if ip4New == nil {
 			return nil, nil // fragment buffered, wait for more
 		}
 		delete(d.ip4Flows, key)
@@ -396,7 +405,16 @@ func (d *Decoder) Decode(data []byte, ci gopacket.CaptureInfo) (*Packet, error) 
 		// Pass a copy of the IPv6 header too.
 		ip6Copy := d.ip6
 		ip6New, err := d.defrag6.DefragIPv6WithTimestamp(&ip6Copy, &frag, ci.Timestamp)
-		if err != nil || ip6New == nil {
+		if err != nil {
+			log.Debug().Err(err).
+				Str("src_ip", d.ip6.SrcIP.String()).
+				Str("dst_ip", d.ip6.DstIP.String()).
+				Uint32("ip_id", frag.Identification).
+				Uint16("frag_offset", frag.FragmentOffset).
+				Msg("IPv6 fragment dropped")
+			return nil, nil
+		}
+		if ip6New == nil {
 			return nil, nil // fragment buffered, wait for more
 		}
 		proto, sp, dp, flags, payload, ok := decodeTransport(ip6New.NextHeader, ip6New.Payload)
