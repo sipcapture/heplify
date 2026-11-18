@@ -1,7 +1,9 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -162,6 +164,40 @@ func TestIPv4Defragmentation(t *testing.T) {
 	}
 	if string(pkt.Payload) != string(udpPayload) {
 		t.Fatalf("payload mismatch:\ngot:  %q\nwant: %q", pkt.Payload, udpPayload)
+	}
+}
+
+// TestIPv4DefragSmallLastFragment reproduces sipcapture/heplify#411: a SIP
+// INVITE just over the MTU leaves a last fragment of fewer than 8 bytes,
+// which used to be dropped so the message was never sent.
+func TestIPv4DefragSmallLastFragment(t *testing.T) {
+	const firstLen = 1480 // IP payload of a full 1500-byte MTU fragment
+	for _, tail := range []int{1, 3, 7, 8, 9} {
+		t.Run(fmt.Sprintf("tail_%d", tail), func(t *testing.T) {
+			d := NewDecoder(layers.LinkTypeEthernet)
+			ci := gopacket.CaptureInfo{Timestamp: time.Now()}
+
+			udpPayload := bytes.Repeat([]byte("INVITE "), firstLen)[:firstLen-8+tail]
+			udpDatagram := buildUDPDatagram(5060, udpPayload)
+
+			pkt, err := d.Decode(buildIPv4Frag(t, 0xAB02, 0, true, udpDatagram[:firstLen]), ci)
+			if err != nil || pkt != nil {
+				t.Fatalf("frag1: want buffered, got pkt=%v err=%v", pkt, err)
+			}
+			pkt, err = d.Decode(buildIPv4Frag(t, 0xAB02, firstLen/8, false, udpDatagram[firstLen:]), ci)
+			if err != nil {
+				t.Fatalf("frag2 decode error: %v", err)
+			}
+			if pkt == nil {
+				t.Fatalf("frag2 (%d bytes): expected assembled packet, got nil", tail)
+			}
+			if !bytes.Equal(pkt.Payload, udpPayload) {
+				t.Fatalf("payload mismatch: got %d bytes, want %d", len(pkt.Payload), len(udpPayload))
+			}
+			if len(d.ip4Flows) != 0 {
+				t.Fatalf("expected flow tracking to be cleared, %d flows left", len(d.ip4Flows))
+			}
+		})
 	}
 }
 
