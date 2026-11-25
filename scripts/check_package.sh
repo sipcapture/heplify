@@ -56,6 +56,27 @@ lintian --suppress-tags-from-file "${PKG_DIR}/lintian-suppressed-tags.txt" --fai
 step "rpmlint (${RPM})"
 rpmlint --rpmlintrc "${PKG_DIR}/rpmlintrc" "${RPM}" || fail "rpmlint reported errors"
 
+# Lines systemd-analyze emitted for the unit under test. verify also walks
+# other unit files already installed on the host and prints their diagnostics
+# (ubuntu-latest warns that CPUAccounting= was removed from xfs and
+# WALinuxAgent units). Those do not name heplify.service, so they are not
+# failures. A line that names no unit file is kept: it may be a general
+# error about the unit we asked to verify.
+classify_verify_output() {
+    local line
+    while IFS= read -r line || [ -n "${line}" ]; do
+        [ -z "${line}" ] && continue
+        if printf '%s\n' "${line}" | grep -q -F 'heplify.service'; then
+            printf '%s\n' "${line}"
+            continue
+        fi
+        if printf '%s\n' "${line}" | grep -q -E '^/.+\.(service|slice|socket|target|mount|timer|path|swap|scope):'; then
+            continue
+        fi
+        printf '%s\n' "${line}"
+    done
+}
+
 step "systemd-analyze verify (packaged unit)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
@@ -64,10 +85,12 @@ grep -q '^ExecStart=/usr/bin/heplify ' "${tmp}/heplify.service" \
     || fail "ExecStart does not point at /usr/bin/heplify"
 # The binary is not installed on the host: verify a copy with a stand-in command.
 sed -i 's|^ExecStart=/usr/bin/heplify|ExecStart=/bin/true|' "${tmp}/heplify.service"
-# systemd-analyze exits 0 even when it ignores invalid settings: any output is a failure.
+# systemd-analyze exits 0 even when it ignores invalid settings, so the
+# diagnostics that belong to this unit are the failure signal.
 out="$(systemd-analyze verify "${tmp}/heplify.service" 2>&1 || true)"
-if [ -n "${out}" ]; then
-    echo "${out}" >&2
+relevant="$(printf '%s\n' "${out}" | classify_verify_output || true)"
+if [ -n "${relevant}" ]; then
+    printf '%s\n' "${relevant}" >&2
     fail "systemd-analyze verify reported problems"
 else
     echo "unit OK"
