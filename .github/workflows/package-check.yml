@@ -20,7 +20,9 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Same runner as the linux/amd64 release build. ubuntu-latest (26.04,
+    # amd64v3) produces a static rpm that SIGILLs on older CPUs (#411).
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +44,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/libpcap
-          key: libpcap-1.10.4-amd64-${{ runner.os }}
+          key: libpcap-1.10.4-baseline-amd64-${{ runner.os }}
 
       # Higher than any release, so installing it over the latest release is
       # an upgrade.

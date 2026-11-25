@@ -53,14 +53,9 @@ if [ ! -f "${ROOT_DIR}/${PACKAGE}" ]; then
         "${SCRIPT_DIR}/build_libpcap.sh"
     fi
     BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    CGO_ENABLED=1 \
-    CGO_CFLAGS="-I${LIBPCAP_DIR}/include" \
-    CGO_LDFLAGS="-L${LIBPCAP_DIR}/lib" \
-    go build \
-        -ldflags "-s -w -X main.Version=${VERSION} -X main.BuildDate=${BUILD_DATE} -linkmode external -extldflags '-static'" \
-        -trimpath \
-        -o "${PACKAGE}" \
-        ./src/cmd/heplify
+    GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    VERSION="${VERSION}" BUILD_DATE="${BUILD_DATE}" GIT_COMMIT="${GIT_COMMIT}" \
+        bash "${SCRIPT_DIR}/build_static.sh" "${ROOT_DIR}/${PACKAGE}" amd64
     log_info "Static build complete: ${PACKAGE}"
 fi
 

@@ -78,9 +78,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ubuntu-latest is Ubuntu 26.04 with the amd64v3 variant: its gcc
+          # defaults to -march=x86-64-v3 and its static libc needs BMI2.
+          # heplify 2.1.1 was built there and raised SIGILL on older CPUs and
+          # on VMs that do not expose x86-64-v3 (#411). 24.04 is the baseline
+          # image 2.1.0 was built on.
           - goarch: amd64
             goos: linux
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - goarch: arm64
             goos: linux
             runner: ubuntu-24.04-arm
@@ -142,7 +147,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/libpcap
-          key: libpcap-1.10.4-${{ matrix.goarch }}-${{ runner.os }}
+          # "baseline" drops any libpcap.a compiled on the amd64v3 runner.
+          key: libpcap-1.10.4-baseline-${{ matrix.goarch }}-${{ runner.os }}
 
       - name: Build static libpcap
         if: matrix.goos == 'linux' && steps.cache-libpcap.outputs.cache-hit != 'true'
@@ -162,14 +168,9 @@ jobs:
           EXT="${{ matrix.goos == 'windows' && '.exe' || '' }}"
 
           if [ "${{ matrix.goos }}" = "linux" ]; then
-            CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.goarch }} \
-            CGO_CFLAGS="-I$(pwd)/build/libpcap/include" \
-            CGO_LDFLAGS="-L$(pwd)/build/libpcap/lib" \
-            go build \
-              -ldflags "${LDFLAGS} -linkmode external -extldflags '-static'" \
-              -trimpath \
-              -o heplify_${{ matrix.goos }}_${{ matrix.goarch }} \
-              ./src/cmd/heplify
+            bash scripts/build_static.sh \
+              "heplify_${{ matrix.goos }}_${{ matrix.goarch }}" \
+              "${{ matrix.goarch }}"
           else
             CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build -ldflags "${LDFLAGS}" -trimpath \

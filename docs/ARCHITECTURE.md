@@ -447,9 +447,9 @@ The artifacts are not built the same way, so behaviour can differ between them
 
 | Artifact | libc | libpcap | Built on |
 |----------|------|---------|----------|
-| Release binaries `heplify_linux_amd64` / `_arm64` | static glibc | private copy built by `scripts/build_libpcap.sh` (1.10.4, no DBus/RDMA) | GitHub runners |
+| Release binaries `heplify_linux_amd64` / `_arm64` | static glibc; amd64 is the x86-64 baseline (no AVX or BMI2) | private copy built by `scripts/build_libpcap.sh` (1.10.4, no DBus/RDMA) | `ubuntu-24.04` (amd64), `ubuntu-24.04-arm` (arm64) |
 | `.deb` | dynamic, system glibc (>= 2.34) | system `libpcap0.8` | Debian 12 container (`scripts/build_deb_binary.sh`) |
-| `.rpm` | static (same binary as the release asset) | same private copy | GitHub runners |
+| `.rpm` | static (same binary as the release asset) | same private copy | `ubuntu-24.04` (amd64), `ubuntu-24.04-arm` (arm64) |
 | Docker image | dynamic, the image's glibc | distribution `libpcap0.8` | `docker/Dockerfile` builder stage |
 | macOS binary / Homebrew | dynamic | libpcap from the build host | `macos-latest` |
 | Windows binary | dynamic | Npcap (`wpcap.dll`), loaded at run time | `windows-latest` |
