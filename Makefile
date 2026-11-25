@@ -30,22 +30,14 @@ libpcap-local:
 	chmod +x scripts/build_libpcap.sh
 	./scripts/build_libpcap.sh
 
-## linux-static — fully static binary using the locally built libpcap
+## linux-static — fully static binary using the locally built libpcap.
+## amd64 targets the x86-64 baseline (scripts/build_static.sh, issue 411).
 ## GOARCH defaults to the native arch; override with: make linux-static GOARCH=arm64
 GOARCH?=$(shell go env GOARCH)
 linux-static: $(LIBPCAP_LOCAL_DIR)/lib/libpcap.a
-	CGO_ENABLED=1 GOOS=linux GOARCH=$(GOARCH) \
-	CGO_CFLAGS="-I$(LIBPCAP_LOCAL_DIR)/include" \
-	CGO_LDFLAGS="-L$(LIBPCAP_LOCAL_DIR)/lib" \
-	go build \
-		-ldflags "-s -w \
-			-X main.Version=$(VERSION) \
-			-X main.BuildDate=$(BUILD_DATE) \
-			-X main.GitCommit=$(GIT_COMMIT) \
-			-linkmode external \
-			-extldflags '-static'" \
-		-trimpath \
-		-o $(NAME)-linux-static ./src/cmd/heplify
+	VERSION="$(VERSION)" BUILD_DATE="$(BUILD_DATE)" GIT_COMMIT="$(GIT_COMMIT)" \
+	LIBPCAP_DIR="$(LIBPCAP_LOCAL_DIR)" \
+	bash scripts/build_static.sh "$(CURDIR)/$(NAME)-linux-static" "$(GOARCH)"
 
 $(LIBPCAP_LOCAL_DIR)/lib/libpcap.a:
 	@echo "==> Local libpcap not found. Run 'make libpcap-local' first, or it will build now."

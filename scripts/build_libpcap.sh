@@ -18,6 +18,16 @@ echo "    Output : ${LIBPCAP_OUT}"
 command -v gcc  >/dev/null || { echo "ERROR: gcc not found"; exit 1; }
 command -v make >/dev/null || { echo "ERROR: make not found"; exit 1; }
 
+# amd64 objects stay on the x86-64 baseline. A libpcap.a built with the
+# default gcc of GitHub's ubuntu-26.04 image (x86-64-v3) makes the static
+# heplify binary raise SIGILL on older CPUs (issue 411).
+# shellcheck source=amd64_baseline_env.sh
+source "$(cd "$(dirname "$0")" && pwd)/amd64_baseline_env.sh"
+amd64_baseline_apply
+if [ -n "${CFLAGS:-}" ]; then
+    echo "    CFLAGS : ${CFLAGS}"
+fi
+
 mkdir -p "${LIBPCAP_SRC}" "${LIBPCAP_OUT}"
 
 # ── download ────────────────────────────────────────────────────────────────

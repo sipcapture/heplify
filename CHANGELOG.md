@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Static Linux amd64 builds ([#411](https://github.com/sipcapture/heplify/issues/411))**: the 2.1.1 release binary and `.rpm` were built on GitHub's Ubuntu 26.04 runner, which is the amd64v3 image. gcc there defaults to `-march=x86-64-v3` and the static libc needs BMI2, so the binary raised `Illegal instruction` (`bzhi`) before reading its config on older CPUs and on virtual machines that do not expose x86-64-v3. Static amd64 builds now run on `ubuntu-24.04`, compile C and cgo for the x86-64 baseline, and the build rejects a binary whose ELF note requires a higher microarchitecture. The IPv4 fragment fix from 2.1.1 is unchanged.
+
 ## [2.1.1] - 2026-11-18
 
 ### Fixed
